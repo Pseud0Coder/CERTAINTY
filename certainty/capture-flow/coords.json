@@ -1,0 +1,46 @@
+{
+  "loginSignIn": {
+    "x": 627,
+    "y": 520,
+    "width": 346,
+    "height": 41
+  },
+  "pipelineNadiaCard": {
+    "x": 264,
+    "y": 220.5,
+    "width": 235.1875,
+    "height": 131
+  },
+  "detailOpenLink": {
+    "x": 1500.328125,
+    "y": 446.375,
+    "width": 50.671875,
+    "height": 24
+  },
+  "detailShareLink": {
+    "x": 281,
+    "y": 436.375,
+    "width": 1129.484375,
+    "height": 44
+  },
+  "profileTopVerifiedBadge": {
+    "x": 516,
+    "y": 208,
+    "width": 308.59375,
+    "height": 27
+  },
+  "profileDownloadPdfBtn": {
+    "x": 516,
+    "y": 861.4375,
+    "width": 147.734375,
+    "height": 43
+  },
+  "profileDownloadDocxBtn": {
+    "x": 673.734375,
+    "y": 861.4375,
+    "width": 161.109375,
+    "height": 43
+  },
+  "viewportAtDownloadScrollY": 269,
+  "pageFullHeight": 1269
+}

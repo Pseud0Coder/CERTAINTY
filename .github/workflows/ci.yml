@@ -1,0 +1,24 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build web clients
+        run: npm run build:web
+      - name: Unit, contract, red-team and golden-transcript tests
+        run: npm test
+      - name: Demo scenario smoke test (master prompt, section 15)
+        run: node --test tests/scenario.test.ts

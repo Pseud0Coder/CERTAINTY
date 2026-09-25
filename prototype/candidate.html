@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certainty · Candidate</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Composition only. Every value comes from tokens.css. */
+[hidden]{display:none!important}
+.app{display:flex;height:100vh;overflow:hidden}
+.rail{width:var(--rail-w);flex:none;background:var(--sheet);border-inline-end:var(--hairline) solid var(--rule);display:flex;flex-direction:column}
+.rail-head{padding:var(--space-4);border-bottom:var(--hairline) solid var(--rule)}
+.nav{padding:var(--space-2);display:flex;flex-direction:column;gap:var(--space-1);flex:1}
+.nav-item{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);background:none;border:0;border-radius:var(--radius-control);font:var(--type-secondary);color:var(--ink-quiet);cursor:pointer;text-align:left;width:100%}
+.nav-item:hover{background:var(--action-quiet-hover);color:var(--ink)}
+.nav-item[aria-current="page"]{background:var(--sheet-sunken);color:var(--ink);font-weight:600}
+.nav-ico{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-6);background:var(--sheet);border-bottom:var(--hairline) solid var(--rule)}
+.grow{flex:1}
+.content{flex:1;overflow:auto;padding:var(--space-6)}
+.view{display:none}.view.on{display:block}
+.panel{background:var(--sheet);border:var(--hairline) solid var(--rule);padding:var(--space-6)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);align-items:start}
+/* journey */
+.journey{display:grid;grid-template-columns:repeat(4,1fr);border:var(--hairline) solid var(--rule);background:var(--sheet)}
+.jstep{padding:var(--space-4);border-inline-end:var(--hairline) solid var(--rule)}
+.jstep:last-child{border-inline-end:0}
+.jstep.now{background:var(--sheet-sunken);font-weight:600}
+.jstep.locked{color:var(--ink-disabled)}
+.srow{display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);padding:var(--space-2) 0;border-bottom:var(--hairline) solid var(--rule)}
+/* modes */
+.modeseg{display:inline-flex;border:var(--hairline) solid var(--rule);border-radius:var(--radius-pill);padding:2px;background:var(--sheet)}
+.modeseg button{border:0;background:none;padding:var(--space-1) var(--space-4);border-radius:var(--radius-pill);font:var(--type-secondary);color:var(--ink-quiet);cursor:pointer}
+.modeseg button[aria-pressed="true"]{background:var(--action-primary);color:var(--ink-inverse);font-weight:600}
+/* session */
+.turn{padding:var(--space-3) 0;border-bottom:var(--hairline) solid var(--rule)}
+.turn .who{font-weight:600;margin-inline-end:var(--space-2)}
+.fb{padding:var(--space-3);margin:var(--space-3) 0}
+.handoff{font:var(--type-mono);background:var(--sheet-sunken);border:var(--hairline) solid var(--rule);border-radius:var(--radius-sheet);padding:var(--space-4);margin-top:var(--space-4)}
+.handoff b{font-weight:600}
+/* gaps */
+.gapcard{background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-control);padding:var(--space-4);margin-bottom:var(--space-3)}
+.gapcard header{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2)}
+/* login, modal, toast */
+.login{position:fixed;inset:0;background:var(--ground);display:flex;align-items:center;justify-content:center;z-index:20}
+.login .panel{width:380px;display:flex;flex-direction:column;gap:var(--space-3)}
+.scrim{display:flex;align-items:center;justify-content:center}
+.modal ul{margin:var(--space-3) 0 var(--space-4) var(--space-6)}
+.modal li{font:var(--type-secondary);color:var(--ink-quiet);margin:var(--space-2) 0}
+.chk{display:flex;gap:var(--space-2);align-items:flex-start;font:var(--type-secondary);margin-bottom:var(--space-4)}
+input[type=checkbox]{accent-color:var(--action-primary);width:16px;height:16px;flex:none;margin-top:2px}
+.toast{position:fixed;right:var(--space-6);bottom:var(--space-6);background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-control);padding:var(--space-3) var(--space-4);font:var(--type-secondary);box-shadow:var(--elev-1);opacity:0;transition:opacity var(--dur-micro) var(--ease);pointer-events:none;z-index:30}
+.toast.on{opacity:1}
+.btn-sm{padding:2px 8px;font:var(--type-caption)}
+@media (max-width:1099px){.nav-item .lbl{display:none}.nav-item{justify-content:center}.rail-head .sub{display:none}.grid2{grid-template-columns:1fr}.journey{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs><path id="mk" d="M6 .8 11.2 6 6 11.2 .8 6Z" fill="currentColor"/></defs>
+</svg>
+
+<div class="login" id="login">
+  <div class="panel">
+    <div class="t-display">Certainty</div>
+    <div class="t-caption">Stage 1 prototype · data stays in this browser</div>
+    <span class="stamp">CANDIDATE · CONNECTED TO GENNEXT RECRUITMENTS</span>
+    <div class="t-secondary">Signed in as Nadia Rowe</div>
+    <button class="btn btn-primary" id="enterBtn">Continue</button>
+  </div>
+</div>
+
+<div class="app" id="app" hidden>
+  <aside class="rail">
+    <div class="rail-head">
+      <div class="t-view">Certainty</div>
+      <div class="t-caption sub">Candidate</div>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-item" data-v="journey"><svg class="nav-ico" viewBox="0 0 16 16"><path d="M2 13h3v-3h3V7h3V4h3"/></svg><span class="lbl">My journey</span></button>
+      <button class="nav-item" data-v="resume"><svg class="nav-ico" viewBox="0 0 16 16"><path d="M3.5 2.5h6l3 3v8h-9zM9.5 2.5v3h3M5.5 8h5M5.5 10.5h5"/></svg><span class="lbl">Resume Studio</span></button>
+      <button class="nav-item" data-v="linkedin"><svg class="nav-ico" viewBox="0 0 16 16"><path d="M5.2 7.2 3.3 9.1a2.1 2.1 0 0 0 3 3l1.9-1.9M10.8 8.8 12.7 6.9a2.1 2.1 0 0 0-3-3L7.8 5.8"/></svg><span class="lbl">LinkedIn Studio</span></button>
+      <button class="nav-item" data-v="interview"><svg class="nav-ico" viewBox="0 0 16 16"><rect x="6" y="2" width="4" height="7" rx="2"/><path d="M4.5 8a3.5 3.5 0 0 0 7 0M8 11.5V14"/></svg><span class="lbl">Interview practice</span></button>
+      <button class="nav-item" data-v="gaps"><svg class="nav-ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.5"/></svg><span class="lbl">My gaps</span></button>
+      <button class="nav-item" data-v="settings"><svg class="nav-ico" viewBox="0 0 16 16"><path d="M2 5h12M2 11h12"/><circle cx="6" cy="5" r="1.75"/><circle cx="10" cy="11" r="1.75"/></svg><span class="lbl">Settings</span></button>
+    </nav>
+  </aside>
+  <main>
+    <header class="topbar">
+      <span class="stamp">CANDIDATE</span>
+      <span class="t-secondary">Nadia Rowe</span>
+      <span class="grow"></span>
+      <span id="recSlot"></span>
+    </header>
+    <div class="content">
+
+      <section class="view on" id="v-journey">
+        <h1 class="t-view">My journey</h1>
+        <p class="t-secondary">Your record follows you. No re-uploading, ever.</p>
+        <div class="journey" style="margin:var(--space-6) 0">
+          <div class="jstep"><span class="t-caption">COMPLETE</span><div class="t-body">Resume</div></div>
+          <div class="jstep"><span class="t-caption">COMPLETE</span><div class="t-body">LinkedIn</div></div>
+          <div class="jstep now"><span class="t-caption">IN PROGRESS</span><div class="t-body">Interview practice</div></div>
+          <div class="jstep locked"><span class="t-caption">LOCKED</span><div class="t-body">Go live</div></div>
+        </div>
+        <div class="grid2">
+          <div class="panel">
+            <h2 class="t-section">Resume Studio · roles extracted</h2>
+            <div class="srow"><span class="t-body">Northline QA Labs · Senior SWE</span><span class="badge figures">5 / 7</span></div>
+            <div class="srow"><span class="t-body">Meridian Systems · SWE</span><span class="badge figures">4 / 4</span></div>
+            <div class="srow"><span class="t-body">Ardent Digital · Junior SWE</span><span class="badge figures">3 / 3</span></div>
+            <p class="t-caption" style="margin-top:var(--space-3)">Era-based depth: recent roles 5 to 7 bullets, older roles 2 to 3. One bullet short on the current role.</p>
+          </div>
+          <div class="panel">
+            <h2 class="t-section">Interview readiness</h2>
+            <div class="srow"><span class="t-secondary">Verified sessions</span><span class="badge figures">3</span></div>
+            <div class="srow"><span class="t-secondary">Practice sessions</span><span class="badge figures">1</span></div>
+            <div class="srow"><span class="t-secondary">Strong: metrics, ownership</span></div>
+            <div class="srow"><span class="t-secondary">Weak: action depth</span></div>
+            <p class="t-caption" style="margin-top:var(--space-3)">Practice sessions are private. Verified sessions are shared with your recruiter and strengthen your submission.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="v-resume">
+        <h1 class="t-view">Resume Studio</h1>
+        <p class="t-secondary">One role per session. Fresh session, fresh interview.</p>
+        <div class="panel" style="margin-top:var(--space-6)">
+          <h2 class="t-section">Northline QA Labs · Senior Software Engineer · 07/2019 - 10/2020</h2>
+          <div style="margin-top:var(--space-4)">
+            <div class="turn"><span class="who">Interviewer</span><span class="t-body">You said you coordinated four engineers on the WCAG automation project. Your CV has no leadership line. Walk me through what you owned.</span></div>
+            <div class="turn"><span class="who">Nadia</span><span class="t-body">Project ownership. They reported to my manager, but I ran the workstream day to day, the API design, and the SQL optimization work.</span></div>
+            <div class="fb spine spine-conf">
+              <span class="t-caption">FEEDBACK</span>
+              <p class="t-body">Strong. Ownership is clear and the scale is present. The 30% metric is already confirmed. One more area and this role is done.</p>
+            </div>
+            <div class="turn"><span class="who">Interviewer</span><span class="t-body">What broke at scale, and what did you change?</span></div>
+          </div>
+          <button class="btn" id="handBtn">Run session handoff</button>
+          <div class="handoff" id="handoff" hidden>
+            YOUR BULLETS FOR THIS ROLE<br><br>
+            1. <b>Led WCAG compliance automation:</b> built the assessment framework and exposed it as a REST API, cutting manual audit cycles from weeks to hours.<br>
+            2. <b>Optimized high-volume scanning:</b> implemented async multithreaded processing with SQL query tuning, reducing processing time by 30%.<br>
+            3. <b>Coordinated a four-engineer QA workstream:</b> ran day-to-day delivery while reporting into engineering management.
+            <div style="margin-top:var(--space-4)"><button class="btn btn-sm" id="copyBtn">Copy bullets</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="v-linkedin">
+        <h1 class="t-view">LinkedIn Studio</h1>
+        <p class="t-secondary">Your resume is the source of truth. Titles and dates always match.</p>
+        <div class="panel" style="margin-top:var(--space-6)">
+          <h2 class="t-section">Profile sections</h2>
+          <div class="srow"><span class="t-body">Banner text</span><span class="stamp">DONE</span></div>
+          <div class="srow"><span class="t-body">Headline</span><span class="stamp">DONE</span></div>
+          <div class="srow"><span class="t-body">About</span><span class="stamp">DONE</span></div>
+          <div class="srow"><span class="t-body">Experience</span><span class="stamp">DONE</span></div>
+          <div class="srow"><span class="t-body">Keyword checklist</span><span class="t-caption">pending</span></div>
+          <div class="srow"><span class="t-body">Skills</span><span class="t-caption">pending</span></div>
+          <div class="fb spine spine-warn" style="margin-top:var(--space-4)">
+            <span class="t-caption">ONE CONFLICT</span>
+            <p class="t-body">Your LinkedIn snapshot says you left Northline QA Labs 10/2022. Your CV says 10/2020. Pick the true one and align both. Recruiters check.</p>
+            <button class="btn btn-sm" onclick="toast('Alignment task created')">Align dates</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="v-interview">
+        <h1 class="t-view">Interview practice</h1>
+        <p class="t-secondary">Harder than the real thing. That is the point.</p>
+        <div class="panel" style="margin-top:var(--space-6)">
+          <div class="modeseg" role="group" aria-label="Session mode">
+            <button id="modeP" aria-pressed="true">Practice · private</button>
+            <button id="modeV" aria-pressed="false">Verified · shared</button>
+          </div>
+          <p class="t-caption" id="modeNote" style="margin:var(--space-3) 0">Practice mode. Only you see this session. Be honest, that is the value.</p>
+          <div style="margin-top:var(--space-4)">
+            <div class="turn"><span class="who">Interviewer</span><span class="t-body">Tell me about a time you delivered against a deadline you did not control.</span></div>
+            <div class="turn"><span class="who">Nadia</span><span class="t-body">The compliance deadline moved up a month when a client audit got scheduled early. I re-prioritized the API work, cut scope on the reporting dashboard, and we hit the date.</span></div>
+            <div class="fb spine spine-conf">
+              <span class="t-caption">FEEDBACK</span>
+              <p class="t-body">Good structure. The result is thin. "We hit the date" is not an outcome. What did the client do with it once delivered?</p>
+              <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2)">
+                <button class="btn btn-sm" onclick="toast('Replaying the question')">Redo answer</button>
+                <button class="btn btn-sm" onclick="toast('Next question queued')">Next question</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="v-gaps">
+        <h1 class="t-view">My gaps</h1>
+        <p class="t-secondary">Found by comparing what you say against what is written.</p>
+        <div style="margin:var(--space-6) 0;max-width:640px" id="gapList"></div>
+      </section>
+
+      <section class="view" id="v-settings">
+        <h1 class="t-view">Settings</h1>
+        <div class="panel" style="margin-top:var(--space-6);max-width:420px">
+          <h2 class="t-section">Demo data and consent</h2>
+          <p class="t-secondary">Reset restores seed data in both apps. Your consent records are listed in the audit trail.</p>
+          <div style="display:flex;gap:var(--space-2);margin-top:var(--space-4)">
+            <button class="btn" id="resetBtn">Reset demo data</button>
+            <button class="btn" id="outBtn">Sign out</button>
+          </div>
+          <p class="t-caption" style="margin-top:var(--space-4)" id="auditLine"></p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="scrim" id="modalbg" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h2 class="t-view" id="mTitle">Verified session</h2>
+    <p class="t-secondary">Your consent is required before anything is recorded.</p>
+    <ul>
+      <li>Audio and transcript are recorded</li>
+      <li>Shared with your connected recruiter, Gennext Recruitments</li>
+      <li>Used as screening evidence in your submission</li>
+      <li>You can access, export, or delete recordings anytime in Settings</li>
+      <li>You can withdraw consent at any time</li>
+    </ul>
+    <label class="chk"><input type="checkbox" id="ck" onchange="document.getElementById('ok').setAttribute('aria-disabled',!this.checked)">
+      <span>I understand and consent to recording and sharing</span></label>
+    <button class="btn btn-primary" id="ok" aria-disabled="true">Start verified session</button>
+    <button class="btn" id="cancel" style="margin-left:var(--space-2)">Stay in practice</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="shared.js"></script>
+<script>
+let store = loadStore();
+let mode = 'p';
+const $ = id => document.getElementById(id);
+const mk = cls => '<svg class="mark '+cls+'"><use href="#mk"/></svg>';
+
+function loginCheck(){ if (sessionStorage.getItem('certainty_cand')) { $('login').hidden=true; $('app').hidden=false; } }
+ $('enterBtn').onclick = () => { sessionStorage.setItem('certainty_cand','1');
+  logEvent(store,'Nadia Rowe','candidate','login',''); $('login').hidden=true; $('app').hidden=false; };
+ $('outBtn').onclick = () => { sessionStorage.removeItem('certainty_cand'); location.reload(); };
+ $('resetBtn').onclick = () => { localStorage.removeItem(STORE_KEY); location.reload(); };
+
+document.querySelectorAll('#nav .nav-item').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+  $('v-'+b.dataset.v).classList.add('on');
+  document.querySelectorAll('#nav .nav-item').forEach(x =>
+    x.setAttribute('aria-current', x===b ? 'page':'false'));
+  if (b.dataset.v==='settings') $('auditLine').textContent = 'Audit: '+store.audit.length+' events this session. Consent record k1, granted 12 Sep 09:14.';
+  if (b.dataset.v==='gaps') renderGaps();
+});
+
+/* mode + consent */
+ $('modeP').onclick = () => setMode('p');
+ $('modeV').onclick = () => { $('modalbg').hidden = false; $('ck').focus(); };
+ $('cancel').onclick = cancelV;
+ $('modalbg').addEventListener('keydown', e => { if (e.key==='Escape') cancelV(); });
+ $('ok').onclick = () => {
+  if ($('ok').getAttribute('aria-disabled')==='true') return;
+  $('modalbg').hidden = true; $('ck').checked = false; $('ok').setAttribute('aria-disabled','true');
+  mode = 'v'; paintMode();
+  logEvent(store,'Nadia Rowe','candidate','consent_granted','k1');
+  toast('Verified mode on · recording indicator active');
+};
+function cancelV(){ $('modalbg').hidden = true; $('ck').checked=false; $('ok').setAttribute('aria-disabled','true'); }
+function setMode(m){ mode = m; paintMode(); }
+function paintMode(){
+  $('modeP').setAttribute('aria-pressed', mode==='p');
+  $('modeV').setAttribute('aria-pressed', mode==='v');
+  $('modeNote').textContent = mode==='p'
+    ? 'Practice mode. Only you see this session. Be honest, that is the value.'
+    : 'Verified mode. Recording. Shared with Gennext Recruitments, it strengthens your submission.';
+  $('recSlot').innerHTML = mode==='v'
+    ? '<span class="recording"><span class="recording-dot"></span>Recording</span>' : '';
+}
+
+/* handoff */
+ $('handBtn').onclick = () => { $('handoff').hidden = false; toast('Bullets delivered as a text block, copy them into your resume'); };
+ $('copyBtn').onclick = () => {
+  const txt = $('handoff').innerText.replace('Copy bullets','').trim();
+  if (navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast('Bullets copied')).catch(()=>toast('Select and copy manually'));
+  else toast('Select and copy manually');
+};
+
+/* gaps */
+function renderGaps(){
+  const open = store.candidateTasks.filter(t => !t.done);
+  $('gapList').innerHTML = open.length ? open.map(t =>
+    '<div class="gapcard spine '+(t.type==='warn'?'spine-warn':'spine-conf')+'">'
+    + '<header>'+mk(t.type==='warn'?'mark-conflict':'mark-confirmed')+'<h3 class="t-section">'+t.title+'</h3>'
+    + (t.source==='recruiter'?'<span class="stamp">FROM YOUR RECRUITER</span>':'')+'</header>'
+    + '<p class="t-body">'+t.body+'</p>'
+    + '<button class="btn btn-sm" onclick="doTask(\''+t.id+'\')">Mark done</button></div>'
+  ).join('') : '<div class="panel"><p class="t-body">No gaps. Everything you say is on the page.</p></div>';
+}
+function doTask(id){ markTaskDone(store, id, 'Nadia Rowe', 'candidate'); renderGaps(); toast('Done'); }
+
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('on'), 2400); }
+
+loginCheck(); paintMode(); renderGaps();
+</script>
+</body>
+</html>

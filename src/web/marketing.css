@@ -1,0 +1,322 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap');
+
+/* ==========================================================================
+   Certainty: marketing page.
+
+   A deliberately separate design system from tokens.css/app.css: that one
+   is the working product's "dark academia" reading-room UI; this is the
+   public-facing poster. They share a hue family (the same brass, oxblood,
+   hunter-green, ink-blue and parchment the app already uses) so the two
+   feel like the same company, composed here as bold geometric color
+   blocks in a modernist Bauhaus register instead of a cozy library.
+
+   No build step, no external fonts or images: system font stacks only,
+   screenshots are the product's own UI. Self-contained, same-origin CSP
+   as the rest of the app.
+   ========================================================================== */
+
+:root{
+  /* muted Bauhaus primaries, the app's own hue family */
+  --cream:      #FBF7EC;
+  --paper:      #EDE3CC;
+  --paper-line: #DCD0AE;
+  --ink:        #1B1712;
+  --ink-soft:   #4A4030;
+  --black:      #14100C;
+
+  --ochre:        #C9A227;
+  --ochre-deep:   #8A6A1E;
+  --terracotta:   #B5502E;
+  --terracotta-deep: #8A3B2E;
+  --forest:       #55703F;
+  --forest-deep:  #3F5D2E;
+  --ink-blue:     #3E5578;
+  --ink-blue-deep:#2E4160;
+
+  --font-display: 'Geist', Cambria, Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --gap: clamp(20px, 4vw, 48px);
+  --edge: clamp(20px, 6vw, 96px);
+  --radius: 3px;
+  --ease: cubic-bezier(.2,0,0,1);
+  --content-max: 1240px;
+}
+
+/* Wide/ultra-wide monitors: the 1240px cap below reads as a small island
+   with dead margin on either side once the viewport clears ~1600px, so
+   the shared content width scales up in two steps instead of staying
+   fixed. Narrow-measure sections (hero copy, section captions) keep their
+   own ch-based caps for readability and are not affected. */
+@media (min-width:1600px){ :root{ --content-max: 1480px; } }
+@media (min-width:2000px){ :root{ --content-max: 1680px; } }
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+
+body{
+  margin:0;
+  background:var(--cream);
+  color:var(--ink);
+  font:400 17px/1.5 var(--font-sans);
+  -webkit-font-smoothing:antialiased;
+}
+
+h1,h2,h3{font-family:var(--font-display);font-weight:700;margin:0;letter-spacing:-.01em}
+p{margin:0}
+a{color:inherit}
+ul{margin:0;padding:0;list-style:none}
+img{max-width:100%;display:block}
+
+.eyebrow{
+  font:700 12px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.14em;
+  color:var(--ochre-deep);margin:0 0 14px;
+}
+
+.eyebrow-badge{
+  display:inline-flex;align-items:center;
+  font:700 12px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.1em;
+  color:var(--ink);background:var(--ochre);
+  border-radius:99px;padding:8px 18px;margin:0 0 24px;
+}
+
+/* ---------- reveal-on-scroll: opacity/translate only, respects reduced motion ---------- */
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){ .reveal{opacity:1;transform:none;transition:none} }
+
+/* ============================== nav ============================== */
+.mnav{
+  position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:var(--gap);
+  padding:16px var(--edge);background:rgba(251,247,236,.88);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--paper-line);
+}
+.mbrand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);font:700 19px var(--font-display)}
+.mbrand-mark{color:var(--ochre-deep);flex:none}
+.mnav-links{display:flex;gap:28px;margin-inline-start:auto;font:600 14px var(--font-sans)}
+.mnav-links a{text-decoration:none;color:var(--ink-soft);transition:color .15s var(--ease)}
+.mnav-links a:hover{color:var(--ink)}
+
+.mbtn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font:700 14px var(--font-sans);padding:11px 22px;border-radius:var(--radius);
+  text-decoration:none;border:2px solid var(--ink);cursor:pointer;white-space:nowrap;
+  transition:transform .15s var(--ease),background .15s var(--ease),color .15s var(--ease);
+}
+.mbtn:hover{transform:translateY(-2px)}
+.mbtn-primary{background:var(--ink);color:var(--cream)}
+.mbtn-primary:hover{background:var(--black)}
+.mbtn-ghost{border-color:var(--paper-line);background:none}
+.mbtn-ghost:hover{border-color:var(--ink)}
+.mbtn-line{background:none}
+.mbtn.lg{padding:16px 32px;font-size:16px}
+
+/* ============================== hero ============================== */
+.hero{
+  position:relative;overflow:hidden;padding:clamp(60px,12vw,140px) var(--edge) clamp(60px,10vw,120px);
+  display:grid;place-items:center;text-align:center;isolation:isolate;
+}
+.hero-shapes{position:absolute;inset:0;z-index:-1}
+.hero-shapes .shape{position:absolute;opacity:.9}
+.shape.circle{border-radius:50%}
+.shape.ring{border-radius:50%;border:14px solid var(--ink-blue);opacity:.35;width:220px;height:220px;top:8%;right:8%}
+.shape.circle.ochre{background:var(--ochre);width:180px;height:180px;top:12%;left:6%}
+.shape.square.forest{background:var(--forest);width:130px;height:130px;bottom:14%;left:12%;transform:rotate(12deg)}
+.shape.triangle.terracotta{width:0;height:0;border-left:90px solid transparent;border-right:90px solid transparent;border-bottom:150px solid var(--terracotta);bottom:6%;right:14%;opacity:.85}
+.shape.bar.ink{background:var(--ink);width:8px;height:220px;top:4%;left:42%;transform:rotate(18deg);opacity:.15}
+.hero-shapes.small{position:absolute;inset:0;z-index:0}
+.hero-shapes.small .circle.forest{width:120px;height:120px;background:var(--forest);top:-30px;left:6%;opacity:.9}
+/* The CTA band's own background is ochre, so its decorative triangle
+   needs a color with contrast against it rather than matching --ochre
+   (which would render as an invisible same-on-same shape). */
+.hero-shapes.small .triangle.dark{width:0;height:0;border-left:60px solid transparent;border-right:60px solid transparent;border-bottom:100px solid var(--ink);bottom:-20px;right:8%;opacity:.85}
+
+.hero-body{max-width:760px;position:relative}
+.hero h1{font-size:clamp(42px,7vw,84px);line-height:.98;color:var(--ink)}
+.hero h1 em{font-style:normal;color:var(--terracotta-deep)}
+.hero-sub{font:400 19px/1.55 var(--font-sans);color:var(--ink-soft);max-width:52ch;margin:26px auto 0}
+.hero-cta{display:flex;gap:16px;justify-content:center;margin-top:38px;flex-wrap:wrap}
+
+/* ============================ section head ============================ */
+.section-head{max-width:640px;margin:0 auto 56px;text-align:center}
+.section-head h2{font-size:clamp(30px,4.4vw,52px);line-height:1.05}
+
+section{padding:clamp(70px,10vw,120px) var(--edge)}
+.platform{background:var(--paper);border-top:1px solid var(--paper-line);border-bottom:1px solid var(--paper-line)}
+.interview{background:var(--ink);color:var(--cream)}
+.features{background:var(--cream)}
+.compare{background:var(--ink);color:var(--cream)}
+.compare .eyebrow{color:var(--ochre)}
+.pricing{background:var(--cream)}
+.stats{background:var(--forest-deep);color:var(--cream)}
+.ctaband{background:var(--ochre);color:var(--ink);text-align:center;position:relative;overflow:hidden}
+
+/* ============================ platform / scrollytelling ============================ */
+.stepwrap{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);max-width:var(--content-max);margin:0 auto;align-items:start}
+.stepvisual{position:sticky;top:96px}
+.stepvisual-frame{
+  position:relative;aspect-ratio:16/10;border-radius:8px;overflow:hidden;
+  border:1px solid var(--paper-line);box-shadow:0 24px 60px rgba(20,16,12,.18);background:var(--black);
+}
+.stepvisual-frame::after{
+  content:'Click to expand';position:absolute;right:12px;bottom:12px;z-index:2;
+  font:700 11px var(--font-sans);letter-spacing:.04em;color:var(--cream);
+  background:rgba(20,16,12,.62);padding:6px 11px;border-radius:99px;
+  opacity:0;transition:opacity .2s var(--ease);pointer-events:none;
+}
+.stepvisual-frame:hover::after{opacity:1}
+.beat-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;opacity:0;transition:opacity .5s var(--ease);cursor:zoom-in;pointer-events:none}
+.beat-img.on{opacity:1;pointer-events:auto}
+.stepvisual-index{display:flex;gap:8px;justify-content:center;margin-top:18px}
+.stepvisual-index span{width:8px;height:8px;border-radius:50%;background:var(--paper-line);transition:background .2s var(--ease),transform .2s var(--ease)}
+.stepvisual-index span.on{background:var(--ochre-deep);transform:scale(1.3)}
+
+.stepbeats{display:flex;flex-direction:column;gap:34vh}
+.stepbeats .beat:first-child{margin-top:2vh}
+.stepbeats .beat:last-child{margin-bottom:8vh}
+.beat{max-width:440px;opacity:.35;transition:opacity .35s var(--ease)}
+.beat.on{opacity:1}
+.beat-no{font:700 13px var(--font-sans);color:var(--ochre-deep);letter-spacing:.1em}
+.beat h3{font-size:clamp(22px,2.6vw,30px);margin:10px 0 12px}
+.beat p{color:var(--ink-soft);font-size:16px;line-height:1.6}
+
+/* ============================== interview ============================== */
+.ivwrap{display:grid;grid-template-columns:1.15fr .85fr;gap:var(--gap);max-width:var(--content-max);margin:0 auto;align-items:center}
+.ivshot{position:relative;border-radius:8px;overflow:hidden;border:1px solid rgba(251,247,236,.14);box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.ivshot::after{
+  content:'Click to expand';position:absolute;right:12px;bottom:12px;z-index:2;
+  font:700 11px var(--font-sans);letter-spacing:.04em;color:var(--cream);
+  background:rgba(20,16,12,.62);padding:6px 11px;border-radius:99px;
+  opacity:0;transition:opacity .2s var(--ease);pointer-events:none;
+}
+.ivshot:hover::after{opacity:1}
+.ivshot img{display:block;width:100%;cursor:zoom-in}
+.interview .eyebrow{color:var(--ochre)}
+.interview h2{font-size:clamp(28px,3.6vw,44px);line-height:1.05;color:var(--cream)}
+.iv-lede{margin:20px 0 0;color:rgba(251,247,236,.7);font-size:16px;line-height:1.6;max-width:44ch}
+.ivlist{display:flex;flex-direction:column;gap:16px;margin-top:28px}
+.ivlist li{padding-inline-start:22px;position:relative;font-size:14.5px;line-height:1.55;color:rgba(251,247,236,.7)}
+.ivlist li::before{content:'';position:absolute;left:0;top:6px;width:9px;height:9px;background:var(--ochre)}
+.ivlist strong{color:var(--cream);font-weight:700}
+
+/* ============================== features ============================== */
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;max-width:var(--content-max);margin:0 auto;
+  background:var(--paper-line);border:1px solid var(--paper-line)}
+.fcard{background:var(--cream);padding:32px 26px;display:flex;flex-direction:column;gap:14px}
+/* Per-card accent color. Was a --fc custom property set via a style
+   attribute; style-src 'self' blocks inline style attributes the same as
+   it blocks an inline <style> block, so this is a real class per hue. */
+.fcard svg{color:var(--ochre)}
+.fcard.fc-ochre svg{color:var(--ochre)}
+.fcard.fc-terracotta svg{color:var(--terracotta)}
+.fcard.fc-forest svg{color:var(--forest)}
+.fcard.fc-ink-blue svg{color:var(--ink-blue)}
+.fcard h3{font-size:18px}
+.fcard p{color:var(--ink-soft);font-size:14.5px;line-height:1.55}
+
+/* ============================== compare table ============================== */
+.ctable{width:100%;max-width:980px;margin:0 auto;border-collapse:collapse}
+.ctable th{text-align:left;font:700 13px var(--font-sans);text-transform:uppercase;letter-spacing:.08em;
+  padding:0 20px 16px;color:var(--ochre);border-bottom:2px solid var(--ochre)}
+.ctable td{padding:22px 20px;border-bottom:1px solid rgba(251,247,236,.14);font-size:16px;vertical-align:top}
+.ctable tbody tr td:first-child{color:rgba(251,247,236,.5);text-decoration:line-through;text-decoration-color:rgba(251,247,236,.25)}
+.ctable tbody tr td:last-child{font-weight:600}
+.ctable tbody tr:last-child td{border-bottom:0}
+
+/* ============================== stats ============================== */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gap);text-align:center}
+.stat-n{display:block;font:700 clamp(44px,6vw,72px)/1 var(--font-display)}
+.stat-l{display:block;margin-top:10px;font:600 13px/1.4 var(--font-sans);color:rgba(251,247,236,.75)}
+
+/* ============================== pricing ============================== */
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap);max-width:800px;margin:0 auto;align-items:stretch}
+.pcard-m{border:1px solid var(--paper-line);border-radius:8px;padding:36px 30px;display:flex;flex-direction:column;gap:8px;background:var(--cream);position:relative}
+.pcard-m.featured{border-color:var(--ink);border-width:2px;box-shadow:0 20px 50px rgba(20,16,12,.12)}
+.pbadge{position:absolute;top:-13px;left:30px;background:var(--ink);color:var(--cream);font:700 11px var(--font-sans);
+  text-transform:uppercase;letter-spacing:.08em;padding:4px 12px;border-radius:99px}
+.pcard-m h3{font-size:22px;margin-top:6px}
+.pprice{font:700 40px var(--font-display);margin:6px 0 2px}
+.pprice span{font:400 14px var(--font-sans);color:var(--ink-soft)}
+.pfor{color:var(--ink-soft);font-size:14.5px;margin-bottom:12px}
+.pcard-m ul{display:flex;flex-direction:column;gap:10px;margin:10px 0 26px;flex:1}
+.pcard-m li{font-size:14.5px;padding-inline-start:22px;position:relative}
+.pcard-m li::before{content:'';position:absolute;left:0;top:7px;width:9px;height:9px;background:var(--ochre)}
+.pcard-m .mbtn{width:100%}
+
+/* ============================== cta band ============================== */
+.ctaband h2{font-size:clamp(32px,5vw,54px);line-height:1.05;position:relative;z-index:1}
+.ctaband .mbtn{margin-top:32px;position:relative;z-index:1;border-color:var(--ink)}
+
+/* ============================== footer ============================== */
+.mfoot{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:28px var(--edge);
+  border-top:1px solid var(--paper-line);color:var(--ink-soft);font-size:13px;flex-wrap:wrap}
+.mfoot .mbrand{font-size:15px}
+
+/* ============================== responsive ============================== */
+@media (max-width:980px){
+  .mnav-links{display:none}
+  .stepwrap{grid-template-columns:1fr}
+  /* Pinning only makes sense beside a scrolling column: once the grid
+     collapses to one, a sticky frame sits fixed on top of the beat text
+     scrolling underneath it instead. Rather than keep one shared image
+     that would need to be visible for four different beats in turn (and
+     go unseen for three of them once it can no longer stay on screen),
+     each beat gets its own small screenshot inline, in normal flow: a
+     plain, linear read that still shows all four real screens. */
+  .stepvisual{display:none}
+  .beat{border-top:1px solid var(--paper-line);padding-top:28px}
+  .beat::before{content:'';display:block;aspect-ratio:16/10;margin-bottom:20px;border-radius:8px;
+    background-size:cover;background-position:top;background-color:var(--black);
+    box-shadow:0 14px 34px rgba(20,16,12,.16)}
+  .beat[data-beat="0"]::before{background-image:url(/assets/img/shot-dashboard.png)}
+  .beat[data-beat="1"]::before{background-image:url(/assets/img/shot-pipeline.png)}
+  .beat[data-beat="2"]::before{background-image:url(/assets/img/shot-detail.png)}
+  .beat[data-beat="3"]::before{background-image:url(/assets/img/shot-audit.png)}
+  /* The large vh gap on desktop exists to give the pinned image time to
+     sit on screen while a beat scrolls past; with no pin on mobile that
+     purpose is gone; a plain section-sized gap reads as one flowing
+     list instead of oddly long empty scroll stretches. */
+  .stepbeats{gap:56px;margin-top:24px}
+  .beat{opacity:1}
+  .fgrid{grid-template-columns:repeat(2,1fr)}
+  .stats{grid-template-columns:repeat(2,1fr);row-gap:36px}
+  .pgrid{grid-template-columns:1fr;max-width:440px}
+  .ivwrap{grid-template-columns:1fr}
+  .ivshot{order:-1}
+}
+@media (max-width:560px){
+  .fgrid{grid-template-columns:1fr}
+  .hero h1{font-size:15vw}
+  /* The desktop shape layout is tuned for a wide canvas: the same percentage
+     positions on a narrow one crowd the shapes directly over the centered
+     headline and CTA buttons. Rather than just scaling them down in place
+     (still overlapping, just smaller), keep two small corner accents clear
+     of the text column and drop the rest. */
+  .shape.square.forest,.shape.triangle.terracotta,.shape.bar.ink{display:none}
+  .shape.circle.ochre{width:56px;height:56px;top:14px;left:14px;opacity:.55}
+  .shape.ring{width:70px;height:70px;border-width:7px;top:auto;bottom:14px;right:14px;opacity:.55}
+  /* Same fix, same reason, for the CTA band's decorative pair: fixed
+     small corner accents instead of percentage positions that land on
+     top of the centered headline at this width. */
+  .hero-shapes.small .circle.forest{width:60px;height:60px;top:14px;left:14px;opacity:.5}
+  .hero-shapes.small .triangle.dark{border-left-width:40px;border-right-width:40px;border-bottom-width:68px;bottom:14px;right:14px;opacity:.5}
+}
+
+/* ============================== lightbox ============================== */
+.lightbox{
+  position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  background:rgba(20,16,12,.92);opacity:0;visibility:hidden;
+  transition:opacity .2s var(--ease),visibility 0s linear .2s;padding:5vh 5vw;
+}
+.lightbox.open{opacity:1;visibility:visible;transition:opacity .2s var(--ease)}
+.lightbox img{
+  max-width:90vw;max-height:90vh;width:auto;height:auto;object-fit:contain;
+  border-radius:6px;box-shadow:0 30px 80px rgba(0,0,0,.5);cursor:zoom-out;
+}
+.lightbox-close{
+  position:absolute;top:22px;right:28px;width:44px;height:44px;border-radius:50%;
+  border:1px solid rgba(251,247,236,.3);background:rgba(20,16,12,.4);color:var(--cream);
+  font-size:26px;line-height:1;cursor:pointer;
+}
+.lightbox-close:hover{background:rgba(251,247,236,.14)}

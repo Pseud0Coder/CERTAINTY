@@ -1,0 +1,182 @@
+<template data-composition-id="f3-interview" data-duration="4.5">
+  <div data-hf-id="hf-aoyk" id="root" data-composition-id="f3-interview" data-start="0" data-duration="4.5" data-width="1080" data-height="1080">
+
+    <style>
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      #root .clip {
+        position: absolute;
+        inset: 0;
+      }
+
+      /* full-bleed cream ground */
+      [class~="f3-interview-bg"] {
+        background: #FBF7EC;
+      }
+
+      /* compass-drafted geo ring, atmosphere only */
+      [id="f3-interview-ring"] {
+        position: absolute;
+        left: 760px;
+        top: -60px;
+        width: 380px;
+        height: 380px;
+        border: 1px solid #C9A227;
+        border-radius: 50%;
+        opacity: 0;
+      }
+      [id="f3-interview-ring"]::before {
+        content: "";
+        position: absolute;
+        inset: 12.5%;
+        border: 1px dashed #C9A227;
+        border-radius: 50%;
+        opacity: 0.7;
+      }
+
+      /* eyebrow labels */
+      [class~="f3-interview-label"] {
+        position: absolute;
+        left: 0;
+        top: 196px;
+        width: 1080px;
+        text-align: center;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: #55703F;
+      }
+      [id="f3-interview-label-b"] {
+        opacity: 0;
+      }
+
+      /* window A — wide interview screen */
+      [id="f3-interview-window-a"] {
+        position: absolute;
+        left: 180px;
+        top: 250px;
+        width: 600px;
+        height: 375px;
+        overflow: hidden;
+        border: 1px solid #C9A227;
+        background: #F3E7C0;
+      }
+      [id="f3-interview-zoom-outer"] {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+      [id="f3-interview-zoom-inner"] {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        will-change: transform;
+      }
+      [id="f3-interview-zoom-inner"] img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      /* window B — STAR proportions crop (arrives on the cut) */
+      [id="f3-interview-window-b"] {
+        position: absolute;
+        left: 130px;
+        top: 317px;
+        width: 820px;
+        height: 241px;
+        overflow: hidden;
+        border: 1px solid #C9A227;
+        background: #F3E7C0;
+        opacity: 0;
+        transform-origin: 50% 50%;
+      }
+      [id="f3-interview-window-b"] img {
+        position: absolute;
+        left: -276px;
+        top: -575px;
+        width: 1783px;
+        height: 1114px;
+        display: block;
+      }
+    </style>
+
+    <div data-hf-id="hf-sgdy" class="clip f3-interview-bg" data-start="0" data-duration="4.5" data-track-index="0"></div>
+
+    <div data-hf-id="hf-2mce" id="f3-interview-ring" class="clip" data-start="0" data-duration="4.5" data-track-index="1"></div>
+
+    <div data-hf-id="hf-pzqu" id="f3-interview-label-a" class="clip f3-interview-label" data-start="0" data-duration="4.5" data-track-index="2" data-layout-allow-overlap="true">INTERVIEW SESSION</div>
+    <div data-hf-id="hf-77p4" id="f3-interview-label-b" class="clip f3-interview-label" data-start="0" data-duration="4.5" data-track-index="5" data-layout-allow-overlap="true">STAR PROPORTIONS</div>
+
+    <div data-hf-id="hf-vykk" id="f3-interview-window-a" class="clip" data-start="0" data-duration="4.5" data-track-index="3">
+      <div data-hf-id="hf-h8r6" id="f3-interview-zoom-outer">
+        <div data-hf-id="hf-iou7" id="f3-interview-zoom-inner">
+          <img data-hf-id="hf-7ad9" src="assets/shot-interview.png" alt="">
+        </div>
+      </div>
+    </div>
+
+    <div data-hf-id="hf-lh9a" id="f3-interview-window-b" class="clip" data-start="0" data-duration="4.5" data-track-index="4">
+      <img data-hf-id="hf-uxxd" src="assets/shot-detail.png" alt="">
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+
+        var ring = document.getElementById("f3-interview-ring");
+        var labelA = document.getElementById("f3-interview-label-a");
+        var labelB = document.getElementById("f3-interview-label-b");
+        var windowA = document.getElementById("f3-interview-window-a");
+        var zoomOuter = document.getElementById("f3-interview-zoom-outer");
+        var zoomInner = document.getElementById("f3-interview-zoom-inner");
+        var windowB = document.getElementById("f3-interview-window-b");
+
+        // Scene 1 (0.0-1.2s) — wide entrance: window settles in, label + ring fade up.
+        tl.fromTo(windowA, { opacity: 0, scale: 1.05, y: 16 }, { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0);
+        tl.fromTo(labelA, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.15);
+        tl.fromTo(ring, { opacity: 0 }, { opacity: 0.3, duration: 0.8, ease: "power2.out" }, 0);
+
+        // Scene 2 (1.2-3.2s) — one continuous push toward the STAR proportions
+        // panel: outer scales, inner counter-translates so the target point
+        // (the "STAR proportions score" placeholder, ~81.25%/60.2% of the
+        // screenshot) lands centered as the frame tightens.
+        tl.to(zoomOuter, { scale: 2.3, duration: 1.95, ease: "power3.inOut" }, 1.2);
+        tl.to(zoomInner, { x: -187.5, y: -38.25, duration: 1.95, ease: "power3.inOut" }, 1.2);
+
+        // Label swap mid-push: the anticipation label hands off to the payoff label.
+        tl.to(labelA, { opacity: 0, duration: 0.3, ease: "power2.in" }, 2.3);
+        tl.to(labelB, { opacity: 1, duration: 0.3, ease: "power2.out" }, 2.3);
+
+        // The cut: the push continues forward through window A (fading, still
+        // scaling up) as window B — the real STAR proportions bars — arrives
+        // already in motion, landing centered and readable.
+        tl.to(windowA, { opacity: 0, scale: 1.15, duration: 0.25, ease: "power2.in" }, 3.15);
+        tl.fromTo(windowB, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.25, ease: "power2.out" }, 3.15);
+
+        // Scene 3 (3.2-4.0s) — held on the STAR percentages; a subtle,
+        // deterministic settle-jitter only, resolving back to rest by 4.0s.
+        tl.to(windowB, { x: 1.5, y: -1, duration: 0.15, ease: "sine.inOut" }, 3.4);
+        tl.to(windowB, { x: -1, y: 1.2, duration: 0.2, ease: "sine.inOut" }, 3.55);
+        tl.to(windowB, { x: 0, y: 0, duration: 0.25, ease: "sine.inOut" }, 3.75);
+
+        window.__timelines = window.__timelines || {};
+        window.__timelines["f3-interview"] = tl;
+      })();
+    </script>
+  </div>
+</template>

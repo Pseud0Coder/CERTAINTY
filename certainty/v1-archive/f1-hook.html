@@ -1,0 +1,80 @@
+<template>
+  <style>
+    /* Root — styled by #root only (never a class); see hyperframes-core Pitfall 3. */
+    #root {
+      position: absolute;
+      inset: 0;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    /* Full-bleed ground: matches the hero screenshot's own cream Bauhaus background
+       so the letterboxed edges of the 16:9 capture blend into the square canvas. */
+    .f1-hook-bg {
+      position: absolute;
+      inset: 0;
+      background: #FBF7EC;
+    }
+
+    /* Fixed display window for the hero capture — this box's size/position never
+       animates; only the image content inside zooms, so "nothing else moves". */
+    .f1-hook-window {
+      position: absolute;
+      left: 108px;
+      top: 160px;
+      width: 864px;
+      height: 486px;
+      overflow: hidden;
+      border: 1px solid rgba(201, 162, 39, 0.35);
+    }
+
+    .f1-hook-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 864px;
+      height: 486px;
+      transform-origin: 50% 0%;
+    }
+  </style>
+
+  <div data-hf-id="hf-6nwj" id="root" data-composition-id="f1-hook" data-width="1080" data-height="1080" data-duration="4.4">
+    <div data-hf-id="hf-ps2p" class="f1-hook-bg clip" data-start="0" data-duration="4.4" data-track-index="0"></div>
+
+    <div data-hf-id="hf-b9sz" class="f1-hook-window clip" data-start="0" data-duration="4.4" data-track-index="1">
+      <img data-hf-id="hf-01d5" class="f1-hook-img" src="assets/scroll-000.png" alt="">
+    </div>
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+    const IMG = ".f1-hook-img";
+
+    // Scene 1 (0.0–1.4s): tight crop centered on the badge + top of "Claimed." —
+    // the crop shows the top ~55% of the hero, entering with a small settle
+    // (1.965 -> 1.82 scale, power3) rather than appearing static.
+    tl.fromTo(
+      IMG,
+      { scale: 1.965 },
+      { scale: 1.82, duration: 1.4, ease: "power3.out" },
+      0
+    );
+
+    // Scene 2 (1.4–3.0s): one continuous zoom-out (power3) to the full hero —
+    // headline, subhead, CTAs and the geometric shapes all resolve into frame.
+    // Only this scale animates; the window itself never moves or resizes.
+    tl.to(IMG, { scale: 1.0, duration: 1.6, ease: "power3.inOut" }, 1.4);
+
+    // Scene 3 (3.0–4.0s): held on the full hero — stillness only, at most a
+    // subtle jitter (a couple of finite, deterministic micro-nudges), then
+    // fully settled for the remainder of the hold.
+    tl.to(IMG, { scale: 1.006, duration: 0.18, ease: "sine.inOut" }, 3.0)
+      .to(IMG, { scale: 0.997, duration: 0.2, ease: "sine.inOut" }, 3.18)
+      .to(IMG, { scale: 1.0, duration: 0.22, ease: "sine.inOut" }, 3.38);
+
+    window.__timelines["f1-hook"] = tl;
+  </script>
+</template>

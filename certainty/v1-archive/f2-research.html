@@ -1,0 +1,240 @@
+<template>
+  <style>
+    /*
+      Frame 2 — "Every claim, checked against evidence"
+      Canvas: 1080x1080. Silent (no VO) — reveals paced to internal beat, not a spoken cue.
+      Blueprint: device-surface-showcase (Adapt) — framed window as persistent hero,
+      one continuous pan down a real screenshot, held on the finding cards.
+
+      Scene 1 (0.0-1.0s): window + text column settle into place, top of the dashboard visible.
+      Scene 2 (1.0-3.0s): one continuous steady pan down to the "Research report" panel.
+      Scene 3 (3.0-4.0s): held on the finding cards; stillness only, at most a subtle jitter.
+    */
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: serif;
+    }
+
+    #root .f2-research-bg {
+      position: absolute;
+      inset: 0;
+      background: #fbf7ec;
+    }
+
+    #root .f2-research-vline {
+      position: absolute;
+      left: 54px;
+      top: 60px;
+      width: 1px;
+      height: 800px;
+      background: #c9a227;
+      opacity: 0.25;
+    }
+
+    #root .f2-research-ring {
+      position: absolute;
+      left: 300px;
+      top: 320px;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      border: 1px solid #c9a227;
+      opacity: 0;
+    }
+    #root .f2-research-ring::before {
+      content: "";
+      position: absolute;
+      inset: 12%;
+      border-radius: 50%;
+      border: 1px dashed #c9a227;
+    }
+
+    /* ---------------- text column (left, ~40%) ---------------- */
+    #root .f2-research-text {
+      position: absolute;
+      left: 76px;
+      top: 200px;
+      width: 370px;
+      height: 560px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+      opacity: 1;
+    }
+    #root .f2-research-label {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #55703f;
+    }
+    #root .f2-research-header {
+      font-size: 34px;
+      font-weight: 400;
+      line-height: 1.15;
+      color: #1b1712;
+    }
+    #root .f2-research-rule {
+      width: 60px;
+      height: 1px;
+      background: #c9a227;
+      transform-origin: left center;
+    }
+    #root .f2-research-legend {
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #5a5a5a;
+    }
+
+    /* ---------------- framed window (right, hero) ---------------- */
+    #root .f2-research-window {
+      position: absolute;
+      left: 470px;
+      top: 200px;
+      width: 534px;
+      height: 560px;
+      background: #fbf7ec;
+      border: 1px solid #c9a227;
+      box-sizing: border-box;
+    }
+    #root .f2-research-titlebar {
+      width: 100%;
+      height: 34px;
+      box-sizing: border-box;
+      border-bottom: 1px solid #c9a227;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+    }
+    #root .f2-research-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid #c9a227;
+      background: transparent;
+      flex-shrink: 0;
+    }
+    #root .f2-research-titlelabel {
+      margin-left: 8px;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #55703f;
+    }
+    #root .f2-research-viewport {
+      position: relative;
+      width: 534px;
+      height: 526px;
+      overflow: hidden;
+    }
+    #root .f2-research-world {
+      position: absolute;
+      left: -374px;
+      top: 0;
+      width: 1282px;
+      height: 801px;
+      will-change: transform;
+    }
+    #root .f2-research-world img {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <div data-hf-id="hf-9xuj" id="root" data-composition-id="f2-research" data-start="0" data-duration="4.5" data-width="1080" data-height="1080">
+    <div data-hf-id="hf-198p" class="f2-research-bg clip" data-start="0" data-duration="4.5" data-track-index="0"></div>
+
+    <div data-hf-id="hf-2vl1" class="f2-research-vline clip" data-start="0" data-duration="4.5" data-track-index="1"></div>
+    <div data-hf-id="hf-m0gx" id="f2-research-ring" class="f2-research-ring clip" data-start="0" data-duration="4.5" data-track-index="4"></div>
+
+    <div data-hf-id="hf-2u8d" id="f2-research-text" class="f2-research-text clip" data-start="0" data-duration="4.5" data-track-index="2">
+      <div data-hf-id="hf-w58p" id="f2-research-label" class="f2-research-label">Research report</div>
+      <div data-hf-id="hf-fezy" id="f2-research-header" class="f2-research-header">Evidence, not assertion.</div>
+      <div data-hf-id="hf-yhsa" id="f2-research-rule" class="f2-research-rule"></div>
+      <div data-hf-id="hf-ku8b" id="f2-research-legend" class="f2-research-legend">Good · Improve · Needs work</div>
+    </div>
+
+    <div data-hf-id="hf-1bxu" id="f2-research-window" class="f2-research-window clip" data-start="0" data-duration="4.5" data-track-index="3">
+      <div data-hf-id="hf-koo8" class="f2-research-titlebar">
+        <span data-hf-id="hf-nkvp" class="f2-research-dot"></span>
+        <span data-hf-id="hf-j1rd" class="f2-research-dot"></span>
+        <span data-hf-id="hf-k8og" class="f2-research-dot"></span>
+        <span data-hf-id="hf-7e4g" class="f2-research-titlelabel">Dashboard</span>
+      </div>
+      <div data-hf-id="hf-bt1b" class="f2-research-viewport">
+        <div data-hf-id="hf-m53b" id="f2-research-world" class="f2-research-world" data-layout-allow-overflow="true">
+          <img data-hf-id="hf-xknk" src="assets/shot-dashboard.png" alt="">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var PAN_TO = -275;
+
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["f2-research"] = tl;
+
+      // GSAP resolves string selectors itself (document-wide); ids are
+      // frame-prefixed and unique in the assembled document, so there is no
+      // need to locate this frame's own root element first.
+      var windowEl = "[id='f2-research-window']";
+      var textEl = "[id='f2-research-text']";
+      var labelEl = "[id='f2-research-label']";
+      var headerEl = "[id='f2-research-header']";
+      var ruleEl = "[id='f2-research-rule']";
+      var legendEl = "[id='f2-research-legend']";
+      var ringEl = "[id='f2-research-ring']";
+      var worldEl = "[id='f2-research-world']";
+
+      /* ---------------- Scene 1 (0.0-1.0s): settle in ---------------- */
+      tl.fromTo(
+        windowEl,
+        { opacity: 0, y: 18, scale: 1.04 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" },
+        0.05,
+      );
+
+      tl.fromTo(ringEl, { opacity: 0 }, { opacity: 0.22, duration: 1.0, ease: "power3.out" }, 0.0);
+
+      tl.fromTo(labelEl, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 0.15);
+      tl.fromTo(headerEl, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.3);
+      tl.fromTo(ruleEl, { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.35, ease: "power3.out" }, 0.55);
+      tl.fromTo(legendEl, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, 0.75);
+
+      /* ---------------- Scene 2 (1.0-3.0s): steady pan down ---------------- */
+      tl.fromTo(worldEl, { y: 0 }, { y: PAN_TO, duration: 2.0, ease: "power3.inOut" }, 1.0);
+
+      /* ---------------- Scene 3 (3.0-4.0s): held, subtle jitter only ------- */
+      var phase = { p: 0 };
+      tl.to(
+        phase,
+        {
+          p: Math.PI * 2 * 0.5,
+          duration: 1.0,
+          ease: "none",
+          onUpdate: function () {
+            var s = Math.sin(phase.p);
+            gsap.set(worldEl, { y: PAN_TO + s * 2 });
+          },
+        },
+        3.0,
+      );
+
+      /* keep text column steady through the hold (no exit, no drift) */
+      gsap.set(textEl, { opacity: 1 });
+    })();
+  </script>
+</template>

@@ -1,0 +1,108 @@
+<template>
+<style>
+  @font-face {
+    font-family: 'Georgia';
+    src: local('Georgia');
+  }
+
+  #root {
+    position: relative;
+    width: 1080px;
+    height: 1080px;
+    overflow: hidden;
+    font-family: "Georgia", serif;
+  }
+
+  .clip {
+    position: absolute;
+    inset: 0;
+  }
+
+  .b8-brand-bg {
+    background: #FBF7EC;
+  }
+
+  .b8-brand-mark {
+    position: absolute;
+    left: 450px;
+    top: 370px;
+    width: 180px;
+    height: 180px;
+    color: #1B1712;
+  }
+
+  .b8-brand-mark svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .b8-brand-wordmark {
+    position: absolute;
+    left: 0px;
+    top: 610px;
+    width: 1080px;
+    text-align: center;
+    font-family: "Georgia", serif;
+    font-weight: 700;
+    font-size: 68px;
+    line-height: 1.1;
+    letter-spacing: 1px;
+    color: #1B1712;
+  }
+</style>
+
+<div id="root" data-composition-id="b8-brand" data-width="1080" data-height="1080" data-duration="5">
+  <div class="clip b8-brand-bg" data-start="0" data-duration="5" data-track-index="0"></div>
+
+  <div class="clip" data-start="0" data-duration="5" data-track-index="1">
+    <div id="b8-brand-mark" class="b8-brand-mark">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="180" height="180" fill="none" aria-hidden="true">
+        <path id="b8-brand-mark-path" d="M12.5 17.2 L16 20.6 L23.07 7.57 A11 11 0 1 0 23.07 24.43" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="120" stroke-dashoffset="120"></path>
+      </svg>
+    </div>
+    <div id="b8-brand-wordmark" class="b8-brand-wordmark">Certainty</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  // ---- Scene 1 (0.0-1.0s): mark draws on and settles, wordmark follows shortly after ----
+  tl.fromTo(
+    "[id='b8-brand-mark']",
+    { opacity: 0, scale: 0.9 },
+    { opacity: 1, scale: 1, duration: 0.6, ease: "power3.out" },
+    0
+  );
+  tl.fromTo(
+    "[id='b8-brand-mark-path']",
+    { attr: { "stroke-dashoffset": 120 } },
+    { attr: { "stroke-dashoffset": 0 }, duration: 0.8, ease: "power2.out" },
+    0
+  );
+  tl.fromTo(
+    "[id='b8-brand-wordmark']",
+    { opacity: 0, y: 10 },
+    { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" },
+    0.35
+  );
+
+  // ---- Scene 2 (1.0-3.2s): held together, at most an extremely subtle drift ----
+  tl.to("[id='b8-brand-mark']", { scale: 1.008, duration: 1.1, ease: "sine.inOut" }, 1.0);
+  tl.to("[id='b8-brand-mark']", { scale: 1.0, duration: 1.1, ease: "sine.inOut" }, 2.1);
+
+  // ---- Scene 3 (3.2-3.9s): wordmark fades out, mark stays visible and re-centers slightly ----
+  tl.to("[id='b8-brand-wordmark']", { opacity: 0, duration: 0.6, ease: "power2.in" }, 3.2);
+  tl.to("[id='b8-brand-mark']", { y: 25, duration: 0.7, ease: "power3.out" }, 3.2);
+
+  // ---- Scene 4 (3.9-5.0s): the mark alone, barely perceptible settle, stable by t=5.0 ----
+  tl.to("[id='b8-brand-mark']", { y: 27, duration: 0.5, ease: "sine.inOut" }, 3.9);
+  tl.to("[id='b8-brand-mark']", { y: 25, duration: 0.5, ease: "sine.inOut" }, 4.4);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["b8-brand"] = tl;
+})();
+</script>
+</template>

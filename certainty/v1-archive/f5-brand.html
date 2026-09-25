@@ -1,0 +1,126 @@
+<template>
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      background: transparent;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    .f5-brand-ground {
+      position: absolute;
+      inset: 0;
+      background: #fbf7ec; /* bg-primary — cream ground */
+    }
+
+    .f5-brand-content {
+      position: absolute;
+      inset: 0;
+    }
+
+    .f5-brand-mark-wrap {
+      position: absolute;
+      top: 180px;
+      left: 50%;
+      margin-left: -160px;
+      width: 320px;
+      height: 320px;
+      color: #1b1712; /* ink — currentColor feeds the mark's stroke */
+    }
+
+    .f5-brand-mark-wrap svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .f5-brand-mark-path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .f5-brand-wordmark {
+      position: absolute;
+      top: 536px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 400;
+      font-size: 112px;
+      line-height: 1.1;
+      letter-spacing: 1px;
+      color: #1b1712; /* ink */
+      opacity: 0;
+    }
+  </style>
+
+  <div data-hf-id="hf-s5pn" id="root" data-composition-id="f5-brand" data-width="1080" data-height="1080">
+    <div data-hf-id="hf-3sk9" class="clip f5-brand-ground" data-start="0" data-duration="4" data-track-index="0"></div>
+
+    <div data-hf-id="hf-qh3m" class="clip f5-brand-content" data-start="0" data-duration="4" data-track-index="1">
+      <div data-hf-id="hf-qf7m" class="f5-brand-mark-wrap" id="f5-brand-mark-wrap">
+        <svg data-hf-id="hf-i6pe" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <path data-hf-id="hf-61z1" id="f5-brand-mark-path" class="f5-brand-mark-path" d="M12.5 17.2 L16 20.6 L23.07 7.57 A11 11 0 1 0 23.07 24.43" />
+        </svg>
+      </div>
+
+      <div data-hf-id="hf-a1sp" class="f5-brand-wordmark" id="f5-brand-wordmark">Certainty</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('[data-composition-id="f5-brand"]');
+      // Plain "#id" selectors throw when the id starts with a digit
+      // (invalid CSS identifier); use getElementById instead.
+      var path = document.getElementById("f5-brand-mark-path");
+      var markWrap = document.getElementById("f5-brand-mark-wrap");
+      var wordmark = document.getElementById("f5-brand-wordmark");
+
+      // Setup: measure the real path geometry, never a guessed length.
+      var len = path.getTotalLength();
+      path.style.strokeDasharray = String(len);
+      path.style.strokeDashoffset = String(len);
+
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      // Scene 1 (0.0-1.0s): plain cream ground, nothing yet — a breath before the mark.
+
+      // Scene 2 (1.0-2.5s): the mark draws on — ink stroke traces the
+      // checkmark-into-ring path, then settles (scale + opacity, power3).
+      tl.to(
+        path,
+        { strokeDashoffset: 0, duration: 1.0, ease: "power2.out" },
+        1.0
+      );
+      tl.fromTo(
+        markWrap,
+        { scale: 0.94, opacity: 0.88 },
+        { scale: 1, opacity: 1, duration: 0.45, ease: "power3.out" },
+        2.0
+      );
+
+      // Scene 3 (2.5-4.0s): the wordmark fades in beside the mark, completing
+      // the lockup, then holds — stillness only.
+      tl.fromTo(
+        wordmark,
+        { opacity: 0, x: -14 },
+        { opacity: 1, x: 0, duration: 0.6, ease: "power1.out" },
+        2.6
+      );
+
+      // Held on the finished lockup through the end of the frame (3.2-4.0s).
+
+      window.__timelines["f5-brand"] = tl;
+    })();
+  </script>
+</template>

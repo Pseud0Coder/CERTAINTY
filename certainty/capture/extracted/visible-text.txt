@@ -1,0 +1,114 @@
+[span] Certainty
+[a] Platform
+[a] Features
+[a] Sign in
+[p] Recruiting software
+[h1] Claimed.
+[h1] Verified.
+[em] Never confused.
+[p] The platform recruiters use to separate what a candidate claims
+        from what the evidence actually shows, enforced by the architecture, not a prompt.
+[a] Sign in to the demo
+[a] See how it works ↓
+[p] The recruiting platform
+[h2] One spine.
+[h2] Four disciplines.
+[h3] Verify, don't assume
+[p] Every résumé line is checked against the transcript, the LinkedIn snapshot and the job description.
+            A finding is either evidenced or it isn't. There is no in-between.
+[h3] One pipeline, human-run
+[p] Agents suggest a stage. A recruiter advances it. The board shows exactly where every
+            candidate stands, nothing more.
+[h3] Measured, not guessed
+[p] STAR proportions, ownership ratio, trailing-off, scored from the transcript itself,
+            the same way every time.
+[h3] Nothing off the record
+[p] Every login, flag and stage change writes to an append-only audit log, scoped to its tenant,
+            visible to admins.
+[p] Verified interviews
+[h2] Scored the same
+[h2] way, every time.
+[p] A live question. A console that says whether it is your turn or the model's,
+          never that audio is happening when it isn't. STAR proportions the moment a session ends,
+          scored by a fixed evaluator, not a guess.
+[strong] Consent before capture.
+[li] A verified session cannot record without it. Practice never saves.
+[strong] Deterministic scoring.
+[li] Situation, Task, Action, Result: the same evaluator, every session, no model in the loop.
+[strong] Ownership measured.
+[li] First person against team voice, trailing answers flagged, not eyeballed.
+[p] Built in, not bolted on
+[h2] The rules live
+[h2] in the code.
+[h3] Quarantine on ingest
+[p] Every document is extracted, sanitized and structured before an agent ever reads it.
+[h3] Projection-gated views
+[p] The candidate surface physically cannot return an internal field. It isn't hidden. It isn't there.
+[h3] No invented numbers
+[p] Model output stating a figure absent from the evidence is rejected outright, not flagged for review.
+[h3] Consent before capture
+[p] A verified interview cannot record without a signed consent gate. Practice sessions never save.
+[h3] Suggest, never decide
+[p] Agents propose a stage, a gap, a flag. A human approves it before it becomes a task.
+[h3] Append-only audit
+[p] Every mutation writes a row nobody can edit or delete. Admins can see all of it.
+[h3] Tenant isolation
+[p] The tenant id comes from the session and is parameterized into every query. Always.
+[h3] Deterministic fallback
+[p] A slow, wrong or absent model degrades wording. It never breaks a gate or a measurement.
+[p] The whole idea, in one table
+[h2] Claimed.
+[h2] Verified.
+[th] Elsewhere
+[th] Certainty
+[td] A résumé line is taken at face value
+[td] Checked against transcript, LinkedIn and the job description
+[td] Screening notes, scattered across email and chat
+[td] One evidence spine, one source of truth per candidate
+[td] "Strong communicator": somebody's opinion
+[td] STAR-scored and ownership-measured from the transcript
+[td] A metric nobody can trace back
+[td] Every figure grounded in a quote, or it doesn't ship
+[td] An AI step nobody can audit
+[td] Traced, contract-checked, and it fails closed
+[span] Rules enforced
+[span] in code, not policy
+[span] Automated tests,
+[span] green on every build
+[span] Role-scoped
+[span] workspaces
+[span] Invented colors
+[span] in the design system
+[p] Plans
+[h2] Priced by
+[h2] the pipeline.
+[h3] Screening
+[span] /seat
+[p] One recruiter, one pipeline.
+[li] Pipeline board
+[li] Quarantine + audit
+[li] 1 tenant module
+[a] Start free
+[p] Most teams
+[h3] Growth
+[p] $48
+[span] /seat/mo
+[p] Submission builder, both studios.
+[li] Everything in Screening
+[li] Submission builder
+[li] Resume + LinkedIn studios
+[li] Verified interview sessions
+[a] Sign in to try
+[h3] Scale
+[p] Custom
+[p] Multi-tenant, dedicated retention.
+[li] Everything in Growth
+[li] Multi-tenant isolation
+[li] Custom retention policy
+[li] Admin flow builder
+[a] Talk to us
+[h2] Separate the claim
+[h2] from the evidence.
+[a] Sign in to the demo
+[span] Certainty
+[p] Stage 1 production build. All demo data is fictional.

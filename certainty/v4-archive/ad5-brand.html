@@ -1,0 +1,139 @@
+<template>
+  <div
+    id="root"
+    data-composition-id="ad5-brand"
+    data-width="1080"
+    data-height="1080"
+    data-duration="4"
+  >
+    <div class="clip ad5-brand-bg" data-start="0" data-duration="4" data-track-index="0"></div>
+
+    <div class="clip ad5-brand-markwrap" data-start="0" data-duration="4" data-track-index="1">
+      <svg
+        id="ad5-brand-mark-svg"
+        width="120"
+        height="120"
+        viewBox="0 0 32 32"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          id="ad5-brand-mark-path"
+          d="M12.5 17.2 L16 20.6 L23.07 7.57 A11 11 0 1 0 23.07 24.43"
+          stroke="#1B1712"
+          stroke-width="2.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+
+    <div class="clip ad5-brand-wordclip" data-start="0" data-duration="4" data-track-index="2">
+      <div id="ad5-brand-word-wrap" class="ad5-brand-wordwrap">Certainty</div>
+    </div>
+  </div>
+
+  <style>
+    @font-face { font-family: 'Georgia'; src: local('Georgia'); }
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ad5-brand-bg {
+      background: #FBF7EC;
+    }
+
+    /* Mark container: full-width strip centered on the mark's own vertical
+       position (y ~= 470, above true canvas center to leave room for the
+       wordmark below it). Centered via flex, never CSS transform, so GSAP
+       can freely animate x/y/scale/opacity on it without conflict. */
+    .ad5-brand-markwrap {
+      top: 410px;
+      height: 120px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      will-change: transform, opacity;
+    }
+
+    /* Wordmark container: full-width strip, text-align centers the copy
+       horizontally with no CSS transform, so GSAP can animate opacity/y
+       on it independently of the mark. */
+    .ad5-brand-wordwrap {
+      position: absolute;
+      left: 0;
+      top: 580px;
+      width: 100%;
+      text-align: center;
+      font-family: "Georgia", serif;
+      font-size: 64px;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      color: #1B1712;
+      opacity: 0;
+      will-change: transform, opacity;
+    }
+  </style>
+
+  <script>
+    (function () {
+      var markWrap = document.getElementById("ad5-brand-mark-svg").parentElement;
+      var pathEl = document.getElementById("ad5-brand-mark-path");
+      var wordWrap = document.getElementById("ad5-brand-word-wrap");
+
+      // Measure the real path length so the stroke draw-on is exact for
+      // this specific curve (checkmark flowing into the open ring).
+      var pathLen = pathEl.getTotalLength();
+      gsap.set(pathEl, { strokeDasharray: pathLen, strokeDashoffset: pathLen });
+
+      var tl = gsap.timeline({ paused: true });
+
+      // Scene 1 (0.0-1.0s): cream ground already present. The mark draws on
+      // via stroke-dashoffset while settling into place (opacity/scale,
+      // power3.out); the "Certainty" wordmark fades in shortly after so the
+      // full lockup (mark + word) is complete and settled by ~1.0s.
+      tl.fromTo(
+        markWrap,
+        { opacity: 0, scale: 0.85 },
+        { opacity: 1, scale: 1, duration: 0.7, ease: "power3.out" },
+        0
+      );
+      tl.to(pathEl, { strokeDashoffset: 0, duration: 0.7, ease: "power2.out" }, 0);
+      tl.fromTo(
+        wordWrap,
+        { opacity: 0, y: 16 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" },
+        0.35
+      );
+
+      // Scene 2 (1.0-2.4s): held — both mark and wordmark fully visible,
+      // centered, static. The one deliberate full stop of the whole video.
+      // (No tween needed; both elements simply hold their settled state.)
+
+      // Scene 3 (2.4-3.1s): the wordmark fades out first while the mark
+      // stays exactly in place; once the fade finishes, the mark eases down
+      // toward the canvas's true vertical center now that it no longer
+      // needs to leave room for text below it.
+      tl.to(wordWrap, { opacity: 0, duration: 0.45, ease: "power2.in" }, 2.4);
+      tl.to(markWrap, { y: 70, duration: 0.25, ease: "power3" }, 2.85);
+
+      // Scene 4 (3.1-4.0s): the mark alone, centered, fully static, holding
+      // to the end. This is the video's literal last image — final frame,
+      // no exit tween follows.
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["ad5-brand"] = tl;
+    })();
+  </script>
+</template>

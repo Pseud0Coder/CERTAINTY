@@ -1,0 +1,87 @@
+<template>
+  <style>
+    /* Root — sized to the 1080x1080 canvas; never a background here (see full-bleed rule below). */
+    #root {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Full-bleed cream ground — painted on a dedicated clip layer, not on #root. */
+    .f4-profile-bg {
+      position: absolute;
+      inset: 0;
+      background-color: #FBF7EC;
+    }
+
+    /* The framed window: a hairline-bordered card holding the profile-page plate. */
+    .f4-profile-window {
+      position: absolute;
+      left: 70px;
+      top: 70px;
+      width: 940px;
+      height: 780px;
+      transform-origin: 50% 50%;
+    }
+
+    .f4-profile-window-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border: 1px solid #C9A227;
+      background-color: #FBF7EC;
+    }
+
+    /* The stitched plate image — scaled up and horizontally center-cropped inside the window;
+       only its vertical position is animated (via GSAP y / transform), never left/top. */
+    .f4-profile-plate {
+      position: absolute;
+      top: 0;
+      left: -330px;
+      width: 1600px;
+      height: 1058px;
+      display: block;
+    }
+  </style>
+
+  <div id="root" data-composition-id="f4-profile" data-width="1080" data-height="1080" data-duration="4.4">
+    <div class="clip f4-profile-bg" data-start="0" data-duration="4.4" data-track-index="0"></div>
+
+    <div class="clip f4-profile-window" data-start="0" data-duration="4.4" data-track-index="1">
+      <div class="f4-profile-window-inner">
+        <img class="f4-profile-plate" src="assets/profile-page-full.png" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+    // Scene 1 (0.0–1.2s): top of the plate visible — name, headline, verified badge.
+    // The framed window settles in: gentle scale + fade (the blueprint's one restrained reveal).
+    tl.fromTo(
+      '.f4-profile-window',
+      { opacity: 0, scale: 0.95 },
+      { opacity: 1, scale: 1, duration: 0.45, ease: 'power3.out' },
+      0
+    );
+
+    // Scene 2 (1.2–3.0s): one continuous, steady vertical pan down the plate — the "Worked with"
+    // company chips and highlight lines pass through frame at constant speed, no wobble.
+    tl.fromTo(
+      '.f4-profile-plate',
+      { y: 0 },
+      { y: -278, duration: 1.8, ease: 'power3.inOut' },
+      1.2
+    );
+
+    // Scene 3 (3.0–4.0s): pan lands on and holds the Download PDF / Download DOCX buttons at the
+    // plate's foot — no further motion; the hold is the deliverable.
+
+    window.__timelines['f4-profile'] = tl;
+  </script>
+</template>

@@ -1,0 +1,228 @@
+<template data-composition-id="flow4-profile">
+  <style>
+    #root {
+      width: 1080px;
+      height: 1080px;
+      position: relative;
+      overflow: hidden;
+      font-family: Cambria, serif;
+    }
+
+    #root .flow4-profile-bg {
+      position: absolute;
+      inset: 0;
+      background: #FBF7EC;
+    }
+
+    #flow4-profile-window {
+      position: absolute;
+      left: 40px;
+      top: 228px;
+      width: 1000px;
+      height: 625px;
+      border: 1px solid #C9A227;
+      background: transparent;
+      overflow: hidden;
+      box-sizing: border-box;
+      transform-origin: center center;
+    }
+
+    #flow4-profile-world {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1000px;
+      height: 793px;
+    }
+
+    #flow4-profile-world img {
+      display: block;
+      width: 1000px;
+      height: 793px;
+    }
+
+    #flow4-profile-cursor {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      left: 0;
+      top: 0;
+      margin-left: -13px;
+      margin-top: -13px;
+      opacity: 0;
+    }
+
+    #flow4-profile-cursor-dot {
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #1B1712;
+      transform-origin: center center;
+    }
+
+    #flow4-profile-cursor-ring {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid #C9A227;
+      box-sizing: border-box;
+      background: transparent;
+      transform-origin: center center;
+    }
+
+    #flow4-profile-mark-wrap {
+      position: absolute;
+      left: 962px;
+      top: 952px;
+      width: 56px;
+      height: 56px;
+      color: #1B1712;
+      opacity: 0;
+      transform-origin: center center;
+    }
+
+    #flow4-profile-mark-wrap svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .flow4-profile-mark-path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+
+  <div id="root" data-composition-id="flow4-profile" data-width="1080" data-height="1080" data-duration="7">
+    <div
+      class="flow4-profile-bg clip"
+      data-start="0"
+      data-duration="7"
+      data-track-index="0"
+    ></div>
+
+    <div
+      id="flow4-profile-window"
+      class="clip"
+      data-start="0"
+      data-duration="7"
+      data-track-index="1"
+    >
+      <div id="flow4-profile-world" data-layout-allow-overflow="true">
+        <img src="assets/flow-profile-full.png" alt="" />
+      </div>
+    </div>
+
+    <div
+      id="flow4-profile-cursor"
+      class="clip"
+      data-start="0"
+      data-duration="7"
+      data-track-index="2"
+    >
+      <div id="flow4-profile-cursor-ring"></div>
+      <div id="flow4-profile-cursor-dot"></div>
+    </div>
+
+    <div
+      id="flow4-profile-mark-wrap"
+      class="clip"
+      data-start="0"
+      data-duration="7"
+      data-track-index="3"
+    >
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path id="flow4-profile-mark-path" class="flow4-profile-mark-path" d="M12.5 17.2 L16 20.6 L23.07 7.57 A11 11 0 1 0 23.07 24.43" />
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+        window.__timelines = window.__timelines || {};
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines["flow4-profile"] = tl;
+
+        var winSel = "[id='flow4-profile-window']";
+        var worldSel = "[id='flow4-profile-world']";
+        var cursorSel = "[id='flow4-profile-cursor']";
+        var dotSel = "[id='flow4-profile-cursor-dot']";
+        var ringSel = "[id='flow4-profile-cursor-ring']";
+        var markSel = "[id='flow4-profile-mark-wrap']";
+
+        // The brand mark is a static solid-stroke path here (fade+scale only,
+        // per this frame's spec) — no stroke draw-on animation is used.
+
+        // initial deterministic states
+        gsap.set(winSel, { opacity: 0, scale: 1.02, transformOrigin: "50% 50%" });
+        gsap.set(worldSel, { y: 0 });
+        gsap.set(cursorSel, { opacity: 0, x: 409, y: 650 });
+        gsap.set(dotSel, { scale: 1, transformOrigin: "50% 50%" });
+        gsap.set(ringSel, { scale: 1, opacity: 1, transformOrigin: "50% 50%" });
+        gsap.set(markSel, { opacity: 0, scale: 0.8, transformOrigin: "50% 50%" });
+
+        // Scene 1 (0.0-1.5s): window fades/scales in, plate top visible (world top:0), then holds.
+        tl.to(
+          winSel,
+          { opacity: 1, scale: 1, duration: 0.7, ease: "power3.out" },
+          0.0
+        );
+        // hold through 1.5s so the top of the plate (name, headline, verified badge, chips) registers.
+
+        // Scene 2 (1.5-4.5s): real scroll — world layer pans via transform (y), 0 to -168px over ~3s.
+        tl.to(
+          worldSel,
+          { y: -168, duration: 3.0, ease: "power3" },
+          1.5
+        );
+
+        // Scene 3 (4.5-5.7s): cursor fades in at (409,650), glides (power3) to (409,780), arriving ~5.6s.
+        tl.to(
+          cursorSel,
+          { opacity: 1, duration: 0.15, ease: "power1.out" },
+          4.5
+        );
+        tl.to(
+          cursorSel,
+          { x: 409, y: 780, duration: 1.1, ease: "power3" },
+          4.5
+        );
+
+        // Scene 4 (5.6-5.95s): click-pulse right at arrival.
+        tl.to(
+          ringSel,
+          { scale: 2.2, opacity: 0, duration: 0.35, ease: "power2.out" },
+          5.6
+        );
+        tl.to(
+          dotSel,
+          { scale: 0.8, duration: 0.075, ease: "power1.out" },
+          5.6
+        );
+        tl.to(
+          dotSel,
+          { scale: 1, duration: 0.075, ease: "power1.in" },
+          5.675
+        );
+
+        // Scene 5 (5.95-7.0s): brand mark fades/scales in as the closing signature, then holds
+        // static to the end (final frame — this is the video's real ending).
+        tl.fromTo(
+          markSel,
+          { opacity: 0, scale: 0.8 },
+          { opacity: 1, scale: 1, duration: 0.4, ease: "power3.out" },
+          5.95
+        );
+    })();
+  </script>
+</template>

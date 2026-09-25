@@ -1,0 +1,25 @@
+{
+  "name": "certainty",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Certainty. Recruitment evidence platform. Verified claims separated from claimed claims.",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "start": "node src/server/index.ts",
+    "dev": "node --watch src/server/index.ts",
+    "test": "node --test tests/",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "build:web": "node scripts/sync-web.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "livekit-client": "^2.22.3",
+    "livekit-server-sdk": "^2.19.1"
+  }
+}

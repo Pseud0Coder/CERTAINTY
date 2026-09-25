@@ -1,0 +1,82 @@
+<template>
+  <div
+    id="root"
+    data-composition-id="ad1-hook"
+    data-width="1080"
+    data-height="1080"
+    data-duration="4.4"
+  >
+    <div class="clip ad1-hook-bg" data-start="0" data-duration="4.4" data-track-index="0"></div>
+
+    <div class="clip ad1-hook-imgwrap" data-start="0" data-duration="4.4" data-track-index="1">
+      <img id="ad1-hook-img" src="assets/scroll-000.png" alt="" />
+    </div>
+  </div>
+
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ad1-hook-bg {
+      background: #FBF7EC;
+    }
+
+    .ad1-hook-imgwrap {
+      overflow: hidden;
+    }
+
+    /* Source screenshot is 1920x1080 (landscape). Canvas is 1080x1080 (square).
+       Height already equals the canvas height, so we size the image at its
+       native height and center-crop horizontally only — no vertical distortion,
+       no aspect-ratio stretch, headline area (upper/middle of the hero) stays in frame. */
+    #ad1-hook-img {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 1920px;
+      height: 1080px;
+      margin-left: -960px;
+      will-change: transform, opacity;
+    }
+  </style>
+
+  <script>
+    (function () {
+      var img = document.getElementById("ad1-hook-img");
+
+      var tl = gsap.timeline({ paused: true });
+
+      // Scene 1 (0.0-0.3s): hero settles in, already filling most of the frame,
+      // well before the 0.5s hero-visibility rule.
+      tl.fromTo(
+        img,
+        { opacity: 0, scale: 1.06 },
+        { opacity: 1, scale: 1.02, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-3.6s): one continuous slow push-in spanning the rest of the
+      // beat — a single power3 tween, never static, never front-loaded-then-frozen.
+      tl.to(img, { scale: 1.0, duration: 3.3, ease: "power3" }, 0.3);
+
+      // Scene 3 (3.6-4.0s): settle with a couple of tiny, finite sine-driven
+      // nudges (no repeat/yoyo) instead of a hard freeze.
+      tl.to(img, { x: 2, y: -1.5, duration: 0.2, ease: "sine.inOut" }, 3.6);
+      tl.to(img, { x: -1, y: 1, duration: 0.2, ease: "sine.inOut" }, 3.8);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["ad1-hook"] = tl;
+    })();
+  </script>
+</template>

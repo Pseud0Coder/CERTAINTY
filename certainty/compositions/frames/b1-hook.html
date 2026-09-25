@@ -1,0 +1,89 @@
+<template>
+<style>
+  #root {
+    position: relative;
+    width: 1080px;
+    height: 1080px;
+    overflow: hidden;
+  }
+
+  .clip {
+    position: absolute;
+    inset: 0;
+  }
+
+  .b1-hook-bg {
+    background: #FBF7EC;
+  }
+
+  .b1-hook-window {
+    position: absolute;
+    left: 375px;
+    top: 70px;
+    width: 330px;
+    height: 590px;
+    border: 1px solid #C9A227;
+    border-radius: 32px;
+    overflow: hidden;
+    background: #FBF7EC;
+  }
+
+  .b1-hook-world {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 330px;
+    height: 714.15px;
+    transform-origin: 50% 15%;
+  }
+
+  .b1-hook-img {
+    display: block;
+    width: 330px;
+    height: 714.15px;
+  }
+</style>
+
+<div id="root" data-composition-id="b1-hook" data-width="1080" data-height="1080" data-duration="5.4">
+  <div class="clip b1-hook-bg" data-start="0" data-duration="5.4" data-track-index="0"></div>
+
+  <div class="clip b1-hook-phone-clip" data-start="0" data-duration="5.4" data-track-index="1">
+    <div id="b1-hook-window" class="b1-hook-window">
+      <div id="b1-hook-world" class="b1-hook-world" data-layout-allow-overflow="true">
+        <img class="b1-hook-img" src="assets/mobile-hero.png" alt="" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  // Scene 1 (0.0-0.3s): phone window fades/settles in - visible well before 0.5s.
+  tl.fromTo(
+    "[id='b1-hook-window']",
+    { opacity: 0, scale: 1.06 },
+    { opacity: 1, scale: 1.02, duration: 0.3, ease: "power3.out" },
+    0
+  );
+
+  // Scene 2 (0.3-4.6s): one continuous slow push-in on the world layer,
+  // transform-origin anchored toward the headline area near the top of the shot.
+  tl.fromTo(
+    "[id='b1-hook-world']",
+    { scale: 1.0 },
+    { scale: 1.12, duration: 4.3, ease: "power3.inOut" },
+    0.3
+  );
+
+  // Scene 3 (4.6-5.0s): settle - a couple of tiny finite sine-driven nudges, no repeat/yoyo.
+  tl.to("[id='b1-hook-world']", { x: 1.2, duration: 0.13, ease: "sine.inOut" }, 4.6);
+  tl.to("[id='b1-hook-world']", { x: -0.8, duration: 0.13, ease: "sine.inOut" }, 4.73);
+  tl.to("[id='b1-hook-world']", { x: 0, duration: 0.14, ease: "sine.inOut" }, 4.86);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["b1-hook"] = tl;
+})();
+</script>
+</template>

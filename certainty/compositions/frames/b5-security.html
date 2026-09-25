@@ -1,0 +1,191 @@
+<template>
+<div id="root" data-composition-id="b5-security" data-width="1080" data-height="1080" data-duration="5.5">
+
+  <div class="clip b5-security-bg" data-start="0" data-duration="5.5" data-track-index="0"></div>
+
+  <div class="clip b5-security-shot" data-start="0" data-duration="5.5" data-track-index="1">
+    <div id="b5-security-window" class="b5-security-window">
+      <div id="b5-security-world" class="b5-security-world" data-layout-allow-overflow="true">
+        <img class="b5-security-img" src="assets/mobile-detail-star.png" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <div class="clip b5-security-copy" data-start="0" data-duration="5.5" data-track-index="2">
+    <div id="b5-security-line1" class="b5-security-line b5-security-line1">
+      <span class="b5-security-word">Every document,</span>
+      <span class="b5-security-word">quarantined first.</span>
+    </div>
+    <div id="b5-security-line2" class="b5-security-line b5-security-line2">
+      <span class="b5-security-word">Embedded instructions,</span>
+      <span class="b5-security-word">stripped before any agent reads them.</span>
+    </div>
+  </div>
+
+  <style>
+    @font-face {
+      font-family: 'Georgia';
+      src: local('Georgia');
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: "Georgia", serif;
+    }
+
+    .clip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1080px;
+    }
+
+    .b5-security-bg {
+      background: #FBF7EC;
+    }
+
+    /* MANDATORY: position:absolute set explicitly on the window itself
+       (not inherited from the .clip parent) — a prior frame in this
+       project omitted this and the window rendered full-canvas-sized,
+       covering the copy beneath it. */
+    .b5-security-window {
+      position: absolute;
+      left: 375px;
+      top: 70px;
+      width: 330px;
+      height: 590px;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      overflow: hidden;
+      background: #FBF7EC;
+      opacity: 0;
+    }
+
+    /*
+      mobile-detail-star.png native size: 780x1688 (sips-verified).
+      Display width 330px -> scale factor 330/780 = 0.4230769.
+      Scaled world height = 1688 * 0.4230769 = 714.1538px.
+      Window viewport is 590px tall; max valid downward crop is
+      714.1538 - 590 = 124.15px, i.e. top: -124px is the deepest offset
+      that still keeps the image filling the window edge-to-edge (no
+      empty gap below). At that offset the visible 590px band spans
+      native rows ~294 - 1688, which lands squarely on the "Ingested
+      sources" card (heading + resume/transcript/linkedin snapshot/jd
+      rows, each marked Clean) and the "Documents are extracted to
+      structured fields. Embedded instructions are stripped at
+      ingestion..." copy, with the "Generate deliverables" button and a
+      sliver of the bottom nav bar visible at the very foot of the
+      window for natural continuity.
+    */
+    .b5-security-world {
+      position: absolute;
+      left: 0;
+      top: -124px;
+      width: 330px;
+      height: 714.1538px;
+      transform-origin: 50% 65%;
+    }
+
+    .b5-security-img {
+      display: block;
+      width: 330px;
+      height: 714.1538px;
+    }
+
+    .b5-security-line {
+      position: absolute;
+      left: 100px;
+      width: 880px;
+      text-align: center;
+      font-family: "Georgia", serif;
+      color: #1B1712;
+      line-height: 1.25;
+    }
+
+    .b5-security-line1 {
+      top: 712px;
+      font-size: 40px;
+    }
+
+    .b5-security-line2 {
+      top: 774px;
+      font-size: 34px;
+    }
+
+    .b5-security-word {
+      display: inline-block;
+      opacity: 0;
+    }
+
+    .b5-security-word + .b5-security-word {
+      margin-left: 12px;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["b5-security"] = tl;
+
+      // Scene 1 (0.0-0.3s): phone window fades/settles in, already framed
+      // on the quarantine/Ingested-sources crop (static top offset above)
+      // — visible well before 0.5s.
+      tl.fromTo(
+        "[id='b5-security-window']",
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-1.4s): copy line 1 word-groups stagger in.
+      tl.fromTo(
+        "#b5-security-line1 .b5-security-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.35 },
+        0.3
+      );
+
+      // Scene 3 (1.4-2.8s): copy line 2 word-groups stagger in (longer
+      // line, so a touch more time between groups).
+      tl.fromTo(
+        "#b5-security-line2 .b5-security-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", stagger: 0.5 },
+        1.4
+      );
+
+      // Scene 4 (2.8-4.4s): slow continuous scale push-in on the inner
+      // world layer toward the "Clean" status badges (transform-origin
+      // 50% 65% sits on the Ingested-sources rows), while copy holds
+      // settled.
+      tl.to(
+        "[id='b5-security-world']",
+        { scale: 1.1, duration: 1.6, ease: "power3" },
+        2.8
+      );
+
+      // Scene 5 (4.4-5.0s): settle — a subtle finite jitter on the outer
+      // window frame, no repeat/yoyo.
+      tl.to(
+        "[id='b5-security-window']",
+        { scale: 1.006, duration: 0.2, ease: "power1.inOut" },
+        4.4
+      );
+      tl.to(
+        "[id='b5-security-window']",
+        { scale: 1, duration: 0.2, ease: "power1.inOut" },
+        4.6
+      );
+    })();
+  </script>
+
+</div>
+</template>
+</content>
+</invoke>

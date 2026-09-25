@@ -1,0 +1,126 @@
+<template>
+  <div
+    id="root"
+    data-composition-id="ad1-hook"
+    data-width="1080"
+    data-height="1080"
+    data-duration="4.4"
+  >
+    <div class="clip ad1-hook-bg" data-start="0" data-duration="4.4" data-track-index="0"></div>
+
+    <div class="clip ad1-hook-windowclip" data-start="0" data-duration="4.4" data-track-index="1">
+      <div id="ad1-hook-window" class="ad1-hook-window">
+        <div id="ad1-hook-world" class="ad1-hook-world" data-layout-allow-overflow="true">
+          <img
+            class="ad1-hook-img"
+            src="assets/mobile-hero.png"
+            alt=""
+            width="430"
+            height="931"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Full-bleed cream ground on its own dedicated clip layer, never on
+       #root — the root is clip-gated at assembly so a background painted
+       there is not a dependable full-frame ground. */
+    .ad1-hook-bg {
+      background: #FBF7EC;
+    }
+
+    /* Single large centered phone window: portrait bezel, 1px ochre
+       hairline border, ~32px rounded corners (clean bezel, no notch).
+       Canvas box left:325, top:100, width:430, height:780 (bottom edge
+       880, safely inside the ~896 keep-out cutoff). Overrides the shared
+       .clip full-bleed inset via explicit left/top/width/height. */
+    .ad1-hook-window {
+      position: absolute;
+      left: 325px;
+      top: 100px;
+      width: 430px;
+      height: 780px;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      overflow: hidden;
+      opacity: 0;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    /* Inner "world" layer: the real mobile-viewport screenshot at its
+       exact display scale (430 / 780 native width ≈ 0.5513), giving a
+       displayed height of ~931px — taller than the 780px window, so it
+       must be allowed to overflow the layout check. Anchored top:0 so
+       the hero's badge + start of the headline are visible at rest.
+       transform-origin sits toward the headline band (upper-middle of
+       the visible crop) so the push-in reads centered on the copy. */
+    .ad1-hook-world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 430px;
+      height: 931px;
+      transform-origin: 50% 35%;
+      will-change: transform;
+    }
+
+    .ad1-hook-img {
+      display: block;
+      width: 430px;
+      height: 931px;
+    }
+  </style>
+
+  <script>
+    (function () {
+      var windowEl = document.getElementById("ad1-hook-window");
+      var worldEl = document.getElementById("ad1-hook-world");
+
+      var tl = gsap.timeline({ paused: true });
+
+      // Scene 1 (0.0-0.3s): the phone window fades/settles in, already
+      // filling most of its space — visible well before 0.5s.
+      tl.fromTo(
+        windowEl,
+        { opacity: 0, scale: 1.06 },
+        { opacity: 1, scale: 1.02, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-3.6s): one continuous slow push-in for the rest of
+      // the beat — the world layer scales up around the headline band,
+      // a single power3 tween spanning the whole window, never static.
+      tl.fromTo(
+        worldEl,
+        { scale: 1.0 },
+        { scale: 1.1, duration: 3.3, ease: "power3.inOut" },
+        0.3
+      );
+
+      // Scene 3 (3.6-4.0s): settle — at most a very subtle finite jitter,
+      // a couple of tiny sine-driven nudges (no repeat/yoyo).
+      tl.to(windowEl, { y: 1.5, duration: 0.2, ease: "sine.inOut" }, 3.6);
+      tl.to(windowEl, { y: 0, duration: 0.2, ease: "sine.inOut" }, 3.8);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["ad1-hook"] = tl;
+    })();
+  </script>
+</template>

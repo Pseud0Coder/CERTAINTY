@@ -1,0 +1,175 @@
+<template>
+  <div
+    id="root"
+    data-composition-id="ad4-profile"
+    data-width="1080"
+    data-height="1080"
+    data-duration="4.4"
+  >
+    <div class="clip ad4-profile-bg" data-start="0" data-duration="4.4" data-track-index="0"></div>
+
+    <div class="clip ad4-profile-copy" data-start="0" data-duration="4.4" data-track-index="1">
+      <div class="ad4-profile-line1" id="ad4-profile-line1">
+        <span class="ad4-profile-word">One</span> <span class="ad4-profile-word">link.</span>
+      </div>
+      <div class="ad4-profile-line2" id="ad4-profile-line2">
+        <span class="ad4-profile-word">Fully</span> <span class="ad4-profile-word">verified.</span>
+      </div>
+    </div>
+
+    <div class="clip ad4-profile-devicewrap" data-start="0" data-duration="4.4" data-track-index="2">
+      <div class="ad4-profile-window" id="ad4-profile-window">
+        <div class="ad4-profile-world" id="ad4-profile-world" data-layout-allow-overflow="true">
+          <img id="ad4-profile-img" src="assets/profile-page-full.png" alt="" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: serif;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ad4-profile-bg {
+      background: #FBF7EC;
+    }
+
+    /* Left column: two-line closing ad copy, roughly x:80-520, y:340-740 */
+    .ad4-profile-line1,
+    .ad4-profile-line2 {
+      position: absolute;
+      left: 80px;
+      width: 440px;
+      font-family: serif;
+      font-weight: 400;
+      font-size: 44px;
+      line-height: 1.15;
+      color: #1B1712;
+    }
+
+    .ad4-profile-line1 {
+      top: 340px;
+    }
+
+    .ad4-profile-line2 {
+      top: 412px;
+    }
+
+    .ad4-profile-word {
+      display: inline-block;
+      will-change: transform, opacity;
+    }
+
+    /* Right side: bordered device window, x:560-1040, y:140-890 (480x750) --
+       shortened from an initial 800px so the window's bottom edge clears the
+       caption keep-out cutoff (~896px on a 1080-tall canvas), which holds
+       even with captions disabled (matches sibling Frame 2's same fix). */
+    .ad4-profile-window {
+      position: absolute;
+      left: 560px;
+      top: 140px;
+      width: 480px;
+      height: 750px;
+      border: 1px solid #C9A227;
+      background: #FBF7EC;
+      overflow: hidden;
+      will-change: transform, opacity;
+    }
+
+    /* Inner "world" layer: the full profile plate (1920x1269 native) scaled to
+       0.7x (1344x888) so it fills + overshoots the 480x750 window --
+       centered horizontally, anchored to the top so Scene 1 shows the plate's
+       own top (verified badge, companies) before any pan happens. It is taller
+       than the window by 138px, which is exactly the pan headroom used below --
+       the world never travels past its own real bottom edge. */
+    .ad4-profile-world {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 1344px;
+      height: 888px;
+      margin-left: -672px;
+      will-change: transform;
+    }
+
+    #ad4-profile-img {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <script>
+    (function () {
+      var tl = gsap.timeline({ paused: true });
+
+      // Scene 1 (0.0-0.3s): device window settles in on the right, showing the
+      // plate's own top (verified badge, companies) -- visible before 0.5s.
+      tl.fromTo(
+        "[id='ad4-profile-window']",
+        { opacity: 0, scale: 0.94 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-1.3s): copy line 1 reveals on the left, word-group by
+      // word-group (fade + y-slide-up, power3.out).
+      tl.fromTo(
+        "[id='ad4-profile-line1'] .ad4-profile-word",
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", stagger: 0.12 },
+        0.3
+      );
+
+      // Scene 3 (1.3-2.3s): copy line 2 reveals the same way, AND the device
+      // window's inner world layer begins a continuous slow pan downward via
+      // `y` (never top/left), a single power3 tween spanning 1.3s-3.6s. -138px
+      // is exactly the world's overshoot past the window (888 - 750), so the
+      // pan lands precisely on the plate's real bottom edge without overshoot.
+      tl.fromTo(
+        "[id='ad4-profile-line2'] .ad4-profile-word",
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", stagger: 0.12 },
+        1.3
+      );
+
+      tl.to(
+        "[id='ad4-profile-world']",
+        { y: -138, duration: 2.3, ease: "power3" },
+        1.3
+      );
+
+      // Scene 4 (2.3-3.6s): the pan above continues through this window,
+      // carrying past the highlights/skills toward the download buttons at
+      // the plate's foot; both copy lines are fully settled well before 2.3s.
+
+      // Scene 5 (3.6-4.0s): settle -- a subtle finite jitter on the window,
+      // no repeat/yoyo.
+      tl.to(
+        "[id='ad4-profile-window']",
+        { x: 1.5, y: -1, duration: 0.2, ease: "sine.inOut" },
+        3.6
+      );
+      tl.to(
+        "[id='ad4-profile-window']",
+        { x: -1, y: 1, duration: 0.2, ease: "sine.inOut" },
+        3.8
+      );
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["ad4-profile"] = tl;
+    })();
+  </script>
+</template>

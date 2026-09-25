@@ -1,0 +1,183 @@
+<template>
+  <style>
+    @font-face { font-family: 'Georgia'; src: local('Georgia'); }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .b2-research-bg {
+      background: #FBF7EC;
+    }
+
+    /* ---------------- Screenshot zone: portrait phone window ---------------- */
+    .b2-research-window {
+      position: absolute;
+      left: 375px;
+      top: 70px;
+      width: 330px;
+      height: 590px;
+      overflow: hidden;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      background: #FBF7EC;
+      opacity: 0;
+      transform: scale(0.96);
+      will-change: transform, opacity;
+    }
+
+    /* Inner "world" layer: native 780x1688 asset displayed at 330px width
+       (factor 330/780 = 0.42308) renders 714.15px tall - taller than the
+       590px window, so it deliberately overflows the bottom; the window's
+       own overflow:hidden clips it. Anchored top:0 so the dashboard's own
+       top is visible first; a later scale push-in (never top/left/width)
+       moves the visible content toward the research-report findings cards
+       in the lower portion of the image. */
+    .b2-research-world {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 330px;
+      height: 714.15px;
+      transform-origin: 50% 78%;
+      will-change: transform;
+    }
+
+    .b2-research-shot {
+      display: block;
+      width: 330px;
+      height: 714.15px;
+    }
+
+    /* ---------------- Copy zone: centered, below the phone window ---------------- */
+    .b2-research-copy {
+      position: absolute;
+      left: 100px;
+      top: 720px;
+      width: 880px;
+      text-align: center;
+    }
+
+    .b2-research-line {
+      font-family: "Georgia", serif;
+      font-weight: 400;
+      font-size: 40px;
+      line-height: 1.25;
+      color: #1B1712;
+    }
+
+    .b2-research-line + .b2-research-line {
+      margin-top: 14px;
+    }
+
+    .b2-research-word-group {
+      display: inline-block;
+      opacity: 0;
+      transform: translateY(24px);
+      will-change: transform, opacity;
+    }
+
+    .b2-research-evidence {
+      color: #8A6A1E;
+    }
+  </style>
+
+  <div id="root" data-composition-id="b2-research" data-width="1080" data-height="1080" data-duration="5.5">
+
+    <div class="b2-research-bg clip" data-start="0" data-duration="5.5" data-track-index="0"></div>
+
+    <div class="b2-research-window clip" id="b2-research-window" data-start="0" data-duration="5.5" data-track-index="1">
+      <div class="b2-research-world" id="b2-research-world" data-layout-allow-overflow="true">
+        <img class="b2-research-shot" src="assets/mobile-dashboard.png" alt="" />
+      </div>
+    </div>
+
+    <div class="b2-research-copy clip" data-start="0" data-duration="5.5" data-track-index="2">
+      <div class="b2-research-line" id="b2-research-line1">
+        <span class="b2-research-word-group">Recruiting</span>
+        <span class="b2-research-word-group">software for</span>
+        <span class="b2-research-word-group">hiring teams.</span>
+      </div>
+      <div class="b2-research-line" id="b2-research-line2">
+        <span class="b2-research-word-group">Every candidate</span>
+        <span class="b2-research-word-group">claim, checked against</span>
+        <span class="b2-research-word-group"><span class="b2-research-evidence">evidence.</span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["b2-research"] = tl;
+
+      var line1Groups = document.querySelectorAll("#b2-research-line1 .b2-research-word-group");
+      var line2Groups = document.querySelectorAll("#b2-research-line2 .b2-research-word-group");
+
+      // Scene 1 (0.0-0.3s): phone window settles into the top zone,
+      // opacity 0->1 + slight scale settle, power3.out - visible before 0.5s.
+      tl.fromTo(
+        "[id='b2-research-window']",
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0.0
+      );
+
+      // Scene 2 (0.3-1.4s): copy line 1 reveals, centered beneath the phone,
+      // word groups staggering in.
+      tl.fromTo(
+        line1Groups,
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", stagger: 0.25 },
+        0.3
+      );
+
+      // Scene 3 (1.4-2.6s): copy line 2 reveals beneath it, same stagger
+      // treatment, while the phone window's inner world layer begins a slow
+      // continuous scale push-in toward the research-report card area
+      // (transform-origin already set to the lower portion of the image),
+      // arriving by ~4.2s.
+      tl.fromTo(
+        line2Groups,
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", stagger: 0.3 },
+        1.4
+      );
+      tl.fromTo(
+        "[id='b2-research-world']",
+        { scale: 1.0 },
+        { scale: 1.18, duration: 2.8, ease: "power3.inOut" },
+        1.4
+      );
+
+      // Scene 4 (2.6-4.6s): push-in continues/settles (the tween above runs
+      // through 4.2s), findings cards readable, both copy lines fully
+      // settled and holding.
+
+      // Scene 5 (4.6-5.0s): settle - a subtle finite jitter on the window,
+      // no repeat/yoyo.
+      tl.to(
+        "[id='b2-research-window']",
+        { scale: 1.008, duration: 0.2, ease: "power3.out" },
+        4.6
+      );
+      tl.to(
+        "[id='b2-research-window']",
+        { scale: 1.0, duration: 0.2, ease: "power3.inOut" },
+        4.8
+      );
+    })();
+  </script>
+</template>

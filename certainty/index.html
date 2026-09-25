@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        background: #FBF7EC;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="40"
+      data-width="1080"
+      data-height="1080"
+    >
+      <div
+        id="el-b1-hook"
+        class="scene"
+        data-composition-id="b1-hook"
+        data-composition-src="compositions/frames/b1-hook.html"
+        data-start="0"
+        data-duration="5.4"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-b2-research"
+        class="scene"
+        data-composition-id="b2-research"
+        data-composition-src="compositions/frames/b2-research.html"
+        data-start="5"
+        data-duration="5.5"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-b3-resume"
+        class="scene"
+        data-composition-id="b3-resume"
+        data-composition-src="compositions/frames/b3-resume.html"
+        data-start="10"
+        data-duration="5.5"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-b4-interview"
+        class="scene"
+        data-composition-id="b4-interview"
+        data-composition-src="compositions/frames/b4-interview.html"
+        data-start="15"
+        data-duration="5.5"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-b5-security"
+        class="scene"
+        data-composition-id="b5-security"
+        data-composition-src="compositions/frames/b5-security.html"
+        data-start="20"
+        data-duration="5.5"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-b6-pipeline"
+        class="scene"
+        data-composition-id="b6-pipeline"
+        data-composition-src="compositions/frames/b6-pipeline.html"
+        data-start="25"
+        data-duration="5.5"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-b7-profile"
+        class="scene"
+        data-composition-id="b7-profile"
+        data-composition-src="compositions/frames/b7-profile.html"
+        data-start="30"
+        data-duration="5.4"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-b8-brand"
+        class="scene"
+        data-composition-id="b8-brand"
+        data-composition-src="compositions/frames/b8-brand.html"
+        data-start="35"
+        data-duration="5"
+        data-track-index="1"
+      ></div>
+
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+      // ── frame transitions (injected by transitions.mjs) ──
+      (function () { var tl = window.__timelines["main"];
+        tl.to("#el-b1-hook", { scale: 2.5, opacity: 0, filter: "blur(8px)", duration: 0.4, ease: "power3.in" }, 5);
+        tl.fromTo("#el-b2-research", { scale: 0.5, opacity: 0, filter: "blur(8px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.4, ease: "power3.out" }, 5);
+        tl.to("#el-b2-research", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 10);
+        tl.fromTo("#el-b3-resume", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 10);
+        tl.to("#el-b3-resume", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 15);
+        tl.fromTo("#el-b4-interview", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 15);
+        tl.to("#el-b4-interview", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 20);
+        tl.fromTo("#el-b5-security", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 20);
+        tl.to("#el-b5-security", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 25);
+        tl.fromTo("#el-b6-pipeline", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 25);
+        tl.to("#el-b6-pipeline", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 30);
+        tl.fromTo("#el-b7-profile", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 30);
+        tl.to("#el-b7-profile", { scale: 2.5, opacity: 0, filter: "blur(8px)", duration: 0.4, ease: "power3.in" }, 35);
+        tl.fromTo("#el-b8-brand", { scale: 0.5, opacity: 0, filter: "blur(8px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.4, ease: "power3.out" }, 35);
+        tl.to({}, { duration: 40 }, 0); // full-span anchor — main.duration() == composition total (Studio master duration)
+      })();
+    </script>
+  </body>
+</html>

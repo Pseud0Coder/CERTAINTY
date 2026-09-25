@@ -1,0 +1,27 @@
+[span] Certainty
+[h1] Nadia Rowe
+[p] Senior Software Engineer, FinTech
+[p] London, UK
+[span] Verified via structured interview
+[h2] Worked with
+[span] Northline QA Labs
+[span] Meridian Systems
+[span] Ardent Digital
+[h2] Highlights
+[p] Led WCAG compliance automation: built the assessment framework and exposed it as a REST API, cutting manual audit cycles from weeks to hours.
+[p] Optimized high-volume scanning: implemented async multithreaded processing with SQL query tuning, reducing processing time by 30%.
+[p] Coordinated a four-engineer QA workstream: ran day-to-day delivery while reporting into engineering management.
+[p] Built billing integrations for B2B SaaS clients, cutting reconciliation effort noticeably.
+[p] Maintained the migration from a monolith to modular services with zero data loss.
+[p] Shipped customer-facing web features in two-week cycles.
+[p] Wrote the first automated test suite for the payments module.
+[h2] Skills
+[b] Engineering:
+[p] API design, SQL optimization, QA automation, TypeScript
+[b] Leadership:
+[p] Workstream coordination, Mentoring
+[h2] Education
+[p] BSc Computer Science, University of Leeds, 2015
+[p] The full CV, including contact details, is available as a download.
+[button] Download PDF
+[button] Download DOCX

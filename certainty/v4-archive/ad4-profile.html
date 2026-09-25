@@ -1,0 +1,209 @@
+<template>
+  <div
+    id="root"
+    data-composition-id="ad4-profile"
+    data-width="1080"
+    data-height="1080"
+    data-duration="4.4"
+  >
+    <div class="clip ad4-profile-bg" data-start="0" data-duration="4.4" data-track-index="0"></div>
+
+    <div class="clip ad4-profile-copyclip" data-start="0" data-duration="4.4" data-track-index="1">
+      <div class="ad4-profile-copy">
+        <div class="ad4-profile-line1">
+          <span id="ad4-profile-w1" class="ad4-profile-word">One</span>
+          <span id="ad4-profile-w2" class="ad4-profile-word">link.</span>
+        </div>
+        <div class="ad4-profile-line2">
+          <span id="ad4-profile-w3" class="ad4-profile-word">Fully</span>
+          <span id="ad4-profile-w4" class="ad4-profile-word">verified.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="clip ad4-profile-windowclip" data-start="0" data-duration="4.4" data-track-index="2">
+      <div id="ad4-profile-window" class="ad4-profile-window">
+        <div id="ad4-profile-world" class="ad4-profile-world" data-layout-allow-overflow="true">
+          <img
+            class="ad4-profile-img"
+            src="assets/mobile-profile-full.png"
+            alt=""
+            width="380"
+            height="1494"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @font-face { font-family: 'Georgia'; src: local('Georgia'); }
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Full-bleed cream ground on its own dedicated clip layer, never on
+       #root — the root is clip-gated at assembly so a background painted
+       there is not a dependable full-frame ground. */
+    .ad4-profile-bg {
+      background: #FBF7EC;
+    }
+
+    /* Ad copy, left column (canvas box roughly x:80-520, y:340-740). Two
+       lines, "Fraunces" serif (a real Google Font — HyperFrames' compiler
+       auto-fetches named fonts it recognizes; confirmed working elsewhere
+       in this project, e.g. ad5-brand.html's wordmark). Each line is split
+       into word-group spans for a staggered reveal. */
+    .ad4-profile-copy {
+      position: absolute;
+      left: 80px;
+      top: 340px;
+      width: 440px;
+    }
+
+    .ad4-profile-line1,
+    .ad4-profile-line2 {
+      font-family: "Georgia", serif;
+      font-size: 44px;
+      font-weight: 500;
+      line-height: 1.2;
+      color: #1B1712;
+    }
+
+    .ad4-profile-line2 {
+      margin-top: 8px;
+    }
+
+    .ad4-profile-word {
+      display: inline-block;
+      opacity: 0;
+      will-change: transform, opacity;
+    }
+
+    .ad4-profile-word + .ad4-profile-word {
+      margin-left: 0.28em;
+    }
+
+    /* Phone window, right side: portrait bezel, 1px ochre hairline border,
+       ~32px rounded corners. Canvas box left:600, top:170, width:380,
+       height:720 (bottom edge 890, safely inside the ~896 keep-out cutoff).
+       Overrides the shared .clip full-bleed inset via explicit box props. */
+    .ad4-profile-window {
+      position: absolute;
+      left: 600px;
+      top: 170px;
+      width: 380px;
+      height: 720px;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      overflow: hidden;
+      opacity: 0;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    /* Inner "world" layer: the real full-page stitched mobile screenshot
+       (native 780 x 3066) at its exact display scale (380 / 780 ≈ 0.4872),
+       giving a displayed height of 3066 * 380/780 ≈ 1493.95px — far taller
+       than the 720px window, so it must be allowed to overflow the layout
+       check. Anchored at y:0 so the plate's own top (name, headline,
+       verified badge, companies) is visible at rest. */
+    .ad4-profile-world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 380px;
+      height: 1493.95px;
+      will-change: transform;
+    }
+
+    .ad4-profile-img {
+      display: block;
+      width: 380px;
+      height: 1493.95px;
+    }
+  </style>
+
+  <script>
+    (function () {
+      var windowEl = document.getElementById("ad4-profile-window");
+      var worldEl = document.getElementById("ad4-profile-world");
+      var w1 = document.getElementById("ad4-profile-w1");
+      var w2 = document.getElementById("ad4-profile-w2");
+      var w3 = document.getElementById("ad4-profile-w3");
+      var w4 = document.getElementById("ad4-profile-w4");
+
+      var tl = gsap.timeline({ paused: true });
+
+      // Scene 1 (0.0-0.3s): phone window fades/settles in on the right,
+      // showing the plate's own top — visible well before 0.5s.
+      tl.fromTo(
+        windowEl,
+        { opacity: 0, scale: 1.05 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-1.3s): copy line 1 word-groups stagger in on the left.
+      tl.fromTo(
+        w1,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" },
+        0.3
+      );
+      tl.fromTo(
+        w2,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" },
+        0.55
+      );
+
+      // Scene 3 (1.3-2.3s): copy line 2 word-groups stagger in on the left;
+      // at the same time, the world layer begins a continuous slow pan
+      // downward via `y` transform (never `top`) — a single power3 tween
+      // spanning 1.3s-3.6s, ending well short of the world's max pan
+      // distance (1493.95 - 720 = 773.95px) so it never overshoots the
+      // plate's real bottom edge.
+      tl.fromTo(
+        w3,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" },
+        1.3
+      );
+      tl.fromTo(
+        w4,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" },
+        1.55
+      );
+      tl.fromTo(
+        worldEl,
+        { y: 0 },
+        { y: -750, duration: 2.3, ease: "power3.inOut" },
+        1.3
+      );
+
+      // Scene 4 (2.3-3.6s): pan continues/settles toward the download
+      // buttons near the plate's foot (covered by the tween above, which
+      // runs through 3.6s); both copy lines are already fully settled.
+
+      // Scene 5 (3.6-4.0s): settle — at most a subtle finite jitter on the
+      // phone window only (no repeat/yoyo).
+      tl.to(windowEl, { y: 1.5, duration: 0.2, ease: "sine.inOut" }, 3.6);
+      tl.to(windowEl, { y: 0, duration: 0.2, ease: "sine.inOut" }, 3.8);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["ad4-profile"] = tl;
+    })();
+  </script>
+</template>

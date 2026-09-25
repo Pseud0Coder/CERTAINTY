@@ -1,0 +1,150 @@
+<template>
+<div id="root" data-composition-id="ad3-interview" data-width="1080" data-height="1080" data-duration="4.5">
+
+  <div class="clip ad3-interview-bg" data-start="0" data-duration="4.5" data-track-index="0"></div>
+
+  <div class="clip ad3-interview-scene" id="ad3-interview-scene" data-start="0" data-duration="4.5" data-track-index="1">
+
+    <div class="ad3-interview-window" id="ad3-interview-window">
+      <div class="ad3-interview-inner" id="ad3-interview-inner">
+        <img class="ad3-interview-img ad3-interview-img-a" id="ad3-interview-img-a" src="assets/shot-interview.png" alt="" />
+        <img class="ad3-interview-img ad3-interview-img-b" id="ad3-interview-img-b" src="assets/shot-detail.png" alt="" />
+      </div>
+    </div>
+
+    <div class="ad3-interview-copy">
+      <div class="ad3-interview-line ad3-interview-line1">
+        <span class="ad3-interview-word ad3-interview-line1-word">Every</span>
+        <span class="ad3-interview-word ad3-interview-line1-word">interview.</span>
+      </div>
+      <div class="ad3-interview-line ad3-interview-line2">
+        <span class="ad3-interview-word ad3-interview-line2-word">Scored</span>
+        <span class="ad3-interview-word ad3-interview-line2-word">the same</span>
+        <span class="ad3-interview-word ad3-interview-line2-word">way.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: serif;
+      background: #FBF7EC;
+    }
+
+    .clip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ad3-interview-bg {
+      background: #FBF7EC;
+    }
+
+    .ad3-interview-window {
+      position: absolute;
+      left: 40px;
+      top: 90px;
+      width: 480px;
+      height: 800px;
+      border: 1px solid #C9A227;
+      box-sizing: border-box;
+      overflow: hidden;
+      background: #1B1712;
+    }
+
+    .ad3-interview-inner {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 60%;
+    }
+
+    .ad3-interview-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .ad3-interview-img-a {
+      object-position: 78% 47%;
+    }
+
+    .ad3-interview-img-b {
+      object-position: 38% 63%;
+    }
+
+    .ad3-interview-copy {
+      position: absolute;
+      left: 600px;
+      top: 90px;
+      width: 440px;
+      height: 800px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .ad3-interview-line {
+      display: flex;
+      flex-wrap: wrap;
+      column-gap: 14px;
+      row-gap: 6px;
+    }
+
+    .ad3-interview-word {
+      display: inline-block;
+      font-family: serif;
+      font-weight: 400;
+      font-size: 44px;
+      line-height: 1.2;
+      color: #1B1712;
+    }
+
+    .ad3-interview-line2 .ad3-interview-word {
+      color: #1B1712;
+    }
+  </style>
+
+  <script>
+    (function () {
+      var tl = gsap.timeline({ paused: true });
+
+      gsap.set("#ad3-interview-window", { opacity: 0, scale: 0.94, transformOrigin: "50% 50%" });
+      gsap.set(".ad3-interview-line1-word", { opacity: 0, y: 20 });
+      gsap.set(".ad3-interview-line2-word", { opacity: 0, y: 20 });
+      gsap.set("#ad3-interview-img-b", { opacity: 0 });
+      gsap.set("#ad3-interview-inner", { scale: 1 });
+
+      // Scene 1 (0.0-0.3s): device window settles in on the left
+      tl.to("#ad3-interview-window", { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, 0);
+
+      // Scene 2 (0.3-1.3s): copy line 1 reveals, word-group stagger
+      tl.to(".ad3-interview-line1-word", { opacity: 1, y: 0, duration: 0.5, stagger: 0.14, ease: "power3.out" }, 0.3);
+
+      // Scene 3 (1.3-2.3s): copy line 2 reveals; device content begins continuous push-in
+      tl.to(".ad3-interview-line2-word", { opacity: 1, y: 0, duration: 0.5, stagger: 0.14, ease: "power3.out" }, 1.3);
+      tl.to("#ad3-interview-inner", { scale: 1.6, duration: 2.3, ease: "power3.inOut" }, 1.3);
+      tl.to("#ad3-interview-img-b", { opacity: 1, duration: 0.9, ease: "power3.inOut" }, 1.4);
+      tl.to("#ad3-interview-img-a", { opacity: 0, duration: 0.9, ease: "power3.inOut" }, 1.4);
+
+      // Scene 5 (3.6-4.0s): subtle finite settle jitter (no repeat/yoyo)
+      tl.to("#ad3-interview-scene", { y: -3, duration: 0.2, ease: "power2.out" }, 3.6);
+      tl.to("#ad3-interview-scene", { y: 0, duration: 0.2, ease: "power2.inOut" }, 3.8);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["ad3-interview"] = tl;
+    })();
+  </script>
+
+</div>
+</template>

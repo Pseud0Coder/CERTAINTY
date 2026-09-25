@@ -1,0 +1,187 @@
+<template>
+<div id="root" data-composition-id="b4-interview" data-width="1080" data-height="1080" data-duration="5.5">
+
+  <div class="clip b4-interview-bg" data-start="0" data-duration="5.5" data-track-index="0"></div>
+
+  <div class="clip b4-interview-shot" data-start="0" data-duration="5.5" data-track-index="1">
+    <div id="b4-interview-window" class="b4-interview-window">
+      <div id="b4-interview-world-top" class="b4-interview-world" data-layout-allow-overflow="true">
+        <img class="b4-interview-img" src="assets/mobile-detail-top.png" alt="" />
+      </div>
+      <div id="b4-interview-world-star" class="b4-interview-world b4-interview-world-star" data-layout-allow-overflow="true">
+        <img class="b4-interview-img" src="assets/mobile-detail-star.png" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <div class="clip b4-interview-copy" data-start="0" data-duration="5.5" data-track-index="2">
+    <div id="b4-interview-line1" class="b4-interview-line">
+      <span class="b4-interview-word">Every candidate</span>
+      <span class="b4-interview-word">interview.</span>
+    </div>
+    <div id="b4-interview-line2" class="b4-interview-line">
+      <span class="b4-interview-word">Scored the same way,</span>
+      <span class="b4-interview-word">every time.</span>
+    </div>
+  </div>
+
+  <style>
+    @font-face {
+      font-family: 'Georgia';
+      src: local('Georgia');
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: "Georgia", serif;
+    }
+
+    .clip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1080px;
+    }
+
+    .b4-interview-bg {
+      background: #FBF7EC;
+    }
+
+    .b4-interview-window {
+      position: absolute;
+      left: 375px;
+      top: 70px;
+      width: 330px;
+      height: 590px;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      overflow: hidden;
+      background: #FBF7EC;
+      opacity: 0;
+    }
+
+    .b4-interview-world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 330px;
+      height: 714.1538px;
+      transform-origin: 50% 50%;
+    }
+
+    .b4-interview-world-star {
+      opacity: 0;
+      transform-origin: 50% 42%;
+    }
+
+    .b4-interview-img {
+      display: block;
+      width: 330px;
+      height: 714.1538px;
+    }
+
+    .b4-interview-line {
+      position: absolute;
+      left: 100px;
+      width: 880px;
+      text-align: center;
+      font-family: "Georgia", serif;
+      font-size: 40px;
+      line-height: 1.2;
+      color: #1B1712;
+    }
+
+    #b4-interview-line1 {
+      top: 720px;
+    }
+
+    #b4-interview-line2 {
+      top: 776px;
+    }
+
+    .b4-interview-word {
+      display: inline-block;
+      opacity: 0;
+    }
+
+    .b4-interview-word + .b4-interview-word {
+      margin-left: 12px;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["b4-interview"] = tl;
+
+      // Scene 1 (0.0-0.3s): phone window fades/settles in, layer 1
+      // (mobile-detail-top.png) visible well before 0.5s.
+      tl.fromTo(
+        "[id='b4-interview-window']",
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-1.4s): copy line 1 word-groups stagger in.
+      tl.fromTo(
+        "#b4-interview-line1 .b4-interview-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.35 },
+        0.3
+      );
+
+      // Scene 3 (1.4-2.6s): copy line 2 word-groups stagger in.
+      tl.fromTo(
+        "#b4-interview-line2 .b4-interview-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.35 },
+        1.4
+      );
+
+      // Scene 4 (2.6-3.6s): crossfade inside the window from layer 1 to
+      // layer 2 (mobile-detail-star.png, the real STAR percentage bars),
+      // layer 1 fading out simultaneously.
+      tl.fromTo(
+        "[id='b4-interview-world-star']",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.7, ease: "power3" },
+        2.6
+      );
+      tl.to(
+        "[id='b4-interview-world-top']",
+        { opacity: 0, duration: 0.7, ease: "power3" },
+        2.6
+      );
+
+      // Scene 5 (3.6-4.6s): gentle scale push-in on the now-visible STAR
+      // layer toward the percentage bars; copy remains settled/held.
+      tl.fromTo(
+        "[id='b4-interview-world-star']",
+        { scale: 1.0 },
+        { scale: 1.08, duration: 1.0, ease: "power3" },
+        3.6
+      );
+
+      // Scene 6 (4.6-5.0s): settle, subtle finite jitter (no repeat/yoyo).
+      tl.to(
+        "[id='b4-interview-window']",
+        { scale: 1.006, duration: 0.2, ease: "power1.inOut" },
+        4.6
+      );
+      tl.to(
+        "[id='b4-interview-window']",
+        { scale: 1, duration: 0.2, ease: "power1.inOut" },
+        4.8
+      );
+    })();
+  </script>
+
+</div>
+</template>

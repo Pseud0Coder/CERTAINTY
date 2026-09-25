@@ -1,0 +1,137 @@
+<template>
+  <style>
+    /* Root — styled by #root only (never a class); see hyperframes-core Pitfall 3. */
+    #root {
+      position: absolute;
+      inset: 0;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    /* Full-bleed cream ground — painted on a dedicated clip layer, not on #root. */
+    .flow3-detail-bg {
+      position: absolute;
+      inset: 0;
+      background-color: #FBF7EC;
+    }
+
+    /* The bordered window holding the real detail-page screenshot at 0.625x native scale.
+       Box position/size never animate; only opacity/scale (transform) on entrance. */
+    .flow3-detail-window {
+      position: absolute;
+      left: 40px;
+      top: 228px;
+      width: 1000px;
+      height: 625px;
+      border: 1px solid #C9A227;
+      background-color: transparent;
+      overflow: hidden;
+      box-sizing: border-box;
+      transform-origin: 50% 50%;
+    }
+
+    .flow3-detail-window img {
+      display: block;
+      width: 1000px;
+      height: 625px;
+    }
+
+    /* Cursor actor: a wrapper positioned at (0,0) with a centering offset, moved purely via
+       GSAP x/y (translate) — never left/top after this. Dot + ring are concentric children. */
+    .flow3-detail-cursor {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 26px;
+      height: 26px;
+      margin-left: -13px;
+      margin-top: -13px;
+      opacity: 0;
+    }
+
+    .flow3-detail-cursor-dot {
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: #1B1712;
+      transform-origin: 50% 50%;
+    }
+
+    .flow3-detail-cursor-ring {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid #C9A227;
+      background-color: transparent;
+      box-sizing: border-box;
+      transform-origin: 50% 50%;
+    }
+  </style>
+
+  <div id="root" data-composition-id="flow3-detail" data-width="1080" data-height="1080" data-duration="5">
+    <div class="clip flow3-detail-bg" data-start="0" data-duration="5" data-track-index="0"></div>
+
+    <div class="clip flow3-detail-window" data-start="0" data-duration="5" data-track-index="1">
+      <img src="assets/flow-detail.png" alt="" />
+    </div>
+
+    <div class="clip flow3-detail-cursor" data-start="0" data-duration="5" data-track-index="2">
+      <div class="flow3-detail-cursor-ring"></div>
+      <div class="flow3-detail-cursor-dot"></div>
+    </div>
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+    const WINDOW = ".flow3-detail-window";
+    const CURSOR = ".flow3-detail-cursor";
+    const DOT = ".flow3-detail-cursor-dot";
+    const RING = ".flow3-detail-cursor-ring";
+
+    // Deterministic starting states.
+    gsap.set(WINDOW, { opacity: 0, scale: 1.02 });
+    gsap.set(CURSOR, { opacity: 0, x: 700, y: 515 });
+    gsap.set(DOT, { scale: 1 });
+    gsap.set(RING, { scale: 1, opacity: 1 });
+
+    // Scene 1 (0.0-1.6s): window fades/scales in (visible well before t=0.5s), then simply
+    // HOLDS fully visible and static for the rest of this window — this frame carries more
+    // real information (journey strip, share link, STAR bars) than the others, so it gets
+    // a longer opening read before the cursor moves. Cursor stays hidden.
+    tl.fromTo(
+      WINDOW,
+      { opacity: 0, scale: 1.02 },
+      { opacity: 1, scale: 1, duration: 0.6, ease: "power3.out" },
+      0
+    );
+
+    // Scene 2 (1.6-3.3s): cursor fades in (~0.15s) at (700,515), already in transit, then
+    // glides via power3 to the "Open" link center (994,515), arriving at t=3.2s.
+    tl.to(CURSOR, { opacity: 1, duration: 0.15, ease: "power1.out" }, 1.6);
+    tl.to(CURSOR, { x: 994, y: 515, duration: 1.6, ease: "power3" }, 1.6);
+
+    // Scene 3 (3.2-3.55s): click-pulse right at arrival — outer ring scales 1.0 -> 2.2 while
+    // fading to 0 (power2.out, ~0.35s); inner dot does a fast compress-release
+    // (scale 1 -> 0.8 -> 1, ~0.15s).
+    tl.to(RING, { scale: 2.2, opacity: 0, duration: 0.35, ease: "power2.out" }, 3.2);
+    tl.to(DOT, { scale: 0.8, duration: 0.075, ease: "power1.out" }, 3.2);
+    tl.to(DOT, { scale: 1, duration: 0.075, ease: "power1.in" }, 3.275);
+
+    // Scene 4 (3.55-5.0s): holds still. A couple of tiny, finite, sine-driven ±1-2px nudges
+    // on the cursor only — no repeat/yoyo, no continuous drift — then fully settled.
+    tl.to(CURSOR, { x: 993, y: 514, duration: 0.18, ease: "sine.inOut" }, 3.75)
+      .to(CURSOR, { x: 995, y: 516, duration: 0.22, ease: "sine.inOut" }, 3.93)
+      .to(CURSOR, { x: 994, y: 515, duration: 0.2, ease: "sine.inOut" }, 4.15);
+
+    window.__timelines["flow3-detail"] = tl;
+  </script>
+</template>

@@ -1,0 +1,164 @@
+<template>
+<div id="root" data-composition-id="b6-pipeline" data-width="1080" data-height="1080" data-duration="5.5">
+
+  <div class="clip b6-pipeline-bg" data-start="0" data-duration="5.5" data-track-index="0"></div>
+
+  <div class="clip b6-pipeline-shot" data-start="0" data-duration="5.5" data-track-index="1">
+    <div id="b6-pipeline-window" class="b6-pipeline-window">
+      <div id="b6-pipeline-world" class="b6-pipeline-world" data-layout-allow-overflow="true">
+        <img class="b6-pipeline-img" src="assets/flow-pipeline.png" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <div class="clip b6-pipeline-copy" data-start="0" data-duration="5.5" data-track-index="2">
+    <div id="b6-pipeline-line1" class="b6-pipeline-line">
+      <span class="b6-pipeline-word">One pipeline,</span>
+      <span class="b6-pipeline-word">every candidate's</span>
+      <span class="b6-pipeline-word">real stage.</span>
+    </div>
+    <div id="b6-pipeline-line2" class="b6-pipeline-line">
+      <span class="b6-pipeline-word">Nothing about them</span>
+      <span class="b6-pipeline-word">lost in a spreadsheet.</span>
+    </div>
+  </div>
+
+  <style>
+    @font-face {
+      font-family: 'Georgia';
+      src: local('Georgia');
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: "Georgia", serif;
+    }
+
+    .clip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1080px;
+    }
+
+    .b6-pipeline-bg {
+      background: #FBF7EC;
+    }
+
+    .b6-pipeline-window {
+      position: absolute;
+      left: 90px;
+      top: 70px;
+      width: 900px;
+      height: 563px;
+      border: 1px solid #C9A227;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #FBF7EC;
+      opacity: 0;
+    }
+
+    .b6-pipeline-world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 900px;
+      height: 562.5px;
+      transform-origin: 35% 35%;
+    }
+
+    .b6-pipeline-img {
+      display: block;
+      width: 900px;
+      height: 562.5px;
+    }
+
+    .b6-pipeline-line {
+      position: absolute;
+      left: 100px;
+      width: 880px;
+      text-align: center;
+      font-family: "Georgia", serif;
+      font-size: 36px;
+      line-height: 1.2;
+      color: #1B1712;
+    }
+
+    #b6-pipeline-line1 {
+      top: 720px;
+    }
+
+    #b6-pipeline-line2 {
+      top: 776px;
+    }
+
+    .b6-pipeline-word {
+      display: inline-block;
+      opacity: 0;
+    }
+
+    .b6-pipeline-word + .b6-pipeline-word {
+      margin-left: 10px;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["b6-pipeline"] = tl;
+
+      // Scene 1 (0.0-0.3s): desktop panel fades/settles in, visible well before 0.5s.
+      tl.fromTo(
+        "[id='b6-pipeline-window']",
+        { opacity: 0, scale: 1.03 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-1.4s): copy line 1 word-groups stagger in.
+      tl.fromTo(
+        "#b6-pipeline-line1 .b6-pipeline-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.32 },
+        0.3
+      );
+
+      // Scene 3 (1.4-2.6s): copy line 2 word-groups stagger in.
+      tl.fromTo(
+        "#b6-pipeline-line2 .b6-pipeline-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.45 },
+        1.4
+      );
+
+      // Scene 4 (2.6-4.4s): slow continuous scale push-in on the inner world
+      // layer, transform-origin toward the Screening column / Nadia Rowe's
+      // card (upper-left-third of the board).
+      tl.to(
+        "[id='b6-pipeline-world']",
+        { scale: 1.12, duration: 1.8, ease: "power3" },
+        2.6
+      );
+
+      // Scene 5 (4.4-5.0s): settle, subtle finite jitter, no repeat/yoyo.
+      tl.to(
+        "[id='b6-pipeline-window']",
+        { scale: 1.006, duration: 0.2, ease: "power1.inOut" },
+        4.4
+      );
+      tl.to(
+        "[id='b6-pipeline-window']",
+        { scale: 1, duration: 0.2, ease: "power1.inOut" },
+        4.6
+      );
+    })();
+  </script>
+
+</div>
+</template>

@@ -1,0 +1,186 @@
+<template>
+  <style>
+    @font-face { font-family: 'Georgia'; src: local('Georgia'); }
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ad2-research-bg {
+      background: #FBF7EC;
+    }
+
+    /* ---------------- Left column: ad copy ---------------- */
+    .ad2-research-copy {
+      position: absolute;
+      left: 80px;
+      top: 340px;
+      width: 440px;
+      height: 400px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 22px;
+    }
+
+    .ad2-research-line {
+      font-family: "Georgia", serif;
+      font-size: 44px;
+      line-height: 1.25;
+      color: #1B1712;
+      font-weight: 400;
+    }
+
+    .ad2-research-word-group {
+      display: inline-block;
+      opacity: 0;
+      transform: translateY(24px);
+      will-change: transform, opacity;
+    }
+
+    .ad2-research-evidence {
+      color: #8A6A1E;
+    }
+
+    /* ---------------- Right column: portrait phone window ---------------- */
+    .ad2-research-window-wrap {
+      position: absolute;
+      left: 600px;
+      top: 170px;
+      width: 380px;
+      height: 720px;
+      opacity: 0;
+      transform: scale(0.96);
+      will-change: transform, opacity;
+    }
+
+    .ad2-research-window {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      background: #FBF7EC;
+    }
+
+    /* Inner "world" layer: the full screenshot at its 380px display width
+       (native 780 x 1688 * 380/780 ~= 822px tall) is taller than the 720px
+       window, so it deliberately overflows the bottom of the frame; the
+       window's own overflow:hidden clips it. Flagged for the layout audit
+       per hyperframes-animation's device-surface-showcase overflow rule. */
+    .ad2-research-world {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 380px;
+      height: 822px;
+      transform-origin: 50% 85%;
+      will-change: transform;
+    }
+
+    .ad2-research-shot {
+      display: block;
+      width: 380px;
+      height: 822px;
+    }
+  </style>
+
+  <div id="root" data-composition-id="ad2-research" data-width="1080" data-height="1080" data-duration="4.5">
+
+    <div class="ad2-research-bg clip" data-start="0" data-duration="4.5" data-track-index="0"></div>
+
+    <div class="ad2-research-window-wrap clip" id="ad2-research-window-wrap" data-start="0" data-duration="4.5" data-track-index="1">
+      <div class="ad2-research-window">
+        <div class="ad2-research-world" id="ad2-research-world" data-layout-allow-overflow="true">
+          <img class="ad2-research-shot" src="assets/mobile-dashboard.png" alt="" />
+        </div>
+      </div>
+    </div>
+
+    <div class="ad2-research-copy clip" data-start="0" data-duration="4.5" data-track-index="2">
+      <div class="ad2-research-line" id="ad2-research-line1">
+        <span class="ad2-research-word-group">Every claim</span>
+        <span class="ad2-research-word-group">on paper.</span>
+      </div>
+      <div class="ad2-research-line" id="ad2-research-line2">
+        <span class="ad2-research-word-group">Checked against</span>
+        <span class="ad2-research-word-group">the <span class="ad2-research-evidence">evidence.</span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["ad2-research"] = tl;
+
+      var line1Groups = document.querySelectorAll("#ad2-research-line1 .ad2-research-word-group");
+      var line2Groups = document.querySelectorAll("#ad2-research-line2 .ad2-research-word-group");
+
+      // Scene 1 (0.0-0.3s): phone window settles into place on the right,
+      // opacity 0->1 + slight scale settle, power3.out - visible before 0.5s.
+      tl.fromTo(
+        "[id='ad2-research-window-wrap']",
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0.0
+      );
+
+      // Scene 2 (0.3-1.2s): copy line 1 reveals on the left column, word
+      // groups staggering in.
+      tl.fromTo(
+        line1Groups,
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "power3.out", stagger: 0.22 },
+        0.3
+      );
+
+      // Scene 3 (1.2-2.2s): copy line 2 reveals beneath it, same stagger
+      // treatment. At the same time the phone window's inner world layer
+      // begins a slow continuous scale push-in toward the research-report
+      // card area (transform-origin already set to the lower portion of
+      // the image), arriving by ~3.2s.
+      tl.fromTo(
+        line2Groups,
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "power3.out", stagger: 0.22 },
+        1.2
+      );
+      tl.fromTo(
+        "[id='ad2-research-world']",
+        { scale: 1.0 },
+        { scale: 1.18, duration: 2.0, ease: "power3.inOut" },
+        1.2
+      );
+
+      // Scene 4 (2.2-3.6s): push-in continues/settles (covered by the tween
+      // above, which runs through 3.2s), findings cards readable, both copy
+      // lines fully settled and holding.
+
+      // Scene 5 (3.6-4.0s): settle - a subtle finite jitter on the window,
+      // no repeat/yoyo.
+      tl.to(
+        "[id='ad2-research-window-wrap']",
+        { scale: 1.008, duration: 0.2, ease: "power3.out" },
+        3.6
+      );
+      tl.to(
+        "[id='ad2-research-window-wrap']",
+        { scale: 1.0, duration: 0.2, ease: "power3.inOut" },
+        3.8
+      );
+    })();
+  </script>
+</template>

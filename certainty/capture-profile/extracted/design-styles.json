@@ -1,0 +1,149 @@
+{
+  "typography": [
+    {
+      "role": "display",
+      "fontFamily": "Cambria",
+      "fontSize": "34px",
+      "fontWeight": "700",
+      "lineHeight": "normal",
+      "letterSpacing": "-0.34px",
+      "color": "#1B1712",
+      "sampleText": "Nadia Rowe"
+    },
+    {
+      "role": "link",
+      "fontFamily": "Cambria",
+      "fontSize": "19px",
+      "fontWeight": "700",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#1B1712",
+      "sampleText": "Certainty"
+    },
+    {
+      "role": "body",
+      "fontFamily": "-apple-system",
+      "fontSize": "17px",
+      "fontWeight": "600",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#4A4030",
+      "sampleText": "Senior Software Engineer, FinTech"
+    },
+    {
+      "role": "heading",
+      "fontFamily": "-apple-system",
+      "fontSize": "12px",
+      "fontWeight": "700",
+      "lineHeight": "normal",
+      "letterSpacing": "1.44px",
+      "color": "#8A6A1E",
+      "sampleText": "Worked with"
+    }
+  ],
+  "spacing": {
+    "observed": [
+      8,
+      10,
+      11,
+      12,
+      16,
+      20,
+      22,
+      28,
+      44,
+      48,
+      96
+    ],
+    "baseUnit": 4
+  },
+  "radius": [
+    "3px",
+    "99px"
+  ],
+  "shadows": [],
+  "buttons": [
+    {
+      "label": "Download PDF",
+      "background": "#1B1712",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FBF7EC",
+      "padding": "11px 22px",
+      "borderRadius": "3px",
+      "border": "2px solid rgb(27, 23, 18)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "700",
+      "height": "43px"
+    },
+    {
+      "label": "Download DOCX",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#000000",
+      "padding": "11px 22px",
+      "borderRadius": "3px",
+      "border": "2px solid rgb(27, 23, 18)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "700",
+      "height": "43px"
+    }
+  ],
+  "cards": [],
+  "nav": {
+    "label": "navigation",
+    "background": "#FBF7EC",
+    "backgroundImage": "",
+    "backdropFilter": "blur(8px)",
+    "color": "#1B1712",
+    "padding": "16px 96px",
+    "borderRadius": "0px",
+    "border": "",
+    "boxShadow": "none",
+    "fontSize": "17px",
+    "fontWeight": "400",
+    "height": "57px"
+  },
+  "chips": [
+    {
+      "label": "Verified via structured ",
+      "background": "#55703F",
+      "color": "#3F5D2E",
+      "padding": "6px 14px",
+      "borderRadius": "99px",
+      "border": "0px none rgb(63, 93, 46)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "700",
+      "height": "27px"
+    },
+    {
+      "label": "Northline QA Labs",
+      "background": "#EDE3CC",
+      "color": "#1B1712",
+      "padding": "7px 16px",
+      "borderRadius": "99px",
+      "border": "1px solid rgb(220, 208, 174)",
+      "boxShadow": "none",
+      "fontSize": "13.5px",
+      "fontWeight": "600",
+      "height": "32px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [],
+  "backgrounds": [],
+  "glass": [
+    {
+      "backdropFilter": "blur(8px)",
+      "background": "rgba(251, 247, 236, 0.88)",
+      "border": "",
+      "borderRadius": "0px",
+      "boxShadow": "",
+      "area": 109440
+    }
+  ]
+}

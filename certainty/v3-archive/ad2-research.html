@@ -1,0 +1,171 @@
+<template>
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: serif;
+      background: transparent;
+    }
+
+    .ad2-research-bg {
+      position: absolute;
+      inset: 0;
+      background: #FBF7EC;
+    }
+
+    /* ---------------- Left column: ad copy ---------------- */
+    .ad2-research-copy {
+      position: absolute;
+      left: 80px;
+      top: 340px;
+      width: 440px;
+      height: 400px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 22px;
+    }
+
+    .ad2-research-line {
+      font-family: serif;
+      font-size: 44px;
+      line-height: 1.25;
+      color: #1B1712;
+      font-weight: 400;
+    }
+
+    .ad2-research-word-group {
+      display: inline-block;
+      opacity: 0;
+      transform: translateY(24px);
+      will-change: transform, opacity;
+    }
+
+    .ad2-research-evidence {
+      color: #8A6A1E;
+    }
+
+    /* ---------------- Right column: device window ---------------- */
+    .ad2-research-window-wrap {
+      position: absolute;
+      left: 560px;
+      top: 140px;
+      width: 480px;
+      height: 750px;
+      opacity: 0;
+      transform: scale(0.96);
+      will-change: transform, opacity;
+    }
+
+    .ad2-research-window {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border: 1px solid #C9A227;
+      background: #16130f;
+    }
+
+    .ad2-research-world {
+      position: absolute;
+      left: -282px;
+      top: 0;
+      width: 1760px;
+      height: 1100px;
+      will-change: transform;
+    }
+
+    .ad2-research-shot {
+      display: block;
+      width: 1760px;
+      height: 1100px;
+    }
+  </style>
+
+  <div id="root" data-composition-id="ad2-research" data-width="1080" data-height="1080" data-duration="4.5">
+
+    <div class="ad2-research-bg clip" data-start="0" data-duration="4.5" data-track-index="0"></div>
+
+    <div class="ad2-research-window-wrap clip" id="ad2-research-window-wrap" data-start="0" data-duration="4.5" data-track-index="1">
+      <div class="ad2-research-window" data-layout-allow-overflow="true">
+        <div class="ad2-research-world" id="ad2-research-world">
+          <img class="ad2-research-shot" src="assets/shot-dashboard.png" alt="" />
+        </div>
+      </div>
+    </div>
+
+    <div class="ad2-research-copy clip" data-start="0" data-duration="4.5" data-track-index="2">
+      <div class="ad2-research-line" id="ad2-research-line1">
+        <span class="ad2-research-word-group">Every claim</span>
+        <span class="ad2-research-word-group">on paper.</span>
+      </div>
+      <div class="ad2-research-line" id="ad2-research-line2">
+        <span class="ad2-research-word-group">Checked against</span>
+        <span class="ad2-research-word-group">the <span class="ad2-research-evidence">evidence.</span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["ad2-research"] = tl;
+
+      var line1Groups = document.querySelectorAll("#ad2-research-line1 .ad2-research-word-group");
+      var line2Groups = document.querySelectorAll("#ad2-research-line2 .ad2-research-word-group");
+
+      // Scene 1 (0.0-0.3s): device window settles in on the right.
+      tl.fromTo(
+        "#ad2-research-window-wrap",
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0.0
+      );
+
+      // Scene 2 (0.3-1.2s): copy line 1 reveals, word-group stagger.
+      tl.fromTo(
+        line1Groups,
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "power3.out", stagger: 0.22 },
+        0.3
+      );
+
+      // Scene 3 (1.2-2.2s): copy line 2 reveals, same stagger treatment.
+      tl.fromTo(
+        line2Groups,
+        { opacity: 0, y: 24 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "power3.out", stagger: 0.22 },
+        1.2
+      );
+
+      // Simultaneously, the device window begins a slow continuous pan down
+      // toward the research-report findings, arriving by ~3.2s.
+      tl.fromTo(
+        "#ad2-research-world",
+        { y: 0 },
+        { y: -350, duration: 2.0, ease: "power3.inOut" },
+        1.2
+      );
+
+      // Scene 4 (2.2-3.6s): pan settles further, findings readable, copy holds.
+      // (covered by the pan tween above running through 3.2s; nothing new fires)
+
+      // Scene 5 (3.6-4.0s): subtle finite settle jitter on the window (no repeat/yoyo).
+      tl.to(
+        "#ad2-research-window-wrap",
+        { scale: 1.008, duration: 0.2, ease: "power3.out" },
+        3.6
+      );
+      tl.to(
+        "#ad2-research-window-wrap",
+        { scale: 1.0, duration: 0.2, ease: "power3.inOut" },
+        3.8
+      );
+    })();
+  </script>
+</template>

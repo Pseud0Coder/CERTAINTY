@@ -1,0 +1,165 @@
+<template>
+<div id="root" data-composition-id="b3-resume" data-width="1080" data-height="1080" data-duration="5.5">
+
+  <div class="clip b3-resume-bg" data-start="0" data-duration="5.5" data-track-index="0"></div>
+
+  <div class="clip b3-resume-shot" data-start="0" data-duration="5.5" data-track-index="1">
+    <div id="b3-resume-window" class="b3-resume-window">
+      <div id="b3-resume-world" class="b3-resume-world" data-layout-allow-overflow="true">
+        <img class="b3-resume-img" src="assets/mobile-resume.png" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <div class="clip b3-resume-copy" data-start="0" data-duration="5.5" data-track-index="2">
+    <div id="b3-resume-line1" class="b3-resume-line">
+      <span class="b3-resume-word">Their real answers,</span>
+      <span class="b3-resume-word">not a template.</span>
+    </div>
+    <div id="b3-resume-line2" class="b3-resume-line">
+      <span class="b3-resume-word">Every role,</span>
+      <span class="b3-resume-word">rebuilt bullet by bullet.</span>
+    </div>
+  </div>
+
+  <style>
+    @font-face {
+      font-family: 'Georgia';
+      src: local('Georgia');
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: "Georgia", serif;
+    }
+
+    .clip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1080px;
+    }
+
+    .b3-resume-bg {
+      background: #FBF7EC;
+    }
+
+    .b3-resume-window {
+      position: absolute;
+      left: 375px;
+      top: 70px;
+      width: 330px;
+      height: 590px;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      overflow: hidden;
+      background: #FBF7EC;
+      opacity: 0;
+    }
+
+    .b3-resume-world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 330px;
+      height: 714.1538px;
+      transform-origin: 50% 85%;
+    }
+
+    .b3-resume-img {
+      display: block;
+      width: 330px;
+      height: 714.1538px;
+    }
+
+    .b3-resume-line {
+      position: absolute;
+      left: 100px;
+      width: 880px;
+      text-align: center;
+      font-family: "Georgia", serif;
+      font-size: 40px;
+      line-height: 1.2;
+      color: #1B1712;
+    }
+
+    #b3-resume-line1 {
+      top: 720px;
+    }
+
+    #b3-resume-line2 {
+      top: 776px;
+    }
+
+    .b3-resume-word {
+      display: inline-block;
+      opacity: 0;
+    }
+
+    .b3-resume-word + .b3-resume-word {
+      margin-left: 12px;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["b3-resume"] = tl;
+
+      // Scene 1 (0.0-0.3s): phone window settles in, visible well before 0.5s.
+      tl.fromTo(
+        "[id='b3-resume-window']",
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-1.4s): copy line 1 word-groups stagger in.
+      tl.fromTo(
+        "#b3-resume-line1 .b3-resume-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.35 },
+        0.3
+      );
+
+      // Scene 3 (1.4-2.6s): copy line 2 word-groups stagger in, while the
+      // inner world layer begins a continuous slow push-in toward the
+      // Revamped CV panel near the bottom of the screenshot (1.4s-4.2s).
+      tl.fromTo(
+        "#b3-resume-line2 .b3-resume-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.35 },
+        1.4
+      );
+
+      tl.to(
+        "[id='b3-resume-world']",
+        { scale: 1.18, duration: 2.8, ease: "power3" },
+        1.4
+      );
+
+      // Scene 4 (2.6-4.6s): push-in settles on the CV panel; copy fully settled.
+      // (push-in tween above already lands by 4.2s; held afterward)
+
+      // Scene 5 (4.6-5.0s): subtle finite jitter settle on the frame, no repeat/yoyo.
+      tl.to(
+        "[id='b3-resume-window']",
+        { scale: 1.006, duration: 0.2, ease: "power1.inOut" },
+        4.6
+      );
+      tl.to(
+        "[id='b3-resume-window']",
+        { scale: 1, duration: 0.2, ease: "power1.inOut" },
+        4.8
+      );
+    })();
+  </script>
+
+</div>
+</template>

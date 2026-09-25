@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certainty · Recruiter</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Composition only. Every value comes from tokens.css. */
+[hidden]{display:none!important}
+.app{display:flex;height:100vh;overflow:hidden}
+.rail{width:var(--rail-w);flex:none;background:var(--sheet);border-inline-end:var(--hairline) solid var(--rule);display:flex;flex-direction:column}
+.rail-head{padding:var(--space-4);border-bottom:var(--hairline) solid var(--rule)}
+.nav{padding:var(--space-2);display:flex;flex-direction:column;gap:var(--space-1);flex:1}
+.nav-item{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);background:none;border:0;border-radius:var(--radius-control);font:var(--type-secondary);color:var(--ink-quiet);cursor:pointer;text-align:left;width:100%}
+.nav-item:hover{background:var(--action-quiet-hover);color:var(--ink)}
+.nav-item[aria-current="page"]{background:var(--sheet-sunken);color:var(--ink);font-weight:600}
+.nav-ico{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-6);background:var(--sheet);border-bottom:var(--hairline) solid var(--rule)}
+.grow{flex:1}
+.content{flex:1;overflow:auto;padding:var(--space-6)}
+.view{display:none}.view.on{display:block}
+.panel{background:var(--sheet);border:var(--hairline) solid var(--rule);padding:var(--space-6)}
+.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:var(--space-6);align-items:start}
+/* pipeline */
+.board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--space-4);align-items:start}
+.colhead{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:var(--space-2)}
+.pcard{background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-control);padding:var(--space-3);margin-bottom:var(--space-2);cursor:pointer}
+.pcard:hover,.pcard:focus-within{border-color:var(--rule-strong)}
+.pcard .nm{font:var(--type-section)}
+.pcard .badges{display:flex;gap:var(--space-1);margin-top:var(--space-2);flex-wrap:wrap}
+.card-acts{margin-top:var(--space-2);min-height:28px}
+/* tabs */
+.tabs{display:flex;gap:var(--space-6);border-bottom:var(--hairline) solid var(--rule);margin:var(--space-6) 0}
+.tab{padding:var(--space-3) 0;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:calc(-1 * var(--hairline));font:var(--type-secondary);color:var(--ink-quiet);cursor:pointer;display:inline-flex;align-items:center;gap:var(--space-2)}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
+/* meters */
+.meter{margin:0 0 var(--space-3)}
+.meter-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-1)}
+.meter-track{height:4px;background:var(--sheet-sunken)}
+.meter-fill{height:100%;background:var(--ink)}
+.meter.out .meter-fill{background:var(--severity-warning)}
+.split{display:flex;height:6px;margin:var(--space-2) 0}
+.split .a{background:var(--ink)}.split .b{background:var(--rule-strong);flex:1}
+/* transcript */
+.turn{display:grid;grid-template-columns:var(--timecode-w) 1fr;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:var(--hairline) solid var(--rule)}
+.turn time{font:var(--type-mono);color:var(--ink-quiet);background:var(--sheet-sunken);text-align:right;padding:0 var(--space-1);height:fit-content}
+.turn .who{font-weight:600;margin-inline-end:var(--space-2)}
+.annot{display:flex;gap:var(--space-2);align-items:center;padding:var(--space-2) 0 var(--space-3);border-bottom:var(--hairline) solid var(--rule)}
+/* flags */
+.flagcard{background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-control);padding:var(--space-4);margin-bottom:var(--space-3)}
+.flagcard header{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2)}
+.acts{display:flex;gap:var(--space-2);margin-top:var(--space-3)}
+/* stage (internal) */
+.stagerow{display:flex;justify-content:space-between;gap:var(--space-4);padding:var(--space-2) 0;border-bottom:1px solid var(--stage-rule)}
+/* builder */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);background:var(--sheet);border:var(--hairline) solid var(--rule)}
+.step{padding:var(--space-4);border-inline-end:var(--hairline) solid var(--rule)}
+.step:last-child{border-inline-end:0}
+.step[aria-current="step"]{background:var(--sheet-sunken);font-weight:600}
+.srcrow{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:var(--hairline) solid var(--rule)}
+.qa{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) 0;border-bottom:var(--hairline) solid var(--rule)}
+.btn-sm{padding:2px 8px;font:var(--type-caption)}
+/* login, toast, modal helpers */
+.login{position:fixed;inset:0;background:var(--ground);display:flex;align-items:center;justify-content:center;z-index:20}
+.login .panel{width:380px;display:flex;flex-direction:column;gap:var(--space-3)}
+.scrim{display:flex;align-items:center;justify-content:center}
+input[type=checkbox]{accent-color:var(--action-primary);width:16px;height:16px;flex:none}
+.toast{position:fixed;right:var(--space-6);bottom:var(--space-6);background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-control);padding:var(--space-3) var(--space-4);font:var(--type-secondary);box-shadow:var(--elev-1);opacity:0;transition:opacity var(--dur-micro) var(--ease);pointer-events:none;z-index:30}
+.toast.on{opacity:1}
+@media (max-width:1099px){.nav-item .lbl{display:none}.nav-item{justify-content:center}.rail-head .sub{display:none}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs><path id="mk" d="M6 .8 11.2 6 6 11.2 .8 6Z" fill="currentColor"/></defs>
+</svg>
+
+<div class="login" id="login">
+  <div class="panel">
+    <div class="t-display">Certainty</div>
+    <div class="t-caption">Stage 1 prototype · data stays in this browser</div>
+    <span class="stamp">RECRUITER · GENNEXT RECRUITMENTS</span>
+    <div class="t-secondary">Signed in as R. Osei</div>
+    <button class="btn btn-primary" id="enterBtn">Continue</button>
+  </div>
+</div>
+
+<div class="app" id="app" hidden>
+  <aside class="rail">
+    <div class="rail-head">
+      <div class="t-view">Certainty</div>
+      <div class="t-caption sub">Recruiter</div>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-item" data-v="pipeline"><svg class="nav-ico" viewBox="0 0 16 16"><path d="M2.5 3.5h3v9h-3zM6.5 3.5h3v9h-3zM10.5 3.5h3v6h-3z"/></svg><span class="lbl">Pipeline</span></button>
+      <button class="nav-item" data-v="builder"><svg class="nav-ico" viewBox="0 0 16 16"><path d="M3.5 2.5h6l3 3v8h-9zM9.5 2.5v3h3M5.5 8h5M5.5 10.5h5"/></svg><span class="lbl">Submission Builder</span></button>
+      <button class="nav-item" data-v="notes"><svg class="nav-ico" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg><span class="lbl">Notes</span></button>
+      <button class="nav-item" data-v="settings"><svg class="nav-ico" viewBox="0 0 16 16"><path d="M2 5h12M2 11h12"/><circle cx="6" cy="5" r="1.75"/><circle cx="10" cy="11" r="1.75"/></svg><span class="lbl">Settings</span></button>
+    </nav>
+  </aside>
+  <main>
+    <header class="topbar">
+      <span class="stamp">RECRUITER</span>
+      <span class="t-secondary">R. Osei · Gennext Recruitments</span>
+      <span class="grow"></span>
+      <span class="t-caption">Candidate detail opens from any card</span>
+    </header>
+    <div class="content">
+
+      <!-- PIPELINE -->
+      <section class="view on" id="v-pipeline">
+        <h1 class="t-view">Pipeline</h1>
+        <p class="t-secondary">Four candidates · one stage per advance · refresh the candidate app to sync</p>
+        <div class="board" id="board" style="margin-top:var(--space-6)"></div>
+        <div class="t-caption" id="parked" style="margin-top:var(--space-6)"></div>
+      </section>
+
+      <!-- CANDIDATE DETAIL -->
+      <section class="view" id="v-detail">
+        <button class="btn btn-sm" data-v="pipeline">← Pipeline</button>
+        <div class="panel" style="margin-top:var(--space-3)">
+          <div style="display:flex;align-items:baseline;gap:var(--space-4)">
+            <h1 class="t-view">Nadia Rowe</h1>
+            <span class="stamp" id="stageStamp"></span>
+          </div>
+          <p class="t-secondary">Senior Software Engineer · FinTech · Northline QA Labs · 07/2019 - 10/2020</p>
+          <p class="t-caption">LinkedIn snapshot synced 12 Sep · one source conflict flagged</p>
+        </div>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" aria-selected="true" data-p="ins">Insights</button>
+          <button class="tab" role="tab" aria-selected="false" data-p="tr">Transcript</button>
+          <button class="tab" role="tab" aria-selected="false" data-p="fl">Gap flags <span class="badge">3</span></button>
+          <button class="tab" role="tab" aria-selected="false" data-p="nt">Notes</button>
+        </div>
+
+        <div class="panel" id="p-ins">
+          <div class="t-caption" style="margin-bottom:var(--space-4)">
+            Session: <span class="stamp">VERIFIED · 12 SEP</span> <span class="stamp">14:02</span>
+            · practice sessions are not visible to recruiters
+          </div>
+          <div class="grid2">
+            <div>
+              <h2 class="t-section">STAR proportions</h2>
+              <div class="meter"><div class="meter-head"><span class="t-secondary">Situation</span><span class="t-caption figures">18% · target 15%</span></div><div class="meter-track"><div class="meter-fill" style="width:36%"></div></div></div>
+              <div class="meter"><div class="meter-head"><span class="t-secondary">Task</span><span class="t-caption figures">9% · target 10%</span></div><div class="meter-track"><div class="meter-fill" style="width:18%"></div></div></div>
+              <div class="meter out"><div class="meter-head"><span class="t-secondary">Action</span><span class="t-caption figures" style="color:var(--severity-warning)">44% · target 50%</span></div><div class="meter-track"><div class="meter-fill" style="width:88%"></div></div></div>
+              <div class="meter"><div class="meter-head"><span class="t-secondary">Result</span><span class="t-caption figures">29% · target 25%</span></div><div class="meter-track"><div class="meter-fill" style="width:58%"></div></div></div>
+              <div class="spine spine-warn" style="padding:var(--space-3);margin-top:var(--space-4)">
+                <svg class="mark mark-gap"><use href="#mk"/></svg>
+                <span class="t-secondary">Action thin: 44 against a 50 target. Probe for decisions, not tasks.</span>
+              </div>
+            </div>
+            <div>
+              <h2 class="t-section">Ownership</h2>
+              <div class="split"><span class="a" style="width:61%"></span><span class="b"></span></div>
+              <p class="t-caption figures">61% first person · 39% team voice · 2 answers trailed off</p>
+              <h2 class="t-section" style="margin-top:var(--space-6)">Audio</h2>
+              <div style="display:flex;align-items:center;gap:var(--space-3);margin:var(--space-2) 0">
+                <button class="btn btn-sm" id="playBtn">Play</button>
+                <span class="t-mono">00:00 / 14:02</span>
+              </div>
+              <p class="t-caption">Consented recording · retention 6 months (agency policy)</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" id="p-tr" hidden>
+          <div id="trBody"></div>
+          <p class="t-caption" style="margin-top:var(--space-4)">Full transcript · flag annotations anchored to the turn that raised them</p>
+        </div>
+
+        <div class="panel" id="p-fl" hidden>
+          <div class="grid2">
+            <div id="flagCol1"></div>
+            <div>
+              <div id="flagCol2"></div>
+              <p class="t-caption" style="margin-top:var(--space-4)">Flags are generated by comparing transcript claims against the CV record and the JD. Never manual, never inferred beyond the evidence.</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="p-nt" hidden></div>
+      </section>
+
+      <!-- BUILDER -->
+      <section class="view" id="v-builder">
+        <h1 class="t-view">Submission Builder</h1>
+        <p class="t-secondary">Nadia Rowe · Senior Software Engineer, FinTech</p>
+        <div class="steps" style="margin:var(--space-6) 0">
+          <div class="step" id="st1" aria-current="step"><span class="t-section">1 · Intake</span><div class="t-caption" id="srcCount">3 of 4 sources</div></div>
+          <div class="step" id="st2"><span class="t-section">2 · Evidence</span><div class="t-caption">2 claims mined · 1 conflict</div></div>
+          <div class="step" id="st3"><span class="t-section">3 · Deliverables</span><div class="t-caption">not generated</div></div>
+        </div>
+        <div class="panel">
+          <h2 class="t-section">Ingested sources</h2>
+          <div id="sources">
+            <div class="srcrow"><span class="t-body">Resume</span><span class="stamp"><svg class="mark mark-confirmed"><use href="#mk"/></svg>SANITIZED</span></div>
+            <div class="srcrow"><span class="t-body">Screening transcript (AI, verified)</span><span class="stamp"><svg class="mark mark-confirmed"><use href="#mk"/></svg>SANITIZED</span></div>
+            <div class="srcrow"><span class="t-body">LinkedIn snapshot</span><span class="stamp"><svg class="mark mark-confirmed"><use href="#mk"/></svg>SANITIZED</span></div>
+            <div class="srcrow"><span class="t-body">Client job description</span><button class="btn btn-sm" id="ingestBtn">Ingest</button></div>
+          </div>
+          <p class="t-caption" style="margin:var(--space-3) 0">Documents are extracted to structured fields. Embedded instructions are stripped at ingestion. Injection attempts are logged, never executed.</p>
+          <button class="btn btn-primary" id="genBtn" aria-disabled="true">Generate deliverables</button>
+          <div id="outs" hidden style="margin-top:var(--space-6)">
+            <h2 class="t-section">Deliverables</h2>
+            <p class="t-mono">Candidate Introduction - Nadia Rowe - Senior Software Engineer.pdf</p>
+            <div class="qa"><svg class="mark mark-confirmed"><use href="#mk"/></svg><span class="t-secondary">Single-role date rule enforced. Dates shown once, on the company line.</span></div>
+            <div class="qa"><svg class="mark mark-confirmed"><use href="#mk"/></svg><span class="t-secondary">Conservative dates used. Conflict carried to Notes, not the document.</span></div>
+            <div class="qa"><svg class="mark mark-confirmed"><use href="#mk"/></svg><span class="t-secondary">Current compensation absent from client-facing output.</span></div>
+            <div class="qa"><svg class="mark mark-confirmed"><use href="#mk"/></svg><span class="t-secondary">Em dash linter: zero violations.</span></div>
+            <p class="t-mono" style="margin-top:var(--space-4)">Client email draft</p>
+            <div class="qa"><svg class="mark mark-confirmed"><use href="#mk"/></svg><span class="t-secondary">Compensation expectations only, in the key details block.</span></div>
+            <p class="t-mono" style="margin-top:var(--space-4)">Recruiter Notes</p>
+            <div class="qa"><svg class="mark mark-confirmed"><use href="#mk"/></svg><span class="t-secondary">Role-gated. Not in the candidate app bundle.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- NOTES -->
+      <section class="view" id="v-notes">
+        <h1 class="t-view">Notes</h1>
+        <p class="t-secondary">Internal only · role-gated · never client-facing</p>
+        <div style="margin:var(--space-6) 0" id="notesBody"></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="v-settings">
+        <h1 class="t-view">Settings</h1>
+        <div class="panel" style="margin-top:var(--space-6);max-width:420px">
+          <h2 class="t-section">Demo data</h2>
+          <p class="t-secondary">Local storage holds the shared spine. Reset restores seed data in both apps.</p>
+          <div style="display:flex;gap:var(--space-2);margin-top:var(--space-4)">
+            <button class="btn" id="resetBtn">Reset demo data</button>
+            <button class="btn" id="outBtn">Sign out</button>
+          </div>
+          <p class="t-caption" style="margin-top:var(--space-4)" id="auditLine"></p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="shared.js"></script>
+<script>
+/* Internal-only seed. Comp fields exist here and nowhere else. */
+const INTERNAL = {
+  c1: {
+    rows: [
+      ['Current compensation','£68,000'],
+      ['Expectations','£75,000 to 80,000'],
+      ['Notice','4 weeks'],
+      ['Motivation','Platform work, away from agency accounts'],
+      ['To verify','Team-size claim · end-date conflict']
+    ],
+    views: 3
+  },
+  c2: { rows: [['Expectations','TBC in screen']], views: 0 },
+  c3: { rows: [['Expectations','£82,000'],['Notice','8 weeks']], views: 1 }
+};
+
+let store = loadStore();
+const $ = id => document.getElementById(id);
+const mk = cls => `<svg class="mark ${cls}"><use href="#mk"/></svg>`;
+
+function loginCheck(){
+  const s = sessionStorage.getItem('certainty_rec');
+  if (s) { $('login').hidden = true; $('app').hidden = false; }
+}
+ $('enterBtn').onclick = () => {
+  sessionStorage.setItem('certainty_rec','1');
+  logEvent(store,'R. Osei','recruiter','login','');
+  $('login').hidden = true; $('app').hidden = false;
+};
+ $('outBtn').onclick = () => { sessionStorage.removeItem('certainty_rec'); location.reload(); };
+ $('resetBtn').onclick = () => { localStorage.removeItem(STORE_KEY); location.reload(); };
+
+/* nav */
+document.querySelectorAll('.nav-item, [data-v]').forEach(b => {
+  if (b.dataset.v) b.addEventListener('click', e => { e.stopPropagation?.(); go(b.dataset.v); });
+});
+function go(v){
+  document.querySelectorAll('.view').forEach(x => x.classList.remove('on'));
+  $('v-'+v).classList.add('on');
+  document.querySelectorAll('#nav .nav-item').forEach(b =>
+    b.setAttribute('aria-current', b.dataset.v === v ? 'page' : 'false'));
+  if (v === 'notes') { logEvent(store,'R. Osei','recruiter','view_notes','panel'); renderNotes(); }
+  if (v === 'detail') logEvent(store,'R. Osei','recruiter','view_detail','c1');
+  if (v === 'settings') $('auditLine').textContent = 'Audit: ' + store.audit.length + ' events this session.';
+}
+document.querySelectorAll('#nav .nav-item').forEach(b => b.onclick = () => go(b.dataset.v));
+
+/* pipeline */
+function renderBoard(){
+  let html = '';
+  STAGES.forEach((s,i) => {
+    html += '<div><div class="colhead"><span class="t-section">'+s+'</span></div>';
+    store.candidates.forEach(c => {
+      if (c.parked || c.stage !== i) return;
+      const badges = (c.id==='c1')
+        ? '<span class="badge">'+mk('mark-gap')+' 3 flags</span><span class="badge">'+mk('mark-conflict')+' verify</span>'
+        : '<span class="stamp">synced</span>';
+      html += '<div class="pcard reveal-host" tabindex="0" role="button" aria-label="'+c.name+', open detail"'
+        + ' onclick="go(\'detail\')" onkeydown="if(event.key===\'Enter\')go(\'detail\')">'
+        + '<div class="nm">'+c.name+'</div><div class="t-caption">'+c.target+'</div>'
+        + '<div class="badges">'+badges+'</div>'
+        + '<div class="card-acts"><span class="reveal" style="display:inline-flex;gap:var(--space-2)">'
+        + (i<STAGES.length-1 ? '<button class="btn btn-sm" onclick="event.stopPropagation();adv(\''+c.id+'\')">Advance</button>':'')
+        + '<button class="btn btn-sm" onclick="event.stopPropagation();park(\''+c.id+'\')">Park</button>'
+        + '</span></div></div>';
+    });
+    html += '</div>';
+  });
+  $('board').innerHTML = html;
+  const parked = store.candidates.filter(c => c.parked);
+  $('parked').innerHTML = parked.length
+    ? 'Parked · ' + parked.map(c => c.name + ' <button class="btn btn-sm" onclick="park(\''+c.id+'\')">Restore</button>').join(' · ')
+    : 'No parked candidates.';
+  $('stageStamp').textContent = STAGES[store.candidates[0].stage].toUpperCase();
+}
+function adv(id){
+  const c = advanceStage(store, id);
+  if (c) { logEvent(store,'R. Osei','recruiter','advance',id); renderBoard(); toast(c.name+' moved to '+STAGES[c.stage]); }
+}
+function park(id){
+  const c = store.candidates.find(x=>x.id===id);
+  setParked(store, id, !c.parked);
+  logEvent(store,'R. Osei','recruiter', c.parked?'unpark':'park', id);
+  renderBoard(); toast(c.name + (c.parked?' parked':' restored'));
+}
+
+/* tabs */
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected','false'));
+  t.setAttribute('aria-selected','true');
+  ['ins','tr','fl','nt'].forEach(p => { $('p-'+p).hidden = (t.dataset.p !== p); });
+  if (t.dataset.p==='tr' && !$('trBody').children.length) renderTranscript();
+  if (t.dataset.p==='fl' && !$('flagCol1').children.length) renderFlags();
+  if (t.dataset.p==='nt') renderNotes();
+});
+
+function renderTranscript(){
+  const s = store.sessions[0];
+  $('trBody').innerHTML = s.transcript.map(t =>
+    '<div class="turn"><time>'+t.t+'</time><div><span class="who">'+t.who+'</span><span class="t-body">'+t.text+'</span></div></div>'
+    + (t.annot ? '<div class="annot">'+mk('mark-'+t.annot.mark)+'<span class="t-caption">'+t.annot.label+'</span></div>' : '')
+  ).join('');
+}
+
+const FLAGS = {
+  claim:    { mark:'mark-claimed',   spine:'spine-pos',  stamp:'POSITIVE' },
+  'jd-gap': { mark:'mark-gap',      spine:'spine-warn', stamp:'WARNING' },
+  conflict: { mark:'mark-conflict', spine:'spine-warn', stamp:'WARNING' },
+  metric:   { mark:'mark-confirmed',spine:'spine-conf', stamp:'CONFIRMED' }
+};
+function renderFlags(){
+  const open = store.flags.filter(f => f.status==='open');
+  const conf = store.flags.filter(f => f.status!=='open');
+  const card = f => {
+    const m = FLAGS[f.type];
+    const acted = f.status==='actioned';
+    return '<div class="flagcard spine '+m.spine+'">'
+      + '<header>'+mk(m.mark)+'<h3 class="t-section">'+f.title+'</h3><span class="stamp">'+mk(m.mark)+m.stamp+'</span></header>'
+      + '<p class="t-body">'+f.body+'</p>'
+      + '<p class="t-caption">Evidence: '+f.quote+'</p>'
+      + '<div class="acts">'
+      + (f.type==='claim' ? (acted?'<span class="stamp">ACTIONED</span>':'<button class="btn btn-sm" onclick="actFlag(\'f1\',\'feed\')">Feed to Resume Studio</button>') : '')
+      + ((f.type!=='metric' && !acted) ? '<button class="btn btn-sm" onclick="actFlag(\''+f.id+'\',\'notes\')">Add to Notes</button>' : '')
+      + (f.type==='metric' ? '<span class="stamp">CLEARED FOR CLIENT-FACING</span>' : '')
+      + '</div></div>';
+  };
+  $('flagCol1').innerHTML = open.map(card).join('');
+  $('flagCol2').innerHTML = conf.map(card).join('');
+}
+function actFlag(id, kind){
+  const f = store.flags.find(x=>x.id===id);
+  f.status = 'actioned';
+  if (kind==='feed' && !store.candidateTasks.some(t=>t.id==='t1')) {
+    store.candidateTasks.unshift({ id:'t1', type:'task', done:false, source:'recruiter',
+      title:'Add the leadership line to your CV',
+      body:'You said you coordinated four engineers on the WCAG workstream. It is not on your CV yet. Your recruiter agrees, it is earned.' });
+  }
+  logEvent(store,'R. Osei','recruiter','flag_'+kind,id);
+  saveStore(store); renderFlags();
+  toast(kind==='feed' ? 'Task written to the candidate app' : 'Carried to Notes');
+}
+
+function renderNotes(){
+  logEvent(store,'R. Osei','recruiter','view_notes','c1');
+  const i = INTERNAL.c1;
+  $('p-nt').innerHTML = '<section class="stage" style="padding:var(--space-6)">'
+    + '<p class="t-caption">INTERNAL ONLY · ROLE-GATED · NEVER CLIENT-FACING</p>'
+    + i.rows.map(r => '<div class="stagerow"><span class="t-secondary">'+r[0]+'</span><span class="t-body">'+r[1]+'</span></div>').join('')
+    + '<p class="t-caption" style="margin-top:var(--space-4)">Audit: every view of this panel is logged. '+i.views+' views this week.</p>'
+    + '</section>';
+  $('notesBody').innerHTML = ['c1','c2','c3'].map(id => {
+    const n = INTERNAL[id], name = store.candidates.find(c=>c.id===id).name;
+    return '<section class="stage" style="padding:var(--space-6);margin-bottom:var(--space-4)">'
+      + '<p class="t-caption">'+name.toUpperCase()+' · INTERNAL ONLY</p>'
+      + n.rows.map(r => '<div class="stagerow"><span class="t-secondary">'+r[0]+'</span><span class="t-body">'+r[1]+'</span></div>').join('')
+      + '</section>';
+  }).join('') + '<p class="t-caption">Audit: every view is logged.</p>';
+}
+
+/* builder */
+ $('ingestBtn').onclick = () => {
+  $('ingestBtn').outerHTML = '<span class="stamp">'+mk('mark-confirmed')+'SANITIZED</span>';
+  $('srcCount').textContent = '4 of 4 sources';
+  $('st1').removeAttribute('aria-current'); $('st2').setAttribute('aria-current','step');
+  $('genBtn').setAttribute('aria-disabled','false');
+  logEvent(store,'R. Osei','recruiter','ingest','jd');
+  toast('Job description ingested and sanitized');
+};
+ $('genBtn').onclick = () => {
+  if ($('genBtn').getAttribute('aria-disabled')==='true') { toast('Ingest the job description first'); return; }
+  $('st2').removeAttribute('aria-current'); $('st3').setAttribute('aria-current','step');
+  $('st3').querySelector('.t-caption').textContent = 'generated';
+  $('outs').hidden = false;
+  logEvent(store,'R. Osei','recruiter','generate','c1');
+  toast('Deliverables generated · QA checks passed');
+};
+ $('playBtn').onclick = () => { $('playBtn').textContent = $('playBtn').textContent==='Play' ? 'Pause' : 'Play'; toast('Playback stub'); };
+
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('on'), 2400); }
+
+loginCheck(); renderBoard();
+</script>
+</body>
+</html>

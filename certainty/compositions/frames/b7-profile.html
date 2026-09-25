@@ -1,0 +1,165 @@
+<template>
+<div id="root" data-composition-id="b7-profile" data-width="1080" data-height="1080" data-duration="5.4">
+
+  <div class="clip b7-profile-bg" data-start="0" data-duration="5.4" data-track-index="0"></div>
+
+  <div class="clip b7-profile-shot" data-start="0" data-duration="5.4" data-track-index="1">
+    <div id="b7-profile-window" class="b7-profile-window">
+      <div id="b7-profile-world" class="b7-profile-world" data-layout-allow-overflow="true">
+        <img class="b7-profile-img" src="assets/mobile-profile-full.png" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <div class="clip b7-profile-copy" data-start="0" data-duration="5.4" data-track-index="2">
+    <div id="b7-profile-line1" class="b7-profile-line">
+      <span class="b7-profile-word">One link,</span>
+      <span class="b7-profile-word">for the hiring manager.</span>
+    </div>
+    <div id="b7-profile-line2" class="b7-profile-line">
+      <span class="b7-profile-word">Fully verified.</span>
+      <span class="b7-profile-word">Ready to download.</span>
+    </div>
+  </div>
+
+  <style>
+    @font-face {
+      font-family: 'Georgia';
+      src: local('Georgia');
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: "Georgia", serif;
+    }
+
+    .clip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1080px;
+    }
+
+    .b7-profile-bg {
+      background: #FBF7EC;
+    }
+
+    .b7-profile-window {
+      position: absolute;
+      left: 375px;
+      top: 70px;
+      width: 330px;
+      height: 590px;
+      border: 1px solid #C9A227;
+      border-radius: 32px;
+      overflow: hidden;
+      background: #FBF7EC;
+      opacity: 0;
+    }
+
+    .b7-profile-world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 330px;
+      height: 1297.1538px;
+    }
+
+    .b7-profile-img {
+      display: block;
+      width: 330px;
+      height: 1297.1538px;
+    }
+
+    .b7-profile-line {
+      position: absolute;
+      left: 100px;
+      width: 880px;
+      text-align: center;
+      font-family: "Georgia", serif;
+      font-size: 40px;
+      line-height: 1.2;
+      color: #1B1712;
+    }
+
+    #b7-profile-line1 {
+      top: 720px;
+    }
+
+    #b7-profile-line2 {
+      top: 776px;
+    }
+
+    .b7-profile-word {
+      display: inline-block;
+      opacity: 0;
+    }
+
+    .b7-profile-word + .b7-profile-word {
+      margin-left: 12px;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines["b7-profile"] = tl;
+
+      // Scene 1 (0.0-0.3s): phone window settles in, showing the top of the
+      // stitched plate (name, verified badge, companies) - visible before 0.5s.
+      tl.fromTo(
+        "[id='b7-profile-window']",
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" },
+        0
+      );
+
+      // Scene 2 (0.3-1.4s): copy line 1 word-groups stagger in.
+      tl.fromTo(
+        "#b7-profile-line1 .b7-profile-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.35 },
+        0.3
+      );
+
+      // Scene 3 (1.4-2.6s): copy line 2 word-groups stagger in.
+      tl.fromTo(
+        "#b7-profile-line2 .b7-profile-word",
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.35 },
+        1.4
+      );
+
+      // Scene 4 (2.6-4.6s): one continuous vertical pan down the stitched
+      // plate via `y` transform on the inner world layer (CSS `top` stays
+      // static at 0), moving past highlights/skills/education and landing
+      // near the "Download PDF / Download DOCX" buttons area by 4.6s.
+      tl.to(
+        "[id='b7-profile-world']",
+        { y: -640, duration: 2.0, ease: "power3" },
+        2.6
+      );
+
+      // Scene 5 (4.6-5.0s): settle, at most a subtle finite jitter (no
+      // repeat/yoyo).
+      tl.to(
+        "[id='b7-profile-window']",
+        { scale: 1.006, duration: 0.2, ease: "power1.inOut" },
+        4.6
+      );
+      tl.to(
+        "[id='b7-profile-window']",
+        { scale: 1, duration: 0.2, ease: "power1.inOut" },
+        4.8
+      );
+    })();
+  </script>
+
+</div>
+</template>
