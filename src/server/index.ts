@@ -74,7 +74,7 @@ function securityHeaders(res: ServerResponse): void {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Content-Security-Policy',
-    "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; img-src 'self' data:");
+    "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://esm.sh; connect-src 'self' https://esm.sh wss://*.livekit.cloud https://*.livekit.cloud; img-src 'self' data:");
 }
 
 function serveFile(res: ServerResponse, path: string): boolean {
