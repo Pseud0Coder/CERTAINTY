@@ -6,4 +6,3 @@ dist/
 .env
 .env.local
 certain.db
-web-dist/

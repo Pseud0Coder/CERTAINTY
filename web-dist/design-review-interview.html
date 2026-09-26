@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview + voice: design review</title>
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/design-review-interview.css">
+</head>
+<body>
+
+<header class="rev-head">
+  <div>
+    <h1>Interview + voice: four directions</h1>
+    <p>Tell me a letter (A, B, C or D) and I'll build it into the app and the landing page.</p>
+  </div>
+  <nav class="rev-jump">
+    <a href="#A">A · Studio</a>
+    <a href="#B">B · Ledger</a>
+    <a href="#C">C · Radial</a>
+    <a href="#D">D · Dual card</a>
+  </nav>
+  <button class="rev-theme" id="themeBtn">Light mode</button>
+</header>
+
+<!-- ============================================================== A ============================================================== -->
+<section class="rev-section dA vstate-speaking" id="A">
+  <div class="rev-title-row"><span class="rev-id">A</span><h2>Studio Console</h2></div>
+  <p class="rev-pitch">The closest evolution of what exists today: same split-screen bones, same transcript-on-the-left
+    pattern, but the right pane becomes a real voice console: a breathing orb standing in for the interviewer, a
+    live STAR readout building underneath it as you talk. Lowest risk to build, most continuity with the current app.</p>
+  <div class="rev-tags"><span class="rev-tag">Evolves current layout</span><span class="rev-tag">Live STAR while talking</span><span class="rev-tag">Lowest build effort</span></div>
+
+  <div class="statesw" data-target="A">
+    <button data-state="idle">Idle</button>
+    <button data-state="listening">Listening</button>
+    <button data-state="speaking" aria-pressed="true">AI speaking</button>
+    <button data-state="muted">Muted</button>
+  </div>
+
+  <div class="rev-frame">
+    <div class="rev-framebar"><div class="dots"><span></span><span></span><span></span></div><span class="lbl">certainty.app: Interview</span></div>
+    <div class="rev-body">
+      <div class="row wrap gap-2 mb-3">
+        <div class="modeseg" role="group"><button aria-pressed="false">Practice · private</button><button aria-pressed="true">Verified · shared</button></div>
+        <span class="recording"><span class="recording-dot"></span>Recording</span>
+      </div>
+      <div class="splitpane">
+        <div class="pane">
+          <h2 class="t-section mb-3">Transcript</h2>
+          <div class="chatlog">
+            <div class="turn"><time>02:14</time><div><span class="who">Interviewer</span><div class="t-body">Tell me about a time you delivered against a deadline you did not control.</div></div></div>
+            <div class="turn"><time>02:41</time><div><span class="who">You</span><div class="t-body">I owned the migration cutover for the billing service. The vendor moved the date up by two weeks.<span class="annot-inline">● confirmed</span></div></div></div>
+            <div class="turn"><time>03:02</time><div><span class="who">Interviewer</span><div class="t-body">Good structure. What did you personally change to hit the new date?</div></div></div>
+          </div>
+        </div>
+        <div class="pane voicecol">
+          <div class="orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z"/><path d="M19 11a7 7 0 01-14 0M12 18v3"/></svg></div>
+          <div class="vlabel">Certainty is speaking</div>
+          <button class="mic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z"/><path d="M19 11a7 7 0 01-14 0M12 18v3"/></svg></button>
+          <div class="starmini">
+            <div class="row"><span>S</span><div class="track"><div class="fill w-s"></div></div><span class="figures">15%</span></div>
+            <div class="row"><span>T</span><div class="track"><div class="fill w-t"></div></div><span class="figures">9%</span></div>
+            <div class="row"><span>A</span><div class="track"><div class="fill w-a"></div></div><span class="figures">48%</span></div>
+            <div class="row"><span>R</span><div class="track"><div class="fill w-r"></div></div><span class="figures">28%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== B ============================================================== -->
+<section class="rev-section dB vstate-listening" id="B">
+  <div class="rev-title-row"><span class="rev-id">B</span><h2>Ledger Interview</h2></div>
+  <p class="rev-pitch">Leans hardest into the dark-academia identity: the transcript reads like a bound manuscript,
+    annotations sit in a marginal gutter next to the exact line they judge, and voice shrinks to a single quiet
+    toolbar at the foot of the page, a waveform, not a gadget. The debrief, not the live view, is where STAR appears.</p>
+  <div class="rev-tags"><span class="rev-tag">Most on-brand</span><span class="rev-tag">Quietest voice UI</span><span class="rev-tag">Marginal annotations</span></div>
+
+  <div class="statesw" data-target="B">
+    <button data-state="idle">Idle</button>
+    <button data-state="listening" aria-pressed="true">Listening</button>
+    <button data-state="speaking">AI speaking</button>
+    <button data-state="muted">Muted</button>
+  </div>
+
+  <div class="rev-frame">
+    <div class="rev-framebar"><div class="dots"><span></span><span></span><span></span></div><span class="lbl">certainty.app: Interview</span></div>
+    <div class="rev-body">
+      <div class="row wrap gap-2 mb-3 jc-center">
+        <span class="stamp">Verified · shared</span><span class="recording"><span class="recording-dot"></span>Recording</span>
+      </div>
+      <div class="ledger">
+        <div class="lgutter">
+          <svg class="g-mark g-mark-1 mark mark-confirmed" viewBox="0 0 12 12" width="12" height="12" title="Confirmed">
+            <path d="M1.5 1.5h9v9h-9z" fill="currentColor"/>
+          </svg>
+        </div>
+        <div>
+          <div class="lrow"><div class="lwho">Interviewer · 02:14</div><div class="ltext">Tell me about a time you delivered against a deadline you did not control.</div></div>
+          <div class="lrow"><div class="lwho you">You · 02:41</div><div class="ltext">I owned the migration cutover for the billing service. The vendor moved the date up by two weeks.</div></div>
+          <div class="lrow"><div class="lwho">Interviewer · 03:02</div><div class="ltext">Good structure. What did you personally change to hit the new date?</div></div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="mic-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z"/><path d="M19 11a7 7 0 01-14 0M12 18v3"/></svg></div>
+        <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <span class="elapsed">03:12</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== C ============================================================== -->
+<section class="rev-section dC vstate-speaking" id="C">
+  <div class="rev-title-row"><span class="rev-id">C</span><h2>Radial Focus</h2></div>
+  <p class="rev-pitch">Voice-first, almost no chrome. The progress ring is the brand mark itself, enlarged: it fills
+    as questions are answered, the same ring-and-check idea as the logo closing the loop. One question at a time,
+    full width, nothing to read but that. Everything else, full transcript, STAR, waits in a drawer or the debrief.</p>
+  <div class="rev-tags"><span class="rev-tag">Boldest, most distinctive</span><span class="rev-tag">Brand-mark callback</span><span class="rev-tag">Highest build effort</span></div>
+
+  <div class="statesw" data-target="C">
+    <button data-state="idle">Idle</button>
+    <button data-state="listening">Listening</button>
+    <button data-state="speaking" aria-pressed="true">AI speaking</button>
+    <button data-state="muted">Muted</button>
+  </div>
+
+  <div class="rev-frame">
+    <div class="rev-framebar"><div class="dots"><span></span><span></span><span></span></div><span class="lbl">certainty.app: Interview</span></div>
+    <div class="rev-body dC">
+      <span class="stamp">Verified · shared · Recording</span>
+      <div class="ringwrap">
+        <svg class="ring" width="220" height="220" viewBox="0 0 220 220">
+          <circle class="track" cx="110" cy="110" r="98"/>
+          <circle class="fill" cx="110" cy="110" r="98" stroke-dasharray="615.7" stroke-dashoffset="215.5"/>
+        </svg>
+        <div class="ringcenter">
+          <div>
+            <div class="icowrap"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z"/><path d="M19 11a7 7 0 01-14 0M12 18v3"/></svg></div>
+            <div class="st">Speaking</div>
+          </div>
+        </div>
+      </div>
+      <div class="qnum">Question 6 of 9</div>
+      <div class="question">"Good structure. What did you personally change to hit the new date?"</div>
+      <button class="mic-lg"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z"/><path d="M19 11a7 7 0 01-14 0M12 18v3"/></svg></button>
+      <details class="drawer">
+        <summary>Transcript so far <span>▾</span></summary>
+        <div class="dbody">
+          <div class="turn plain"><div><span class="who">Interviewer</span><span class="t-body"> Tell me about a time you delivered against a deadline you did not control.</span></div></div>
+          <div class="turn plain"><div><span class="who">You</span><span class="t-body"> I owned the migration cutover for the billing service. The vendor moved the date up by two weeks.</span></div></div>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== D ============================================================== -->
+<section class="rev-section dD vstate-listening" id="D">
+  <div class="rev-title-row"><span class="rev-id">D</span><h2>Dual Card</h2></div>
+  <p class="rev-pitch">The familiar shape: a chat card, two speakers, bubbles left and right. STAR rides as four
+    thin bars in the header instead of a separate panel, and voice is one pill in the corner: a mic dot plus a
+    small equalizer when live. Warmest and most approachable of the four; the smallest departure from a normal chat app.</p>
+  <div class="rev-tags"><span class="rev-tag">Most familiar</span><span class="rev-tag">Compact header metrics</span><span class="rev-tag">Approachable</span></div>
+
+  <div class="statesw" data-target="D">
+    <button data-state="idle">Idle</button>
+    <button data-state="listening" aria-pressed="true">Listening</button>
+    <button data-state="speaking">AI speaking</button>
+    <button data-state="muted">Muted</button>
+  </div>
+
+  <div class="rev-frame">
+    <div class="rev-framebar"><div class="dots"><span></span><span></span><span></span></div><span class="lbl">certainty.app: Interview</span></div>
+    <div class="rev-body">
+      <div class="card">
+        <div class="dhead">
+          <span class="stamp">Verified</span>
+          <div class="voicepill">
+            <span class="micdot"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z"/><path d="M19 11a7 7 0 01-14 0M12 18v3"/></svg></span>
+            <span class="eq"><span></span><span></span><span></span><span></span></span>
+            Listening
+          </div>
+          <div class="dstars" aria-label="Live STAR proportions">
+            <div class="track"><div class="fill w-s"></div></div>
+            <div class="track"><div class="fill w-t"></div></div>
+            <div class="track"><div class="fill w-a"></div></div>
+            <div class="track"><div class="fill w-r"></div></div>
+          </div>
+        </div>
+        <div class="dbody">
+          <div class="bubble them"><span class="bwho">Interviewer</span>Tell me about a time you delivered against a deadline you did not control.</div>
+          <div class="bubble me"><span class="bwho">You</span>I owned the migration cutover for the billing service. The vendor moved the date up by two weeks.</div>
+          <div class="bubble them"><span class="bwho">Interviewer</span>Good structure. What did you personally change to hit the new date?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<p class="rev-foot">Certainty: interview and voice design review. Not linked from the app; for this conversation only.</p>
+
+<script type="module" src="/assets/design-review-interview.js"></script>
+</body>
+</html>

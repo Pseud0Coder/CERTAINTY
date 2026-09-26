@@ -1,0 +1,162 @@
+  /* ===================================================================
+     Design-review-only styling. Real tokens.css / app.css above supply
+     every color, radius, shadow and type role; this stylesheet adds
+     nothing except the new components being proposed, so what you see
+     here is what it would actually look like wired into the app.
+     =================================================================== */
+  body{padding:0}
+  .rev-head{position:sticky;top:0;z-index:50;background:var(--ground);border-bottom:var(--hairline) solid var(--rule);
+    padding:var(--space-4) var(--space-6);display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap}
+  .rev-head h1{font:var(--type-view-title);margin:0}
+  .rev-head p{margin:0;color:var(--ink-quiet);font:var(--type-secondary)}
+  .rev-jump{display:flex;gap:var(--space-2);margin-inline-start:auto;flex-wrap:wrap}
+  .rev-jump a{font:var(--type-caption);font-weight:600;text-decoration:none;color:var(--ink);
+    border:var(--hairline) solid var(--rule);border-radius:var(--radius-pill);padding:5px 14px;background:var(--sheet)}
+  .rev-theme{border:var(--hairline) solid var(--rule);border-radius:var(--radius-control);background:var(--sheet);
+    color:var(--ink);font:var(--type-caption);font-weight:600;padding:6px 12px;cursor:pointer}
+
+  .rev-section{padding:var(--space-8) var(--space-6);border-bottom:var(--hairline) solid var(--rule)}
+  .rev-section:nth-child(even){background:var(--rail-bg)}
+  .rev-id{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+    border-radius:50%;background:var(--accent);color:var(--ink-inverse);font:var(--type-section);
+    font-weight:700;flex:none}
+  .rev-title-row{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-2)}
+  .rev-title-row h2{font:var(--type-display);margin:0}
+  .rev-pitch{color:var(--ink-quiet);font:var(--type-body);max-width:68ch;margin:0 0 var(--space-3)}
+  .rev-tags{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-6)}
+  .rev-tag{font:var(--type-caption);font-weight:600;padding:3px 10px;border-radius:var(--radius-pill);
+    background:var(--accent-soft);color:var(--accent-ink)}
+
+  .rev-frame{max-width:1180px;margin:0 auto;background:var(--ground);border:var(--hairline) solid var(--rule);
+    border-radius:var(--radius-sheet);box-shadow:var(--elev-2);overflow:hidden}
+  .rev-framebar{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-5);
+    border-bottom:var(--hairline) solid var(--rule);background:var(--sheet)}
+  .rev-framebar .dots{display:flex;gap:6px}
+  .rev-framebar .dots span{width:9px;height:9px;border-radius:50%;background:var(--rule-strong)}
+  .rev-framebar .lbl{font:var(--type-caption);color:var(--ink-quiet);margin-inline-start:auto}
+  .rev-body{padding:var(--space-6)}
+
+  .statesw{display:inline-flex;gap:2px;border:var(--hairline) solid var(--rule);border-radius:var(--radius-pill);
+    padding:2px;background:var(--sheet);margin-bottom:var(--space-5)}
+  .statesw button{border:0;background:none;font:var(--type-caption);font-weight:600;color:var(--ink-quiet);
+    padding:6px 14px;border-radius:var(--radius-pill);cursor:pointer}
+  .statesw button[aria-pressed="true"]{background:var(--accent);color:var(--ink-inverse)}
+
+  /* ---------- shared voice-state visual language ---------- */
+  .vstate-idle{--vc:var(--ink-quiet)}
+  .vstate-listening{--vc:var(--accent)}
+  .vstate-speaking{--vc:var(--severity-positive)}
+  .vstate-muted{--vc:var(--severity-blocking)}
+
+  @keyframes pulse-ring{0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--vc) 35%, transparent)}
+    100%{box-shadow:0 0 0 22px color-mix(in srgb, var(--vc) 0%, transparent)}}
+  @keyframes bob{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+
+  /* ===================== A: Studio Console ===================== */
+  .dA .splitpane{gap:var(--space-6)}
+  .dA .voicecol{display:flex;flex-direction:column;align-items:center;gap:var(--space-5);text-align:center}
+  .dA .orb{width:120px;height:120px;border-radius:50%;display:grid;place-items:center;
+    border:3px solid var(--vc);color:var(--vc);position:relative;background:var(--sheet-sunken)}
+  .dA .orb::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--vc);
+    animation:pulse-ring 1.8s var(--ease) infinite}
+  .vstate-idle .orb::after,.vstate-muted .orb::after{animation:none;opacity:0}
+  .dA .orb svg{width:38px;height:38px}
+  .dA .vlabel{font:var(--type-secondary);font-weight:600;color:var(--vc)}
+  .dA .mic{width:56px;height:56px;border-radius:50%;border:var(--hairline) solid var(--rule);background:var(--sheet);
+    display:grid;place-items:center;cursor:pointer;color:var(--ink)}
+  .dA .starmini{display:grid;gap:8px;width:100%;max-width:220px;text-align:left}
+  .dA .starmini .row{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:8px;font:var(--type-caption)}
+  .dA .starmini .track{height:4px;background:var(--sheet-sunken);border-radius:99px}
+  .dA .starmini .fill{height:100%;border-radius:99px;background:var(--vc)}
+  .dA .turn .annot-inline{display:inline-flex;align-items:center;gap:4px;margin-inline-start:8px;
+    font:var(--type-caption);color:var(--ink-quiet)}
+
+  /* ===================== B: Ledger Interview ===================== */
+  .dB .ledger{display:grid;grid-template-columns:28px 1fr;max-width:820px;margin:0 auto}
+  .dB .lgutter{border-inline-end:var(--hairline) solid var(--rule);position:relative}
+  .dB .lgutter .g-mark{position:absolute;transform:translateY(2px)}
+  .dB .lrow{padding:var(--space-4) 0 var(--space-4) var(--space-4);border-bottom:var(--hairline) solid var(--rule)}
+  .dB .lrow:last-child{border-bottom:0}
+  .dB .lwho{font:var(--type-caption);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-quiet)}
+  .dB .lwho.you{color:var(--accent-ink)}
+  .dB .ltext{font:var(--type-body);margin-top:4px}
+  .dB .toolbar{position:sticky;bottom:0;margin-top:var(--space-6);display:flex;align-items:center;gap:var(--space-4);
+    padding:var(--space-3) var(--space-5);background:var(--stage);color:var(--stage-ink);border-radius:var(--radius-pill);
+    max-width:520px;margin-inline:auto}
+  .dB .toolbar .mic-sm{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--vc);color:var(--vc);
+    display:grid;place-items:center;flex:none}
+  .dB .wave{display:flex;align-items:center;gap:3px;height:18px;flex:1}
+  .dB .wave span{width:3px;background:var(--vc);border-radius:2px;animation:bob 1s ease-in-out infinite}
+  .vstate-idle .wave span,.vstate-muted .wave span{animation:none;transform:scaleY(.25)}
+  .dB .wave span:nth-child(2n){animation-delay:.15s}
+  .dB .wave span:nth-child(3n){animation-delay:.3s}
+  .dB .toolbar .elapsed{font:var(--type-mono);font-size:12px;color:var(--stage-ink-quiet)}
+
+  /* ===================== C: Radial Focus ===================== */
+  .dC{display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--space-5)}
+  .dC .ringwrap{width:220px;height:220px;position:relative;display:grid;place-items:center}
+  .dC svg.ring{transform:rotate(-90deg)}
+  .dC svg.ring circle{fill:none;stroke-width:6}
+  .dC svg.ring .track{stroke:var(--rule)}
+  .dC svg.ring .fill{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .6s var(--ease)}
+  .dC .ringcenter{position:absolute;inset:0;display:grid;place-items:center;flex-direction:column;gap:6px}
+  .dC .ringcenter .icowrap{width:56px;height:56px;border-radius:50%;background:var(--sheet-sunken);display:grid;place-items:center;color:var(--vc);margin:0 auto 8px}
+  .dC .ringcenter .st{font:var(--type-secondary);font-weight:600;color:var(--vc)}
+  .dC .qnum{font:var(--type-caption);color:var(--ink-quiet);letter-spacing:.08em;text-transform:uppercase}
+  .dC .question{font:var(--type-view-title);max-width:560px}
+  .dC .drawer{width:100%;max-width:640px;border:var(--hairline) solid var(--rule);border-radius:var(--radius-control);
+    background:var(--sheet);text-align:left}
+  .dC .drawer summary{padding:var(--space-3) var(--space-4);cursor:pointer;font:var(--type-secondary);font-weight:600;
+    display:flex;justify-content:space-between;color:var(--ink-quiet)}
+  .dC .drawer .dbody{padding:0 var(--space-4) var(--space-4);border-top:var(--hairline) solid var(--rule)}
+  .dC .mic-lg{width:64px;height:64px;border-radius:50%;border:var(--hairline) solid var(--rule);background:var(--sheet);
+    display:grid;place-items:center;cursor:pointer;color:var(--ink)}
+
+  /* ===================== D: Dual Card ===================== */
+  .dD .card{max-width:720px;margin:0 auto;border:var(--hairline) solid var(--rule);border-radius:var(--radius-sheet);
+    overflow:hidden;box-shadow:var(--elev-1)}
+  .dD .dhead{display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-5);
+    background:var(--sheet);border-bottom:var(--hairline) solid var(--rule)}
+  .dD .dstars{display:flex;gap:10px;margin-inline-start:auto}
+  .dD .dstars .track{width:34px;height:4px;border-radius:99px;background:var(--sheet-sunken)}
+  .dD .dstars .fill{height:100%;border-radius:99px;background:var(--accent)}
+  .dD .voicepill{display:inline-flex;align-items:center;gap:8px;border:var(--hairline) solid var(--rule);
+    border-radius:var(--radius-pill);padding:4px 6px 4px 12px;background:var(--sheet-sunken);font:var(--type-caption);font-weight:600}
+  .dD .voicepill .eq{display:flex;gap:2px;align-items:center;height:12px}
+  .dD .voicepill .eq span{width:2.5px;background:var(--vc);border-radius:2px;animation:bob .9s ease-in-out infinite}
+  .vstate-idle .voicepill .eq span,.vstate-muted .voicepill .eq span{animation:none;transform:scaleY(.3)}
+  .dD .voicepill .micdot{width:22px;height:22px;border-radius:50%;background:var(--vc);color:var(--ink-inverse);
+    display:grid;place-items:center}
+  .dD .dbody{padding:var(--space-5);display:flex;flex-direction:column;gap:var(--space-3);background:var(--ground)}
+  .dD .bubble{max-width:78%;padding:var(--space-3) var(--space-4);border-radius:var(--radius-sheet);font:var(--type-body)}
+  .dD .bubble.them{background:var(--sheet);border:var(--hairline) solid var(--rule);align-self:flex-start;border-end-start-radius:4px}
+  .dD .bubble.me{background:var(--accent);color:var(--ink-inverse);align-self:flex-end;border-end-end-radius:4px}
+  .dD .bwho{display:block;font:var(--type-caption);font-weight:700;opacity:.65;margin-bottom:3px}
+
+  .rev-foot{padding:var(--space-8) var(--space-6);text-align:center;color:var(--ink-quiet);font:var(--type-secondary)}
+
+/* ---------- one-off utility values, extracted from what were inline
+   style attributes: the CSP's style-src 'self' blocks those the same way
+   it blocks a raw <style> block (ADR-0013), so every value here is a
+   real class or selector instead. ---------- */
+.jc-center{justify-content:center}
+.w-s{width:38%}
+.w-t{width:22%}
+.w-a{width:70%}
+.w-r{width:55%}
+.g-mark-1{top:74px;left:9px}
+
+/* Waveform / equalizer bars: varying heights via nth-child instead of a
+   one-off class per bar, since the exact heights are purely decorative. */
+.dB .wave span:nth-child(1){height:6px}
+.dB .wave span:nth-child(2){height:14px}
+.dB .wave span:nth-child(3){height:9px}
+.dB .wave span:nth-child(4){height:16px}
+.dB .wave span:nth-child(5){height:7px}
+.dB .wave span:nth-child(6){height:12px}
+.dB .wave span:nth-child(7){height:5px}
+.dB .wave span:nth-child(8){height:15px}
+.dD .voicepill .eq span:nth-child(1){height:4px}
+.dD .voicepill .eq span:nth-child(2){height:10px}
+.dD .voicepill .eq span:nth-child(3){height:6px}
+.dD .voicepill .eq span:nth-child(4){height:12px}
