@@ -2,7 +2,11 @@
    onboarding -> research -> role-by-role resume -> CV -> LinkedIn -> interview. */
 import { api, subscribe } from '../shared/api.js';
 import { h, mark, stamp, toast, empty, clear, themeToggle, checkGlyph, lockGlyph, brandLockup, setWidthPct } from '../shared/dom.js';
-import { Room, RoomEvent, createLocalAudioTrack } from 'livekit-client';
+/* Self-hosted vendor bundle (ADR-0018). The CDN import map was an inline
+   script, which the CSP's script-src blocks, and one unresolvable specifier
+   killed the whole module graph before any app code ran. The bundle is
+   fully self-contained, so a single file suffices. */
+import { Room, RoomEvent, createLocalAudioTrack } from '../vendor/livekit-client.esm.mjs';
 import { cvBlocks } from '../shared/cv-template.js';
 import { buildCvPdf } from '../shared/pdf.js';
 import { buildCvDocx } from '../shared/docx.js';

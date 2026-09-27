@@ -514,9 +514,18 @@ route('POST', '/api/admin/retention/run', ['admin'], r => {
 route('POST', '/api/webhooks/livekit', null, async r => {
   const store = r.deps.store;
   const body = r.body as any;
-  
+
   const candidateId = body.participant?.metadata?.candidateId;
   if (!candidateId) throw new ApiError(400, 'missing_candidate_id');
+
+  /* Agent-produced structured output, not an untrusted document, so it
+     enters the spine as 'clean' like every other write_artifact call. The
+     previous version hand-built artifacts with quarantine 'pending' (a
+     status that does not exist) under a fake 'system' tenant, which
+     typecheck rejected and tenant isolation (L9) forbids. */
+  const tenantId = store.tenantForCandidate(candidateId);
+  if (!tenantId) throw new ApiError(404, 'candidate_not_found');
+  const ctx: Ctx = { tenantId };
 
   const bullets = body.data?.resume_bullet ?? [];
   const note = body.data?.interviewer_note;
@@ -524,11 +533,11 @@ route('POST', '/api/webhooks/livekit', null, async r => {
   for (const b of bullets) {
     store.insertArtifact({
       id: randomUUID(),
-      tenantId: 'system',
+      tenantId: ctx.tenantId,
       candidateId,
       kind: 'handoff_block',
       title: 'Extracted Resume Bullet',
-      quarantine: 'pending',
+      quarantine: 'clean',
       fields: { ownership: b.ownership, action: b.action, outcome: b.outcome },
       sanitizedText: null, content: null, injectionAttempts: 0,
       createdBy: 'livekit_agent', createdAt: new Date().toISOString(),
@@ -538,11 +547,11 @@ route('POST', '/api/webhooks/livekit', null, async r => {
   if (note) {
     store.insertArtifact({
       id: randomUUID(),
-      tenantId: 'system',
+      tenantId: ctx.tenantId,
       candidateId,
       kind: 'debrief',
       title: 'Interview Evaluation',
-      quarantine: 'pending',
+      quarantine: 'clean',
       fields: { evaluation_summary: note.evaluation_summary },
       sanitizedText: null, content: null, injectionAttempts: 0,
       createdBy: 'livekit_agent', createdAt: new Date().toISOString(),

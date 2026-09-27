@@ -636,3 +636,42 @@ the mobile breakpoint. A matching screenshot of the real console mid-session
 marketing-page section between Platform and Features, making the same
 promises the implementation actually keeps: consent before capture,
 deterministic scoring, ownership measured.
+
+## ADR-0018: The LiveKit client bundle is self-hosted; no CDN, no import map
+
+Date: 2026-09-26. Status: accepted.
+
+The candidate app served an inline `<script type="importmap">` mapping
+`livekit-client` to `https://esm.sh/livekit-client@2.6.2`. Inline scripts
+are exactly what `script-src 'self'` (ADR-0013) forbids, so the browser
+refused the map, the bare specifier in `candidate/main.ts` failed to
+resolve, and one unresolvable import killed the entire module graph before
+any app code ran. `/app/candidate` returned 200 with an empty `#root`: a
+blank screen invisible to the API, the server logs, and every test, because
+none of them load a browser.
+
+The fix removes the third party from the critical path entirely. The
+livekit-client ESM bundle is vendored at `src/web/vendor/`, copied into
+`web-dist` by the build, and imported by relative path. The bundle is fully
+self-contained, so a single file suffices. The CSP drops the esm.sh
+exception from `script-src` and `connect-src`: scripts are now same-origin
+only. This also removes a version-skew hazard (the import map pinned 2.6.2
+while package.json carried 2.22.x) and a CDN availability dependency.
+
+Keeping the failure class out of the codebase, not just this instance:
+`tests/csp.test.ts` fails the build if any shipped page carries an inline
+script, if any shipped app module uses a bare import specifier, if the
+vendored bundle stops resolving on its own (proven by importing it, since
+regex cannot tell code from string literals in a minified bundle), if the
+bundle drifts from the installed livekit-client version, or if the CSP ever
+references the removed CDN again.
+
+The same audit surfaced the LiveKit webhook hand-building artifacts with a
+`quarantine` status that does not exist, under a fake `system` tenant. That
+route now resolves the tenant from the stored candidate (L9) and records
+agent output as `clean`, the same as every other `write_artifact` call.
+
+Verified end to end: the served page carries one module script and no
+inline scripts, the CSP header ships `script-src 'self'`, the vendor asset
+serves through the `/assets` route, and the full compiled module graph of
+the candidate app resolves with no import map.

@@ -20,7 +20,7 @@ function copyStatic(dir, base) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) copyStatic(p, base);
-    else if (p.endsWith('.html') || p.endsWith('.css') || p.endsWith('.png')) {
+    else if (['.html', '.css', '.png', '.mjs'].some(ext => p.endsWith(ext))) {
       const dest = join(out, p.slice(base.length + 1));
       mkdirSync(dirname(dest), { recursive: true });
       cpSync(p, dest);
@@ -29,4 +29,19 @@ function copyStatic(dir, base) {
 }
 const webRoot = join(root, 'src', 'web');
 copyStatic(webRoot, webRoot);
+
+/* Vendor bundle lives in git (render has no npm-provided path for it after a
+   clean clone, and committing it keeps deploys reproducible). Refresh it from
+   node_modules and refuse a stale copy: the shipped bundle must always match
+   the livekit-client version in package.json. */
+import { readFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+const vendorName = 'livekit-client.esm.mjs';
+const vendorSrc = join(root, 'node_modules', 'livekit-client', 'dist', vendorName);
+const vendorOut = join(webRoot, 'vendor', vendorName);
+const same = existsSync(vendorOut) &&
+  createHash('sha256').update(readFileSync(vendorOut)).digest('hex') ===
+  createHash('sha256').update(readFileSync(vendorSrc)).digest('hex');
+if (!same) cpSync(vendorSrc, vendorOut);
+
 console.log('web-dist synced');

@@ -65,7 +65,7 @@ store.onEvent = (tenantId: string, topic: string, payload: unknown) => {
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml',
+  ".js": 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.woff2': 'font/woff2',
 };
 
@@ -74,7 +74,7 @@ function securityHeaders(res: ServerResponse): void {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Content-Security-Policy',
-    "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://esm.sh; connect-src 'self' https://esm.sh wss://*.livekit.cloud https://*.livekit.cloud; img-src 'self' data:");
+    "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self' wss://*.livekit.cloud https://*.livekit.cloud; img-src 'self' data:");
 }
 
 function serveFile(res: ServerResponse, path: string): boolean {

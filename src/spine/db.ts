@@ -185,6 +185,13 @@ export class Store {
       .get(ctx.tenantId, userId) as any;
     return row ? rowToCandidate(row) : null;
   }
+  /* Server-to-server callers (the LiveKit webhook) learn the tenant from the
+     stored candidate, never from client input (L9). */
+  tenantForCandidate(candidateId: string): string | null {
+    const row = this.db.prepare('SELECT tenant_id FROM candidates WHERE id = ?')
+      .get(candidateId) as { tenant_id: string } | undefined;
+    return row?.tenant_id ?? null;
+  }
   candidates(ctx: Ctx): Candidate[] {
     return (this.db.prepare('SELECT * FROM candidates WHERE tenant_id = ? ORDER BY created_at')
       .all(ctx.tenantId) as any[]).map(rowToCandidate);
