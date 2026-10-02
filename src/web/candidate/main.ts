@@ -2,7 +2,7 @@
    onboarding -> research -> role-by-role resume -> CV -> LinkedIn -> interview. */
 import { api, subscribe } from '../shared/api.js';
 import { h, mark, stamp, toast, empty, clear, checkGlyph, lockGlyph, setWidthPct, icon,
-  railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader,
+  railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, brandMark,
   passwordScreen, uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
 import type { IconName } from '../shared/dom.js';
 /* Self-hosted vendor bundle (ADR-0018). The CDN import map was an inline
@@ -651,29 +651,35 @@ function sectionBody(text: string): string {
   return text.replace(/^[^:\n]{2,60}:\s*/, '').trim();
 }
 
-async function generateLinkedin(keys: string[], restart: boolean): Promise<void> {
-  if (liBusy) return;
-  liBusy = true;
-  try {
-    let runId = restart ? null : liSections().runId;
-    if (!runId || restart) {
-      const resp = await api.post('/api/candidate/flows/linkedin_studio/start');
-      runId = resp.run.id as string;
-    }
-    for (const key of keys) {
-      await api.post(`/api/flows/runs/${runId}/turn`, { text: key });
-      lastSelf = await api.get('/api/candidate/me').catch(() => lastSelf);
-      await renderView();
-    }
-    await refreshJourney();
-    renderShell();
-    toast('LinkedIn sections saved');
-  } catch (e) {
-    const code = String((e as Error).message);
-    toast(code === 'active_session_exists' ? 'A LinkedIn session is still running. Reload the page and try again.' : 'Could not write the sections. Try again.');
-  } finally {
-    liBusy = false;
-    await renderView();
+/* The brand mark as a buffer: it turns inside the box while that section is
+   being written, so the page never jumps and the work is visible where it
+   happens. */
+function bufferLogo(size = 30): HTMLElement {
+  const wrap = h('span', { class: 'buffer', role: 'status', 'aria-label': 'Writing section' });
+  wrap.append(brandMark(size));
+  return wrap;
+}
+
+interface LiEntry { card: HTMLElement; head: HTMLElement; body: HTMLElement; text: string | null; copy: HTMLElement | null }
+
+function liPending(): HTMLElement {
+  return h('p', { class: 't-caption' }, 'Not written yet.');
+}
+
+/* Fill one box in place: no view re-render, so the other boxes stay put. */
+function fillLiCard(entry: LiEntry, label: string, text: string): void {
+  entry.text = text;
+  entry.card.classList.remove('is-pending');
+  entry.body.classList.remove('is-loading');
+  entry.body.replaceChildren(sectionBody(text));
+  if (!entry.copy) {
+    const copy = h('button', { class: 'btn btn-sm' }, icon('copy', 14), 'Copy');
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(sectionBody(entry.text ?? '')); toast(`${label} copied`); }
+      catch { toast('Select the text and copy it manually'); }
+    });
+    entry.copy = copy;
+    entry.head.append(copy);
   }
 }
 
@@ -685,39 +691,86 @@ async function renderLinkedin(content: HTMLElement): Promise<void> {
     return;
   }
   const { sections } = liSections();
-  const missing = LI_SECTIONS.map(([k]) => k).filter(k => !sections[k]);
   const acts = h('div', { class: 'row gap-2 wrap mt-6' });
-  if (missing.length) {
-    const gen = h('button', { class: 'btn btn-primary', 'aria-disabled': liBusy ? 'true' : 'false' },
-      liBusy ? 'Writing your sections' : missing.length === 6 ? 'Write all six sections' : `Write the remaining ${missing.length}`);
-    gen.addEventListener('click', () => { void generateLinkedin(missing, false); });
-    acts.append(gen);
-  } else {
-    const again = h('button', { class: 'btn', 'aria-disabled': liBusy ? 'true' : 'false' }, 'Write them again');
-    again.addEventListener('click', () => { void generateLinkedin(LI_SECTIONS.map(([k]) => k), true); });
-    acts.append(h('span', { class: 't-secondary row gap-2' }, mark('confirmed'), 'All six saved. Copy each into your LinkedIn profile.'), again);
-  }
+  const gen = h('button', { class: 'btn btn-primary' }, 'Write all six sections');
+  const state = h('span', { class: 't-secondary row gap-2' });
+  acts.append(gen, state);
   content.append(acts);
 
-  const grid = h('div', { class: 'cardgrid mt-6' });
+  const grid = h('div', { class: 'cardgrid li-grid mt-6' });
+  const entries: Record<string, LiEntry> = {};
   for (const [key, label] of LI_SECTIONS) {
-    const text = sections[key];
-    const card = h('section', { class: `panel li-card${text ? '' : ' is-pending'}`, 'aria-label': label });
+    const card = h('section', { class: `panel li-card${sections[key] ? '' : ' is-pending'}`, 'aria-label': label });
     const head = h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, label));
-    if (text) {
-      const copy = h('button', { class: 'btn btn-sm' }, icon('copy', 14), 'Copy');
-      copy.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(sectionBody(text)); toast(`${label} copied`); }
-        catch { toast('Select the text and copy it manually'); }
-      });
-      head.append(copy);
-      card.append(head, h('div', { class: 'li-body' }, sectionBody(text)));
-    } else {
-      card.append(head, h('p', { class: 't-caption' }, liBusy ? 'Writing...' : 'Not written yet.'));
-    }
+    const body = h('div', { class: 'li-body' });
+    card.append(head, body);
+    const entry: LiEntry = { card, head, body, text: sections[key] ?? null, copy: null };
+    if (sections[key]) fillLiCard(entry, label, sections[key]!);
+    else body.append(liPending());
+    entries[key] = entry;
     grid.append(card);
   }
   content.append(grid);
+
+  const labelFor = (key: string): string => LI_SECTIONS.find(([k]) => k === key)?.[1] ?? key;
+  const missing = (): string[] => LI_SECTIONS.map(([k]) => k).filter(k => !liSections().sections[k]);
+  const refreshButton = (): void => {
+    const miss = missing();
+    gen.setAttribute('aria-disabled', liBusy || miss.length === 0 ? 'true' : 'false');
+    gen.textContent = liBusy ? 'Writing your sections'
+      : miss.length === 6 ? 'Write all six sections'
+        : miss.length ? `Write the remaining ${miss.length}` : 'Write them again';
+    state.replaceChildren();
+    if (!liBusy && miss.length === 0) state.append(mark('confirmed'), 'All six saved. Copy each into your LinkedIn profile.');
+  };
+  refreshButton();
+
+  const resetCard = (entry: LiEntry): void => {
+    entry.text = null;
+    if (entry.copy) { entry.copy.remove(); entry.copy = null; }
+    entry.card.classList.add('is-pending');
+    entry.body.classList.remove('is-loading');
+    entry.body.replaceChildren(liPending());
+  };
+
+  const run = async (keys: string[], restart: boolean): Promise<void> => {
+    if (liBusy) return;
+    liBusy = true;
+    refreshButton();
+    try {
+      let runId = restart ? null : liSections().runId;
+      if (!runId || restart) {
+        const resp = await api.post('/api/candidate/flows/linkedin_studio/start');
+        runId = resp.run.id as string;
+      }
+      if (restart) for (const key of keys) resetCard(entries[key]!);
+      for (const key of keys) {
+        const entry = entries[key]!;
+        entry.body.classList.add('is-loading');
+        entry.body.replaceChildren(bufferLogo());
+        await api.post(`/api/flows/runs/${runId}/turn`, { text: key });
+        lastSelf = await api.get('/api/candidate/me').catch(() => lastSelf);
+        const text = liSections().sections[key];
+        if (text) fillLiCard(entry, labelFor(key), text);
+        else { entry.body.classList.remove('is-loading'); entry.body.replaceChildren(liPending()); }
+      }
+      await refreshJourney();
+      renderShell();
+      await renderView();
+      toast('LinkedIn sections saved');
+    } catch (e) {
+      const code = String((e as Error).message);
+      toast(code === 'active_session_exists' ? 'A LinkedIn session is still running. Reload the page and try again.' : 'Could not write the sections. Try again.');
+    } finally {
+      liBusy = false;
+      refreshButton();
+    }
+  };
+
+  gen.addEventListener('click', () => {
+    const miss = missing();
+    void run(miss.length ? miss : LI_SECTIONS.map(([k]) => k), miss.length === 0);
+  });
 }
 
 /* ---------- portfolio: connected accounts ---------- */

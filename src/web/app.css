@@ -538,8 +538,18 @@ table.audit td .t-body{font:var(--type-secondary);color:var(--ink)}
 
 .cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);align-items:start}
 .cardgrid-2{grid-template-columns:repeat(auto-fill,minmax(380px,1fr))}
+/* LinkedIn studio: six independent boxes. The grid stretches each row so the
+   boxes line up, and every box reserves the same working height so filling
+   one never shifts the others. */
+.li-grid{align-items:stretch}
+.li-card{display:flex;flex-direction:column;min-height:220px}
+.li-card .li-body{flex:1}
 .li-card.is-pending{background:transparent;border-style:dashed;box-shadow:none}
 .li-body{font:var(--type-secondary);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.li-body.is-loading{display:grid;place-items:center;min-height:140px}
+.buffer{display:inline-grid;place-items:center;color:var(--ink-quiet);animation:buffer-spin 1.2s linear infinite}
+@keyframes buffer-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.buffer{animation:none}}
 
 .conn-card .acts{margin-top:var(--space-4)}
 .conn-card .row input{flex:1}
