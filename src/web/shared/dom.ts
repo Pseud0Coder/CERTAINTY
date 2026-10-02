@@ -411,6 +411,36 @@ export function passwordScreen(root: HTMLElement, displayName: string, onDone: (
   current.focus();
 }
 
+/* The seal: the evidence gauge at the centre of a certificate header. A
+   ring split into verified (solid ink) and claimed (lighter) arcs out of
+   the requirement total, the count in the display serif inside. Colours
+   come from CSS classes, so the gauge follows the theme. */
+export function sealGauge(verified: number, claimed: number, total: number, caption = 'evidenced'): HTMLElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 176 176');
+  svg.setAttribute('aria-hidden', 'true');
+  const r = 74, c = 2 * Math.PI * r;
+  const circle = (cls: string, radius: number, width: number, dash?: [number, number], offset = 0) => {
+    const el = document.createElementNS(ns, 'circle');
+    el.setAttribute('cx', '88'); el.setAttribute('cy', '88'); el.setAttribute('r', String(radius));
+    el.setAttribute('fill', 'none'); el.setAttribute('class', cls); el.setAttribute('stroke-width', String(width));
+    if (dash) { el.setAttribute('stroke-dasharray', `${dash[0]} ${dash[1]}`); el.setAttribute('stroke-dashoffset', String(offset)); el.setAttribute('transform', 'rotate(-90 88 88)'); }
+    svg.append(el);
+  };
+  circle('ring-outer', 85, 1);
+  circle('ring-track', r, 10);
+  const safe = Math.max(total, 1);
+  const vLen = c * Math.min(verified, safe) / safe;
+  const cLen = c * Math.min(claimed, safe - Math.min(verified, safe)) / safe;
+  if (vLen > 0) circle('ring-verified', r, 10, [vLen, c]);
+  if (cLen > 0) circle('ring-claimed', r, 10, [cLen, c], -vLen);
+  circle('ring-outer', 62, 1, [2, 4]);
+  const label = total ? `${verified + claimed}/${total}` : '0';
+  return h('div', { class: 'seal', role: 'img', 'aria-label': `${verified + claimed} of ${total} requirements ${caption}, ${verified} verified` },
+    svg, h('div', { class: 'seal-n' }, h('b', {}, label), h('small', {}, caption)));
+}
+
 /* Positions a marker along a track, through CSSOM for the same CSP reason. */
 export function setLeftPct(el: HTMLElement, pct: number): HTMLElement {
   el.style.left = `${Math.max(0, Math.min(100, pct))}%`;

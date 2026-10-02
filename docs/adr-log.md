@@ -947,3 +947,55 @@ persistence. Every changed screen was checked in the running app at desktop
 and phone widths. Not done: the pre-registered parser comparison against a
 real CV corpus that the experiment discipline calls for (the fixtures are
 synthetic and few); it should run before claiming extraction accuracy.
+
+## ADR-0023: Notary: a branded design system, chosen from three mockups
+
+Date: 2026-10-02. Status: accepted. Supersedes the palette, type and shell
+of ADR-0021; keeps its evidence semantics, hairline structure and every
+behaviour from ADR-0022.
+
+The owner's verdict on ADR-0021 was that the UI had "no branding or polish,
+no symmetry, no theme". Three static mockups of the same screen (recruiter
+candidate detail, real demo data) were built in `mockups/`: A "Notary"
+(editorial, certificate language), B "Instrument" (dark console), C
+"Atrium" (warm, rounded). The owner chose A, with one change: the logo is
+the landing page's mark (the check that flows into an open C) and its bold
+Geist wordmark, not the seal drawn for the mockup.
+
+**Theme.** The product certifies claims, so it speaks the language of
+certificates: navy ink (#16244F) on paper (#F5F2EC), white sheets, an
+Instrument Serif display face for names, page titles, card titles and
+figures, Geist for the interface and the wordmark, Geist Mono for small
+figures. One ornament, the guilloche band (engraved waves, drawn through a
+CSS mask so its colour is the `--brand` token), on certificate headers, the
+login card and the public profile. Corners are crisp (3px controls, 4px
+sheets); sheets carry no shadow, paper on a desk. Eyebrow labels (small,
+tracked, upper case) mark data labels, crumbs and card captions; this
+deliberately reverses design-language.md's ban on tracked capitals, which
+belonged to the achromatic system. Dark mode is "Notary at night": navy
+paper, warm ink, the same structure.
+
+**Symmetry.** The left rail is gone. The shell is a three-column top bar,
+brand left, pill navigation centred, account right, from the existing DOM
+(`rail-head`, `nav`, `rail-foot`), so no app changed its markup to get it.
+Crumbs became an eyebrow line above the page. The recruiter candidate page
+is a certificate: identity left, the seal gauge centred (requirements
+evidenced, split into verified and claimed arcs, `sealGauge()` in
+shared/dom.ts), facts right, mirrored; stamps and actions run along its
+foot. The journey is six numbered cells with a navy rule under each
+completed gate and a dashed rule under the current one, on both the
+recruiter and candidate sides. The Insights tab sets the requirement table
+(the same insight the shared profile shows) beside the structured interview
+at 7:5. Below 1100px the navigation becomes icons; below 720px it becomes
+the bottom tab bar and the certificate stacks.
+
+**Semantics kept.** Navy marks what Certainty verified, a lighter navy what
+is claimed, amber what is partial, vermilion a gap or block; a gap now uses
+the blocking mark everywhere. Target ticks on STAR meters are vermilion.
+Focus keeps its own blue. App favicons moved to a navy tile; the marketing
+page keeps its own system (ADR-0017), and its logo is the reference.
+
+Verified: typecheck, 89/89 tests (no behaviour changed), and screenshots of
+the recruiter pipeline and candidate detail, candidate dashboard and
+portfolio, admin audit, login and the public profile, light and dark, at
+1440, 900 and 390px.

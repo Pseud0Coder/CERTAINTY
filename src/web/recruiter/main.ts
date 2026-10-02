@@ -1,7 +1,7 @@
 /* Recruiter app. Dashboards render state; agents never touch the UI (A0). */
 import { api, subscribe } from '../shared/api.js';
 import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, setWidthPct, setLeftPct, icon, avatar,
-  railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader,
+  railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, sealGauge,
   uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
 import type { MarkState, IconName } from '../shared/dom.js';
 
@@ -143,16 +143,25 @@ async function renderPipeline(content: HTMLElement): Promise<void> {
 }
 
 /* ---------- candidate detail ---------- */
+interface Insight {
+  targetCompany: string | null;
+  fit: Array<{ requirement: string; status: 'verified' | 'claimed' | 'partial' | 'gap'; sources: string[]; partial?: string[] }>;
+  fitSummary: { evidenced: number; verified: number; total: number };
+}
+interface JourneyView { onboarding: string; research: string; roles: Array<{ done: boolean }>; rolesDone: boolean; cv: string; linkedin: string; interview: string }
+let lastInsight: Insight | null = null;
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/* 2026-11-01 reads as "1 Nov 2026" on a certificate. */
+function fmtDay(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '');
+  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : (iso ?? '');
+}
+
 function word(state: string): string {
   return state ? state.charAt(0).toUpperCase() + state.slice(1) : 'Pending';
 }
 
-function stat(label: string, value: string, opts: { word?: boolean; mark?: MarkState } = {}): HTMLElement {
-  const v = h('div', { class: `stat-value${opts.word ? ' is-word' : ''}` });
-  if (opts.mark) v.append(mark(opts.mark));
-  v.append(document.createTextNode(value));
-  return h('div', { class: 'stat' }, h('span', { class: 'stat-label' }, label), v);
-}
 
 async function renderDetail(content: HTMLElement, id: string): Promise<void> {
   const d: Detail = await api.get(`/api/recruiter/candidates/${id}`);
@@ -163,40 +172,71 @@ async function renderDetail(content: HTMLElement, id: string): Promise<void> {
   const openFlags = d.flags.filter(f => f.status === 'open');
   const conflicts = openFlags.filter(f => f.type === 'source_conflict').length;
 
-  /* Identity, stage, and the two profile actions on one line. */
-  const id_ = h('div', { class: 'dhead-id' },
-    h('div', { class: 'dhead-title' }, h('h1', { class: 't-view' }, d.candidate.name), stamp(d.candidate.stage)),
-    h('p', { class: 't-secondary' }, `${d.candidate.targetRole} · ${d.candidate.employer} · ${d.candidate.tenure}`));
-  if (conflicts > 0) {
-    id_.append(h('p', { class: 't-caption' },
-      `${conflicts === 1 ? 'One source conflict' : `${conflicts} source conflicts`} flagged. Conservative dates in use.`));
-  }
-  content.append(h('div', { class: 'dhead' }, avatar(d.candidate.name, 'lg'), id_, renderProfileShare(d)));
+  const [insightResp, jr] = await Promise.all([
+    api.get(`/api/recruiter/candidates/${id}/insight`).catch(() => null) as Promise<{ insight: Insight | null; page: { live: boolean; share: { expiresAt: string | null } } | null } | null>,
+    api.get(`/api/recruiter/candidates/${id}/journey`).then(r => r.journey).catch(() => null) as Promise<JourneyView | null>,
+  ]);
+  const insight = insightResp?.insight ?? null;
+  lastInsight = insight;
+  const fs = insight?.fitSummary ?? { evidenced: 0, verified: 0, total: 0 };
+  const verifiedSession = d.sessions.find(s => s.mode === 'verified');
 
-  /* The numbers a recruiter reads before anything else. Journey stages
-     come from the shared spine; the strip degrades to what is known. */
-  const strip = h('div', { class: 'statstrip', role: 'group', 'aria-label': 'Candidate summary' });
-  strip.append(
-    stat('Open flags', String(openFlags.length), openFlags.length ? { mark: 'gap' } : {}),
-    stat('Verified sessions', String(d.sessions.filter(s => s.mode === 'verified').length)));
-  try {
-    const jr = (await api.get(`/api/recruiter/candidates/${id}/journey`)).journey;
-    const roles = jr.roles as Array<{ done: boolean }>;
-    strip.append(
-      stat('Roles revamped', `${roles.filter(r => r.done).length}/${roles.length}`),
-      stat('CV', word(jr.cv), { word: true }),
-      stat('LinkedIn', word(jr.linkedin), { word: true }),
-      stat('Interview', word(jr.interview), { word: true }));
-  } catch { /* journey figures are best effort */ }
-  content.append(strip);
-
-  if (d.suggestion) {
-    const apply = h('button', { class: 'btn btn-sm' }, 'Advance to ' + d.suggestion);
-    apply.addEventListener('click', async () => {
-      await api.post(`/api/recruiter/candidates/${id}/advance`); toast('Stage advanced'); await renderView();
+  /* The certificate: who, how sure (the seal), and the facts, mirrored
+     around the seal; the stamps and actions run along its foot. */
+  const tags = h('div', { class: 'tags' }, h('span', { class: 'tag ink' }, d.candidate.stage));
+  if (insight?.targetCompany) tags.append(h('span', { class: 'tag' }, `For ${insight.targetCompany}`));
+  const page = insightResp?.page;
+  tags.append(h('span', { class: 'tag' }, !page ? 'Profile not generated yet'
+    : page.live ? `Profile shared until ${fmtDay(page.share.expiresAt)}` : page.share.expiresAt ? 'Profile link expired' : 'Awaiting candidate approval to share'));
+  const who = h('div', { class: 'who' },
+    h('h1', { class: 't-display' }, d.candidate.name),
+    h('p', {}, [d.candidate.targetRole, d.candidate.employer, d.candidate.tenure].filter(Boolean).join(' · ')),
+    tags);
+  const facts = h('dl', { class: 'facts' },
+    h('div', {}, h('dt', {}, 'Verified'), h('dd', {}, String(fs.verified))),
+    h('div', {}, h('dt', {}, 'Claimed'), h('dd', {}, String(fs.evidenced - fs.verified))),
+    h('div', {}, h('dt', {}, 'Open flags'), h('dd', {}, String(openFlags.length))),
+    h('div', {}, h('dt', {}, 'Interview'), h('dd', {}, verifiedSession?.duration || 'None')));
+  const stamps = h('div', { class: 'cert-stamps' });
+  stamps.append(verifiedSession
+    ? h('span', {}, mark('confirmed'), `Verified interview, ${fmtDay(verifiedSession.date)}`)
+    : h('span', {}, 'No verified interview yet'));
+  if (jr) stamps.append(h('span', {}, `Roles revamped ${jr.roles.filter(r => r.done).length} of ${jr.roles.length}`),
+    h('span', {}, jr.cv === 'complete' && jr.linkedin === 'complete' ? 'CV and LinkedIn complete' : `CV ${jr.cv}, LinkedIn ${jr.linkedin}`));
+  if (conflicts > 0) stamps.append(h('span', {}, mark('conflict'), `${conflicts === 1 ? 'One source conflict' : `${conflicts} source conflicts`}, conservative dates in use`));
+  if (d.suggestion) stamps.append(h('span', {}, mark('claimed'), `Stage advisor suggests ${d.suggestion}`));
+  const acts = renderProfileShare(d);
+  const next = d.suggestion ?? me.stages[me.stages.indexOf(d.candidate.stage) + 1];
+  if (next && !d.candidate.parked) {
+    const adv = h('button', { class: 'btn btn-primary' }, `Advance to ${next}`);
+    adv.addEventListener('click', async () => {
+      try { await api.post(`/api/recruiter/candidates/${id}/advance`); toast('Stage advanced'); await renderView(); }
+      catch (err) { toast(String((err as Error).message)); }
     });
-    content.append(h('div', { class: 'callout mt-4' },
-      mark('claimed'), h('span', { class: 't-secondary' }, `Stage advisor suggests ${d.suggestion}. Humans advance.`), apply));
+    acts.append(adv);
+  }
+  content.append(h('section', { class: 'panel cert guilloche', 'aria-label': `${d.candidate.name}, summary` },
+    h('div', { class: 'cert-in' }, who, sealGauge(fs.verified, fs.evidenced - fs.verified, fs.total), facts),
+    h('div', { class: 'cert-foot' }, stamps, acts)));
+
+  /* The journey as numbered cells, one per gate. */
+  if (jr) {
+    const steps: Array<[string, string, boolean]> = [
+      ['Setup', word(jr.onboarding), jr.onboarding === 'complete'],
+      ['Research', word(jr.research), jr.research === 'complete'],
+      ['Resume', `${jr.roles.filter(r => r.done).length} of ${jr.roles.length} roles`, jr.rolesDone],
+      ['CV', jr.cv === 'complete' ? 'Assembled' : 'Pending', jr.cv === 'complete'],
+      ['LinkedIn', word(jr.linkedin), jr.linkedin === 'complete'],
+      ['Interview', verifiedSession ? 'Verified, scored' : word(jr.interview), !!verifiedSession],
+    ];
+    const nowIndex = steps.findIndex(([, , done]) => !done);
+    const ol = h('ol', { class: 'journey mt-6', 'aria-label': 'Journey' });
+    steps.forEach(([label, cap, done], i) => {
+      const state = done ? 'is-done' : i === nowIndex ? 'is-now' : 'is-locked';
+      ol.append(h('li', { class: `jstep ${state}` }, h('span', { class: 'jlabel' }, label), h('span', { class: 'jcap' }, cap),
+        h('span', { class: 'sr-only' }, done ? ' (complete)' : i === nowIndex ? ' (current)' : ' (not reached)')));
+    });
+    content.append(ol);
   }
 
   const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Candidate evidence' });
@@ -265,8 +305,9 @@ function renderProfileShare(d: Detail): HTMLElement {
   const live = !!share.enabled && !!share.expiresAt && Date.parse(share.expiresAt) > Date.now();
   const url = `${location.origin}/p/${page.id}`;
   const open = h('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, icon('external'), live ? 'Open profile' : 'Preview profile');
+  /* The sharing state is shown as a tag in the certificate header. */
   if (!live) {
-    acts.append(h('span', { class: 't-caption' }, share.enabled ? 'Link expired. The candidate can renew it.' : 'Waiting for the candidate to approve sharing.'), open);
+    acts.append(open);
     return acts;
   }
   const copy = h('button', { class: 'btn btn-primary', title: url }, icon('link'), 'Copy profile link');
@@ -290,7 +331,7 @@ async function renderPortfolioEvidence(id: string): Promise<HTMLElement | null> 
     { connectors: Array<{ provider: string; linked: boolean; username: string; url: string; verified: boolean; syncedAt: string | null; snapshot: any }> };
   const linked = connectors.filter(c => c.linked);
   if (!linked.length) return null;
-  const box = h('div', { class: 'mt-6 hair-t pt-6' }, h('h2', { class: 't-section mb-4' }, 'Portfolio evidence'));
+  const box = h('section', { class: 'panel mt-6' }, h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, 'Work you can inspect'), h('span', { class: 'eyebrow' }, 'Connected accounts')));
   for (const c of linked) {
     const s = c.snapshot;
     const figures = !s ? 'Not synced yet'
@@ -307,43 +348,70 @@ async function renderPortfolioEvidence(id: string): Promise<HTMLElement | null> 
   return box;
 }
 
+const FIT_MARK: Record<string, { mark: MarkState; word: string }> = {
+  verified: { mark: 'confirmed', word: 'Verified' },
+  claimed: { mark: 'claimed', word: 'Claimed' },
+  partial: { mark: 'gap', word: 'Partly' },
+  gap: { mark: 'blocking', word: 'Gap' },
+};
+
+/* Insights: the requirement table beside the structured interview, then
+   connected work. The table is the same insight the shared profile shows. */
 function renderInsights(d: Detail): HTMLElement {
-  const panel = h('div', { class: 'panel' });
+  const wrap = h('div', {});
+  const grid = h('div', { class: 'grid-75' });
+
+  const fit = h('section', { class: 'panel' });
+  const rows = lastInsight?.fit ?? [];
+  fit.append(h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, 'Fit for the role'),
+    h('span', { class: 'eyebrow' }, lastInsight?.targetCompany ? `${lastInsight.targetCompany} JD, ${rows.length} must-haves` : `${rows.length} must-haves`)));
+  if (!rows.length) {
+    fit.append(empty('No must-haves found in the job description yet.'));
+  } else {
+    const table = h('div', { class: 'fit' });
+    for (const r of rows) {
+      const meta = FIT_MARK[r.status] ?? FIT_MARK.gap!;
+      table.append(h('div', { class: 'fit-row' }, mark(meta.mark),
+        h('div', {}, h('div', { class: 'req' }, r.requirement),
+          h('div', { class: 'src' }, r.sources.length ? r.sources.join(', ') : r.partial?.length ? `Partly in ${r.partial.join(', ')}` : 'No evidence found')),
+        h('span', { class: `verdict is-${r.status}` }, meta.word)));
+    }
+    fit.append(table, h('div', { class: 'legend' },
+      h('span', {}, mark('confirmed'), 'Verified by Certainty'), h('span', {}, mark('claimed'), 'Claimed'),
+      h('span', {}, mark('gap'), 'Partly evidenced'), h('span', {}, mark('blocking'), 'Gap')));
+  }
+
+  const iv = h('section', { class: 'panel' });
   const s = d.sessions[0];
   if (!s) {
-    panel.append(empty('No verified sessions yet. Practice sessions stay private to the candidate.',
-      { label: 'Run the screener', fn: () => startScreener(d.candidate.id) }));
-    void renderPortfolioEvidence(d.candidate.id).then(box => { if (box) panel.append(box); });
-    return panel;
+    iv.append(h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, 'Structured interview')),
+      empty('No verified sessions yet. Practice sessions stay private to the candidate.',
+        { label: 'Run the screener', fn: () => startScreener(d.candidate.id) }));
+  } else {
+    iv.append(h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, 'Structured interview'),
+      h('span', { class: 'eyebrow' }, `${fmtDay(s.date)}, ${s.duration}`)));
+    for (const [key, label] of [['S', 'Situation'], ['T', 'Task'], ['A', 'Action'], ['R', 'Result']] as const) {
+      const v = s.star?.[key] ?? 0;
+      const target = s.targets[key] ?? 0;
+      const out = Math.abs(v - target) > 5;
+      iv.append(h('div', { class: 'meter' + (out ? ' out' : '') },
+        h('div', { class: 'meter-head' },
+          h('span', { class: 't-secondary' }, label),
+          h('span', { class: 't-caption figures' }, `${v}% · target ${target}`)),
+        /* The track spans 0 to 50%, so the widest target (Action, 50) fills it. */
+        h('div', { class: 'meter-track' },
+          setWidthPct(h('div', { class: 'meter-fill' }), v * 2),
+          setLeftPct(h('span', { class: 'meter-tick', title: `Target ${target}%` }), target * 2))));
+    }
+    iv.append(h('dl', { class: 'facts facts-left mt-6' },
+      h('div', {}, h('dt', {}, 'Ownership'), h('dd', {}, `${s.ownership ?? 0}%`)),
+      h('div', {}, h('dt', {}, 'Trailing ends'), h('dd', {}, String(s.trailing ?? 'n/a')))),
+      h('p', { class: 't-caption mt-3' }, 'Practice sessions are never visible to recruiters.'));
   }
-  panel.append(h('div', { class: 'row wrap gap-2 t-caption mb-6' },
-    stamp(`Verified session, ${s.date}`, 'confirmed'), stamp(s.duration), h('span', {}, 'Practice sessions are not visible to recruiters.')));
-  const grid = h('div', { class: 'grid2' });
-  const left = h('div', {},
-    h('h2', { class: 't-section mb-4' }, 'STAR proportions'));
-  for (const [key, label] of [['S', 'Situation'], ['T', 'Task'], ['A', 'Action'], ['R', 'Result']] as const) {
-    const v = s.star?.[key] ?? 0;
-    const target = s.targets[key] ?? 0;
-    const out = Math.abs(v - target) > 5;
-    const meter = h('div', { class: 'meter' + (out ? ' out' : '') },
-      h('div', { class: 'meter-head' },
-        h('span', { class: 't-secondary' }, label),
-        h('span', { class: 't-caption figures' }, `${v}% · target ${target}%`)),
-      /* The track spans 0 to 50%, so the widest target (Action, 50) fills it. */
-      h('div', { class: 'meter-track' },
-        setWidthPct(h('div', { class: 'meter-fill' }), v * 2),
-        setLeftPct(h('span', { class: 'meter-tick', title: `Target ${target}%` }), target * 2)));
-    left.append(meter);
-  }
-  const right = h('div', {},
-    h('h2', { class: 't-section mb-4' }, 'Ownership'),
-    h('div', { class: 'split' }, setWidthPct(h('span', { class: 'a' }), s.ownership ?? 0), h('span', { class: 'b' })),
-    h('p', { class: 't-caption figures' },
-      `${s.ownership ?? 0}% first person · team voice the rest · trailing ends: ${s.trailing ?? 'not scored'}`));
-  grid.append(left, right);
-  panel.append(grid);
-  void renderPortfolioEvidence(d.candidate.id).then(box => { if (box) panel.append(box); });
-  return panel;
+  grid.append(fit, iv);
+  wrap.append(grid);
+  void renderPortfolioEvidence(d.candidate.id).then(box => { if (box) wrap.append(box); });
+  return wrap;
 }
 
 function renderTranscript(d: Detail): HTMLElement {

@@ -1,88 +1,92 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..500&family=Instrument+Serif:ital@0;1&display=swap');
 
 /* ==========================================================================
    Certainty. Design tokens.
    Theme system: light and dark selected by [data-theme] on <html>.
 
-   Neutral certainty (ADR-0021). The interface is achromatic: neutral
-   ground, white sheets, near-black ink, and near-black primary actions.
-   Hue is spent only on evidence (positive, warning, blocking), on
-   recording, and on focus. A screen with nothing at stake has no colour
-   in it at all, so the moment colour appears it means something.
+   Notary (ADR-0023). The product certifies claims, so it borrows the
+   language of certificates: navy ink on paper, a serif for display type,
+   a guilloche band, a seal-like evidence gauge. The brand mark is the
+   landing page's check-into-C, in ink. Colour stays semantic: navy marks
+   what Certainty verified, a lighter navy what is only claimed, amber what
+   is partial, vermilion a gap or a block. Focus has its own blue.
    Accents are tokens only. No component invents a color value.
    ========================================================================== */
 
 :root, [data-theme="light"] {
   color-scheme: light;
 
-  /* --- base neutrals ---------------------------------------------------- */
-  --ground:            #F7F7F8;
-  --rail-bg:           #F2F2F3;
+  /* --- paper and ink ---------------------------------------------------- */
+  --ground:            #F5F2EC;
+  --rail-bg:           #F5F2EC;
   --sheet:             #FFFFFF;
-  --sheet-sunken:      #F4F4F5;
-  --rule:              #E4E4E7;
-  --rule-strong:       #D4D4D8;
-  --ink:               #09090B;
-  --ink-quiet:         #5F5F67;
-  --ink-disabled:      #A1A1AA;
+  --sheet-sunken:      #FAF8F4;
+  --rule:              #E4DED3;
+  --rule-strong:       #D3CBBC;
+  --ink:               #101828;
+  --ink-quiet:         #475467;
+  --ink-disabled:      #98A2B3;
   --ink-inverse:       #FFFFFF;
-  --hover-wash:        rgba(9, 9, 11, 0.045);
+  --hover-wash:        rgba(22, 36, 79, 0.05);
 
   /* --- internal only: always the inverse of ground ---------------------- */
-  --stage:             #18181B;
-  --stage-rule:        #2F2F35;
-  --stage-ink:         #FAFAFA;
-  --stage-ink-quiet:   #A1A1AA;
+  --stage:             #16244F;
+  --stage-rule:        #2B3F7A;
+  --stage-ink:         #F5F2EC;
+  --stage-ink-quiet:   #AEB8D6;
 
-  /* --- accent: ink. The primary action is black, never a brand hue. ----- */
-  --accent:            #09090B;
-  --accent-hover:      #27272A;
-  --accent-soft:       #EAEAEC;
-  --accent-ink:        #09090B;
+  /* --- accent: navy ink, the brand colour and the primary action -------- */
+  --accent:            #16244F;
+  --accent-hover:      #24356A;
+  --accent-soft:       #E8ECF6;
+  --accent-ink:        #16244F;
+  --brand:             #16244F;
 
-  /* --- evidence hues, each a quiet tint plus a strong ink ---------------- */
-  --pastel-green:      #E6F4EC;   --pastel-green-ink:   #14664A;
-  --pastel-orange:     #FBF0E1;   --pastel-orange-ink:  #8A4B0A;
-  --pastel-red:        #FBE8E6;   --pastel-red-ink:     #B0231A;
-  /* Retained names, now neutral: nothing in the product may carry meaning
-     through blue, yellow, purple or pink any more. */
+  /* --- evidence --------------------------------------------------------- */
+  --pastel-green:      #E8ECF6;   --pastel-green-ink:   #16244F;
+  --pastel-orange:     #F6EDD9;   --pastel-orange-ink:  #8A5E0E;
+  --pastel-red:        #F8E7E2;   --pastel-red-ink:     #B4381F;
   --pastel-blue:       var(--sheet-sunken);   --pastel-blue-ink:    var(--ink-quiet);
   --pastel-yellow:     var(--sheet-sunken);   --pastel-yellow-ink:  var(--ink-quiet);
   --pastel-purple:     var(--sheet-sunken);   --pastel-purple-ink:  var(--ink-quiet);
   --pastel-pink:       var(--sheet-sunken);   --pastel-pink-ink:    var(--ink-quiet);
 
-  /* --- semantic roles ---------------------------------------------------- */
-  --severity-positive: var(--pastel-green-ink);
-  --severity-positive-bg: var(--pastel-green);
+  --severity-confirmed: #16244F;
+  --severity-positive: #5568A0;
+  --severity-positive-bg: #E8ECF6;
   --severity-warning:  var(--pastel-orange-ink);
   --severity-warning-bg: var(--pastel-orange);
   --severity-blocking: var(--pastel-red-ink);
   --severity-blocking-bg: var(--pastel-red);
-  --severity-confirmed: var(--ink);
-  --recording-active:  #E01B0F;
-  --recording-halo:    rgba(224, 27, 15, 0.08);
-  --focus-ring:        #1A5FD0;
+  --tick:              #B4381F;
+  --recording-active:  #C2341C;
+  --recording-halo:    rgba(194, 52, 28, 0.08);
+  --focus-ring:        #2E6BE6;
 
-  /* --- type ------------------------------------------------------------ */
+  /* --- type: Geist for the interface and the wordmark, Instrument Serif
+     for display, Geist Mono for figures ------------------------------- */
   --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                "Helvetica Neue", Arial, sans-serif;
-  /* No serif any more; the name survives so older rules resolve to sans. */
-  --font-serif: var(--font-sans);
+  --font-serif: 'Instrument Serif', Georgia, "Iowan Old Style", "Times New Roman", serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --type-display:        600 32px/38px var(--font-sans);
-  --type-view-title:     600 26px/32px var(--font-sans);
+  --type-display:        400 48px/50px var(--font-serif);
+  --type-view-title:     400 38px/42px var(--font-serif);
+  --type-card:           400 25px/30px var(--font-serif);
+  --type-figure:         400 32px/34px var(--font-serif);
   --type-section:        600 15px/22px var(--font-sans);
-  --type-body:           400 16px/24px var(--font-sans);
+  --type-body:           400 15px/23px var(--font-sans);
   --type-secondary:      400 14px/21px var(--font-sans);
   --type-caption:        400 13px/18px var(--font-sans);
+  --type-eyebrow:        500 11px/16px var(--font-sans);
   --type-numeral:        500 14px/19px var(--font-sans);
   --type-mono:           400 13px/20px var(--font-mono);
-  --type-stat:           600 22px/28px var(--font-sans);
+  --type-stat:           400 32px/34px var(--font-serif);
 
-  --track-display:      -0.025em;
-  --track-view-title:   -0.02em;
+  --track-display:      -0.015em;
+  --track-view-title:   -0.01em;
   --track-section:      -0.005em;
+  --track-eyebrow:      0.1em;
   --measure-prose:      68ch;
 
   /* --- space, 4px base ------------------------------------------------- */
@@ -96,21 +100,19 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* --- radius by role -------------------------------------------------- */
+  /* --- radius: crisp, documentary ------------------------------------- */
   --radius-none:    0;
-  --radius-control: 8px;
-  --radius-sheet:   12px;
+  --radius-control: 3px;
+  --radius-sheet:   4px;
   --radius-pill:    999px;
 
-  /* --- elevation. Structure comes from hairlines; shadow is reserved for
-     what genuinely floats (popover, toast, modal). A sheet gets at most a
-     one-pixel lift so white reads crisp on the neutral ground. ---------- */
+  /* --- elevation: paper on a desk; hairlines, no lift ------------------- */
   --elev-0: none;
-  --elev-sheet: 0 1px 2px rgba(9, 9, 11, 0.04);
-  --elev-1: 0 1px 2px rgba(9, 9, 11, 0.05), 0 8px 24px rgba(9, 9, 11, 0.08);
-  --elev-2: 0 24px 64px rgba(9, 9, 11, 0.20);
+  --elev-sheet: none;
+  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 12px 32px rgba(16, 24, 40, 0.10);
+  --elev-2: 0 24px 64px rgba(16, 24, 40, 0.22);
   --inset-field: none;
-  --scrim:  rgba(9, 9, 11, 0.40);
+  --scrim:  rgba(16, 24, 40, 0.42);
 
   /* --- motion ----------------------------------------------------------- */
   --dur-micro:    120ms;
@@ -120,53 +122,56 @@
 
   /* --- structure -------------------------------------------------------- */
   --hairline:   1px;
-  --rail-w:     240px;
-  --rail-w-sm:  64px;
+  --topbar-h:   64px;
+  --gutter:     48px;
   --timecode-w: 64px;
-  --spine-w:    2px;
+  --spine-w:    3px;
 }
 
+/* Notary at night: navy paper, warm ink. */
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --ground:            #0B0B0C;
-  --rail-bg:           #0F0F11;
-  --sheet:             #141416;
-  --sheet-sunken:      #1C1C1F;
-  --rule:              #26262A;
-  --rule-strong:       #36363C;
-  --ink:               #FAFAFA;
-  --ink-quiet:         #A1A1AA;
-  --ink-disabled:      #5B5B63;
-  --ink-inverse:       #0B0B0C;
-  --hover-wash:        rgba(255, 255, 255, 0.05);
+  --ground:            #0D1322;
+  --rail-bg:           #0D1322;
+  --sheet:             #131B2E;
+  --sheet-sunken:      #18213A;
+  --rule:              #24304A;
+  --rule-strong:       #33415F;
+  --ink:               #F2EEE6;
+  --ink-quiet:         #A4ADC2;
+  --ink-disabled:      #616C85;
+  --ink-inverse:       #0D1322;
+  --hover-wash:        rgba(242, 238, 230, 0.05);
 
-  --stage:             #F4F4F5;
-  --stage-rule:        #D4D4D8;
-  --stage-ink:         #09090B;
-  --stage-ink-quiet:   #52525B;
+  --stage:             #F2EEE6;
+  --stage-rule:        #D6CFBF;
+  --stage-ink:         #101828;
+  --stage-ink-quiet:   #475467;
 
-  --accent:            #FAFAFA;
-  --accent-hover:      #E4E4E7;
-  --accent-soft:       rgba(255, 255, 255, 0.08);
-  --accent-ink:        #FAFAFA;
+  --accent:            #F2EEE6;
+  --accent-hover:      #FFFFFF;
+  --accent-soft:       rgba(174, 190, 236, 0.14);
+  --accent-ink:        #C9D3F0;
+  --brand:             #C9D3F0;
 
-  --pastel-green:      rgba(79, 190, 146, 0.13);   --pastel-green-ink:   #4FBE92;
-  --pastel-orange:     rgba(217, 154, 61, 0.14);   --pastel-orange-ink:  #D99A3D;
-  --pastel-red:        rgba(240, 131, 122, 0.14);  --pastel-red-ink:     #F0837A;
+  --pastel-green:      rgba(174, 190, 236, 0.14);  --pastel-green-ink:   #C9D3F0;
+  --pastel-orange:     rgba(226, 182, 90, 0.14);   --pastel-orange-ink:  #E2B65A;
+  --pastel-red:        rgba(240, 138, 111, 0.14);  --pastel-red-ink:     #F08A6F;
 
-  --severity-positive: var(--pastel-green-ink);
-  --severity-positive-bg: var(--pastel-green);
+  --severity-confirmed: #C9D3F0;
+  --severity-positive: #8A9BCB;
+  --severity-positive-bg: rgba(174, 190, 236, 0.14);
   --severity-warning:  var(--pastel-orange-ink);
   --severity-warning-bg: var(--pastel-orange);
   --severity-blocking: var(--pastel-red-ink);
   --severity-blocking-bg: var(--pastel-red);
-  --recording-active:  #FF5247;
-  --recording-halo:    rgba(255, 82, 71, 0.12);
-  --focus-ring:        #5C9BFF;
+  --tick:              #F08A6F;
+  --recording-active:  #FF6B4D;
+  --recording-halo:    rgba(255, 107, 77, 0.12);
+  --focus-ring:        #8FB0FF;
 
-  --elev-sheet: none;
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.45);
   --elev-2: 0 24px 64px rgba(0, 0, 0, 0.6);
   --scrim:  rgba(0, 0, 0, 0.6);
 }
@@ -213,6 +218,8 @@ h1, h2, h3 { margin: 0; }
 .t-secondary { font: var(--type-secondary); color: var(--ink-quiet); }
 .t-caption   { font: var(--type-caption);    color: var(--ink-quiet); }
 .t-mono      { font: var(--type-mono); }
+.t-card      { font: var(--type-card); letter-spacing: var(--track-view-title); }
+.t-eyebrow   { font: var(--type-eyebrow); letter-spacing: var(--track-eyebrow); text-transform: uppercase; color: var(--ink-quiet); }
 .prose       { max-width: var(--measure-prose); }
 
 /* ==========================================================================
@@ -323,7 +330,7 @@ h1, h2, h3 { margin: 0; }
   padding: 2px 8px;
   background: var(--sheet);
   border: var(--hairline) solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   white-space: nowrap;
 }
 
@@ -337,7 +344,7 @@ h1, h2, h3 { margin: 0; }
   padding: 0 7px;
   background: var(--sheet);
   border: var(--hairline) solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font: var(--type-caption);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -350,7 +357,7 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   gap: var(--space-1);
   padding: 1px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font: var(--type-caption);
   font-weight: 500;
   white-space: nowrap;
@@ -416,7 +423,6 @@ h1, h2, h3 { margin: 0; }
    Responsive boundaries
    ========================================================================== */
 
-@media (max-width: 1099px) { :root, [data-theme="light"] { --rail-w: var(--rail-w-sm); } }
 @media (max-width: 719px) {
   :root, [data-theme="light"] { --timecode-w: auto; }
   .btn { min-height: 44px; padding: 10px 14px; }

@@ -7,7 +7,7 @@
    fit the role, and how sure can I be? Every requirement shows its
    evidence and where it came from, and "verified" is reserved for what
    Certainty checked itself. Contact details stay inside the CV download. */
-import { h, clear, mark, brandMark, setWidthPct, setLeftPct } from '../shared/dom.js';
+import { h, clear, mark, brandMark, setWidthPct, setLeftPct, sealGauge } from '../shared/dom.js';
 import type { MarkState } from '../shared/dom.js';
 import { initTheme } from '../shared/theme.js';
 import { cvBlocks, type CvTemplateFields } from '../shared/cv-template.js';
@@ -49,7 +49,7 @@ const FIT: Record<FitStatus, { mark: MarkState; word: string }> = {
   verified: { mark: 'confirmed', word: 'Verified' },
   claimed: { mark: 'claimed', word: 'Claimed' },
   partial: { mark: 'gap', word: 'Partly evidenced' },
-  gap: { mark: 'gap', word: 'Not evidenced' },
+  gap: { mark: 'blocking', word: 'Not evidenced' },
 };
 
 function initials(name: string): string {
@@ -93,19 +93,24 @@ function renderProfile(d: Payload): void {
   }
 
   /* Identity and the one-line verdict. */
+  /* The certificate: who, for which role, and the seal of how much of the
+     role's must-haves the evidence covers. */
   const facts = h('div', { class: 'pp-facts' });
   if (ins?.fitSummary.total) {
     facts.append(h('span', { class: 'stamp' }, mark(ins.fitSummary.verified ? 'confirmed' : 'claimed'),
-      `${ins.fitSummary.evidenced} of ${ins.fitSummary.total} requirements evidenced, ${ins.fitSummary.verified} verified`));
+      `${ins.fitSummary.verified} verified, ${ins.fitSummary.evidenced - ins.fitSummary.verified} claimed`));
   }
   if (ins?.interview) facts.append(h('span', { class: 'stamp' }, mark('confirmed'), `Verified interview, ${ins.interview.date}`));
-  root.append(h('div', { class: 'pp-hero' },
-    h('span', { class: 'avatar avatar-lg' }, initials(p.name)),
+  const hero = h('div', { class: 'pp-hero guilloche' },
     h('div', { class: 'pp-id' },
       h('h1', { class: 't-display' }, p.name),
       h('p', { class: 't-secondary' }, [p.headline, p.location].filter(Boolean).join(' · ')),
       ins?.targetRole ? h('p', { class: 'pp-target' }, `For the ${ins.targetRole} role${ins.targetCompany ? ` at ${ins.targetCompany}` : ''}`) : '',
-      facts)));
+      facts));
+  if (ins?.fitSummary.total) {
+    hero.append(sealGauge(ins.fitSummary.verified, ins.fitSummary.evidenced - ins.fitSummary.verified, ins.fitSummary.total));
+  }
+  root.append(hero);
 
   /* Fit: each requirement, its evidence, and where the evidence is from. */
   if (ins && ins.fit.length) {

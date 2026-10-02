@@ -11,7 +11,7 @@ function render() {
        because the panel is a column flexbox: an unwrapped inline element
        stretches to the full column width and reads as an empty input. */
     const demoStamp = h('span', {});
-    const panel = h('div', { class: 'panel' }, h('div', { class: 'login-head' }, brandLockup({ large: true }), h('p', { class: 't-secondary login-promise' }, 'What a candidate claimed, separated from what is verified.'), h('div', { class: 'login-stamp' }, demoStamp)), h('div', { class: 'field' }, h('label', { class: 't-secondary', for: 'email' }, 'Email'), h('input', { type: 'email', id: 'email', autocomplete: 'username' })), h('div', { class: 'field' }, h('label', { class: 't-secondary', for: 'password' }, 'Password'), h('input', { type: 'password', id: 'password', autocomplete: 'current-password' })));
+    const panel = h('div', { class: 'panel guilloche' }, h('div', { class: 'login-head' }, brandLockup({ large: true }), h('p', { class: 't-secondary login-promise' }, 'What a candidate claimed, separated from what is verified.'), h('div', { class: 'login-stamp' }, demoStamp)), h('div', { class: 'field' }, h('label', { class: 't-secondary', for: 'email' }, 'Email'), h('input', { type: 'email', id: 'email', autocomplete: 'username' })), h('div', { class: 'field' }, h('label', { class: 't-secondary', for: 'password' }, 'Password'), h('input', { type: 'password', id: 'password', autocomplete: 'current-password' })));
     const btn = h('button', { class: 'btn btn-primary' }, 'Sign in');
     btn.addEventListener('click', async () => {
         const email = document.getElementById('email').value.trim();

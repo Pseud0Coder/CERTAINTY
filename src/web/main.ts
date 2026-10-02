@@ -13,7 +13,7 @@ function render(): void {
      because the panel is a column flexbox: an unwrapped inline element
      stretches to the full column width and reads as an empty input. */
   const demoStamp = h('span', {});
-  const panel = h('div', { class: 'panel' },
+  const panel = h('div', { class: 'panel guilloche' },
     h('div', { class: 'login-head' },
       brandLockup({ large: true }),
       h('p', { class: 't-secondary login-promise' },
