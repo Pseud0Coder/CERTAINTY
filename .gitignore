@@ -1,8 +1,9 @@
 node_modules/
-data/
+/data/
 *.log
 .DS_Store
 dist/
 .env
 .env.local
 certain.db
+.freebuff/

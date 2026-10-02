@@ -1,0 +1,34 @@
+{
+  "condition": "pre-fix, unauthenticated probes",
+  "errors": [],
+  "input": {
+    "commit": "680a47b1ed0b3d86289a46ff10d00a05b33dab46",
+    "env": {
+      "LIVEKIT_API_KEY": "fake-key",
+      "LIVEKIT_URL": "wss://fake.livekit.cloud",
+      "PORT": 8391
+    }
+  },
+  "logged_at": "2026-09-28T03:21:15Z",
+  "model": null,
+  "observations": {
+    "P1_http": 200,
+    "P1_token_len": 427,
+    "P1_token_minted_without_consent": true,
+    "P1_token_value": "[redacted]",
+    "P2_artifact_delta": 0,
+    "P2_unsigned_webhook_http": 401,
+    "P3_unsigned_webhook_http": 401,
+    "note": "P2/P3 were refused by the dispatcher's global auth gate before reaching the webhook route; probe did not exercise H0b/H0c"
+  },
+  "output": {
+    "path": "data/raw/baseline-20260928T032006Z.txt",
+    "sha256": "7f75edf4f3d2c7b15d22b19b65f067180c3fc9c63878c406c3bd1485bbaf75b2"
+  },
+  "probe_script": "repro_baseline.sh",
+  "probe_script_sha256": "11ec2d8e6ce6ef8ae05f83d1ce0e9750e60b51711f62c247735b6ab42d062ca6",
+  "run_id": "R001",
+  "status": "ok",
+  "timestamp_end": "2026-09-28T03:20:06Z",
+  "timestamp_start": "2026-09-28T03:19:55Z"
+}

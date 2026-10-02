@@ -1,0 +1,57 @@
+server_ready: 200
+preconditions written: cv artifact + completed linkedin_studio run
+candidate_id: 0ed309b4-4f31-44d0-af33-cbb85e827e28
+control_candidate (no session): 82b30401-34eb-4984-a55e-732acf3dc4e8
+
+== P1a: token mint with no chain (H1a predicted: 409, no token) ==
+HTTP 409
+token_present: False | error: consent_required
+
+== P1b: run exists, consent not granted (H1a predicted: 409, no token) ==
+run_id: 844815ac-f8a2-4df1-aefe-f715e0976ea7 (step: consent)
+HTTP 409
+token_present: False | error: consent_required
+
+== P1c: full chain (consent granted) (H1a predicted: token) ==
+HTTP 200
+token_present: True | url_returned: True
+claims.iss: fake-key | claims.exp_present: True
+metadata keys: ['candidateId', 'consentId', 'sessionId']
+session_id: 11dcc08b-090e-43ef-a172-5564c9511ec2 | consent_id: a2b07f04-a8ed-4c92-be8c-121a7cadb384
+db session_id: 11dcc08b-090e-43ef-a172-5564c9511ec2 | db consent_id: a2b07f04-a8ed-4c92-be8c-121a7cadb384
+
+== P2a: unsigned webhook, string metadata (H1b predicted: 401, delta 0) ==
+HTTP 401
+artifact_delta: 0
+response: {'error': 'invalid_signature'}
+
+== P2a2: signed with the WRONG secret (H1b predicted: 401, delta 0) ==
+HTTP 401
+artifact_delta: 0
+response: {'error': 'invalid_signature'}
+
+== P2b: signed, control candidate with NO active session (H1b predicted: 409, delta 0) ==
+HTTP 409
+artifact_delta: 0
+response: {'error': 'consent_required'}
+
+== P2c: signed, in-consent session, bullet + note (H1b predicted: 200, delta 2, linked) ==
+HTTP 200
+artifact_delta: 2
+response: {'success': True, 'ingested': 2}
+artifact debrief | sessionId: 11dcc08b-090e-43ef-a172-5564c9511ec2 | consentId: a2b07f04-a8ed-4c92-be8c-121a7cadb384
+artifact handoff_block | sessionId: 11dcc08b-090e-43ef-a172-5564c9511ec2 | consentId: a2b07f04-a8ed-4c92-be8c-121a7cadb384
+
+== P3a: signed, room name only, no metadata (H1c predicted: resolves, 200) ==
+HTTP 200
+artifact_delta: 1
+response: {'success': True, 'ingested': 1}
+
+== P3b: signed, no identity anywhere (H1c predicted: 400, delta 0) ==
+HTTP 400
+artifact_delta: 0
+response: {'error': 'missing_candidate_id'}
+
+== cleanup: server stopped, database restored ==
+repro_postfix2.sh: line 178: 36220 Terminated: 15          node src/server/index.ts > /tmp/p0-server.log 2>&1
+restored: certain.db 

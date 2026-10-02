@@ -1,0 +1,18 @@
+server_ready: 200
+target_candidate (nadia): 8ed49b42-0f5f-455b-a789-2cb34765030e
+attacker_session: recruiter@gennext.demo (csrf header supplied)
+
+== P2-amended2: AUTHENTICATED + CSRF unsigned webhook, object metadata (H0b predicted: artifact written) ==
+HTTP 200
+artifact_delta: 1
+response: {'success': True}
+newest artifact: handoff_block | Extracted Resume Bullet | created_by: livekit_agent
+
+== P3-amended2: AUTHENTICATED + CSRF unsigned webhook, string metadata (H0c predicted: 400) ==
+HTTP 400
+artifact_delta: 0
+response: {'error': 'missing_candidate_id'}
+
+== cleanup: server stopped, database restored ==
+repro_baseline_auth2.sh: line 77: 35657 Terminated: 15          node src/server/index.ts > /tmp/p0-server.log 2>&1
+restored: certain.db 

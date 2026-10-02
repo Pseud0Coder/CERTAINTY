@@ -1,0 +1,63 @@
+server_ready: 200
+candidate_id: f0e0ce38-2704-4a49-8305-fd5c5e497334
+control_candidate (no session): 462da4fb-2340-4edc-965f-5edd8faaf90b
+
+== P1a: token mint with no chain (H1a predicted: 409, no token) ==
+HTTP 409
+token_present: False | error: consent_required
+
+== P1b: run exists, consent not granted (H1a predicted: 409, no token) ==
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys;print(json.load(sys.stdin)['run']['id'])
+                          ~~~~~~~~~~~~~~~~~~~~^^^^^^^
+KeyError: 'run'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys;print(json.load(sys.stdin)['run']['currentStep'])
+                          ~~~~~~~~~~~~~~~~~~~~^^^^^^^
+KeyError: 'run'
+run_id:  (step: )
+HTTP 409
+token_present: False | error: consent_required
+
+== P1c: full chain (consent granted) (H1a predicted: token) ==
+HTTP 409
+token_present: False | url_returned: False
+db session_id: 78c47e84-0696-4039-b1b2-3908d0f718db | db consent_id: d07a4d1a-e9a8-48ce-b9a9-180b03419494
+
+== P2a: unsigned webhook, string metadata (H1b predicted: 401, delta 0) ==
+HTTP 401
+artifact_delta: 0
+response: {'error': 'invalid_signature'}
+
+== P2a2: signed with the WRONG secret (H1b predicted: 401, delta 0) ==
+HTTP 401
+artifact_delta: 0
+response: {'error': 'invalid_signature'}
+
+== P2b: signed, control candidate with NO active session (H1b predicted: 409, delta 0) ==
+HTTP 409
+artifact_delta: 0
+response: {'error': 'consent_required'}
+
+== P2c: signed, in-consent session, bullet + note (H1b predicted: 200, delta 2, linked) ==
+HTTP 200
+artifact_delta: 2
+response: {'success': True, 'ingested': 2}
+artifact handoff_block | sessionId: 78c47e84-0696-4039-b1b2-3908d0f718db | consentId: d07a4d1a-e9a8-48ce-b9a9-180b03419494
+artifact debrief | sessionId: 78c47e84-0696-4039-b1b2-3908d0f718db | consentId: d07a4d1a-e9a8-48ce-b9a9-180b03419494
+
+== P3a: signed, room name only, no metadata (H1c predicted: resolves, 200) ==
+HTTP 409
+artifact_delta: 0
+response: {'error': 'consent_required'}
+
+== P3b: signed, no identity anywhere (H1c predicted: 400, delta 0) ==
+HTTP 400
+artifact_delta: 0
+response: {'error': 'missing_candidate_id'}
+
+== cleanup: server stopped, database restored ==
+repro_postfix.sh: line 160: 36090 Terminated: 15          node src/server/index.ts > /tmp/p0-server.log 2>&1
+restored: certain.db 

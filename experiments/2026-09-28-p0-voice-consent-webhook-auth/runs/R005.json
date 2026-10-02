@@ -1,0 +1,26 @@
+{
+  "condition": "post-fix v2 probes (journey preconditioned; named-session tightened to active)",
+  "errors": [],
+  "logged_at": "2026-09-28T03:23:41Z",
+  "model": null,
+  "observations": {
+    "P1a": "409 no token",
+    "P1b": "409 no token",
+    "P1c": "200 token ids match db",
+    "P2a": "401 delta 0",
+    "P2a2": "401 delta 0",
+    "P2b": "409 delta 0",
+    "P2c": "200 ingested 2 linked",
+    "P3a": "200 ingested 1",
+    "P3b": "400 delta 0",
+    "verdict": "every prediction holds"
+  },
+  "output": {
+    "path": "data/raw/postfix2-20260928T032313Z.txt",
+    "sha256": "cdc8131ffafbb2bf4b6892152de0040c69ddc4e8c243b5165db9c9501850ba46"
+  },
+  "probe_script": "repro_postfix2.sh",
+  "probe_script_sha256": "69f5740b61734f21f1da2e958cacf8e4fa733ba510ed6d8d91cf3ddda62aa30a",
+  "run_id": "R005",
+  "status": "ok"
+}

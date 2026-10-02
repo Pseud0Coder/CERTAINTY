@@ -1,0 +1,25 @@
+{
+  "condition": "pre-fix, authenticated probes without CSRF",
+  "errors": [],
+  "input": {
+    "commit": "680a47b1ed0b3d86289a46ff10d00a05b33dab46"
+  },
+  "logged_at": "2026-09-28T03:21:15Z",
+  "model": null,
+  "observations": {
+    "P2_error": "csrf",
+    "P2_http": 403,
+    "P3_http": 403,
+    "note": "CSRF header omitted by the probe; the attacker's own session trivially supplies it, so the probe was corrected again"
+  },
+  "output": {
+    "path": "data/raw/baseline-auth-20260928T032025Z.txt",
+    "sha256": "e0716cfd8cc3fbe70f89a8c9d6266fb201350d199913cb903f3d8f2019583b20"
+  },
+  "probe_script": "repro_baseline_auth.sh",
+  "probe_script_sha256": "3bc90e2adc198a74060053c3eb57278a539248b99faea0e6f612a0faf1f7010b",
+  "run_id": "R002",
+  "status": "ok",
+  "timestamp_end": "2026-09-28T03:20:25Z",
+  "timestamp_start": "2026-09-28T03:20:15Z"
+}

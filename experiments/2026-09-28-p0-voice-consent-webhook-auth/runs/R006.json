@@ -1,0 +1,18 @@
+{
+  "command": "npm run typecheck && npm test && npm run build:web",
+  "condition": "post-fix verification suite",
+  "errors": [],
+  "logged_at": "2026-09-28T03:23:41Z",
+  "model": null,
+  "observations": {
+    "build_web": "synced",
+    "new_harness_tests": 12,
+    "pre_fix_total": 61,
+    "tests_fail": 0,
+    "tests_pass": 73,
+    "tests_total": 73,
+    "typecheck": "clean"
+  },
+  "run_id": "R006",
+  "status": "ok"
+}

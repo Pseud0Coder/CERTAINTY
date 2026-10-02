@@ -1,0 +1,23 @@
+{
+  "condition": "post-fix v1 probes (superseded)",
+  "errors": [],
+  "logged_at": "2026-09-28T03:23:41Z",
+  "model": null,
+  "observations": {
+    "P1a": "409 consent_required",
+    "P1b_P1c": "blocked by journey gate (interview_locked); chain not exercised",
+    "P2a_P2a2": "401 invalid_signature",
+    "P2b": "409 consent_required",
+    "P2c": "200 delta 2 but linked to the seeded COMPLETE session: named-session path accepted any non-stopped status (loophole vs H1b active requirement)",
+    "P3a": "409 (no active session; unmet for extraneous reason)",
+    "P3b": "400 missing_candidate_id"
+  },
+  "output": {
+    "path": "data/raw/postfix-20260928T032249Z.txt",
+    "sha256": "03ae5ed356ec868dee32477bab717dd683c9a090262a9daf19840a410c74d3cf"
+  },
+  "probe_script": "repro_postfix.sh",
+  "probe_script_sha256": "5903615da9ef329e1f409618442947361e9216a055f594e06e2d4962226e26e0",
+  "run_id": "R004",
+  "status": "ok"
+}

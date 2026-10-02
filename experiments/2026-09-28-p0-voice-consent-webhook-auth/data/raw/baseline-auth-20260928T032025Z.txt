@@ -1,0 +1,16 @@
+server_ready: 200
+target_candidate (nadia): 67e6bda0-4c76-4815-94d8-c6bbed1ac0fa
+
+== P2-amended: AUTHENTICATED unsigned webhook, object metadata (H0b predicted: artifact written) ==
+HTTP 403
+artifact_delta: 0
+response: {'error': 'csrf'}
+
+== P3-amended: AUTHENTICATED unsigned webhook, REAL payload shape (string metadata) ==
+HTTP 403
+artifact_delta: 0
+response: {'error': 'csrf'}
+
+== cleanup: server stopped, database restored ==
+repro_baseline_auth.sh: line 73: 35597 Terminated: 15          node src/server/index.ts > /tmp/p0-server.log 2>&1
+restored: certain.db 

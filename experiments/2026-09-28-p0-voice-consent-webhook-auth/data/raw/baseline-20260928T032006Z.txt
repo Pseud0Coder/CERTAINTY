@@ -1,0 +1,20 @@
+server_ready: 200
+candidate_id: b3f88216-4c47-468b-a307-bb3e2b97b95b
+
+== P1: token mint without consent (H0a predicted: token minted) ==
+HTTP 200
+token_present: True | token_len: 427 | token_value: [redacted]
+url_returned: wss://fake.livekit.cloud
+
+== P2: unsigned webhook, object metadata (H0b predicted: artifact written) ==
+HTTP 401
+artifact_delta: 0
+response: {'error': 'unauthenticated'}
+
+== P3: unsigned webhook, string metadata (H0c predicted: 400 missing_candidate_id) ==
+HTTP 401
+response: {'error': 'unauthenticated'}
+
+== cleanup: server stopped, database restored ==
+repro_baseline.sh: line 78: 35525 Terminated: 15          node src/server/index.ts > /tmp/p0-server.log 2>&1
+restored: certain.db 

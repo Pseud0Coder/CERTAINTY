@@ -10,11 +10,12 @@ export interface RemoteTrack {
 
 export interface LocalTrack {
   kind: string;
+  stop(): void;
 }
 
 export declare class Room {
   connect(url: string, token: string): Promise<void>;
-  disconnect(): void;
+  disconnect(): Promise<void>;
   localParticipant: {
     publishTrack(track: LocalTrack): Promise<unknown>;
   };

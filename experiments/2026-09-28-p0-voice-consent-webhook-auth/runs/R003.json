@@ -1,0 +1,28 @@
+{
+  "condition": "pre-fix, authenticated probes with the attacker session's own CSRF",
+  "errors": [],
+  "input": {
+    "commit": "680a47b1ed0b3d86289a46ff10d00a05b33dab46"
+  },
+  "logged_at": "2026-09-28T03:21:15Z",
+  "model": null,
+  "observations": {
+    "P2_artifact_delta": 1,
+    "P2_http": 200,
+    "P2_newest_artifact": "handoff_block | Extracted Resume Bullet | created_by: livekit_agent",
+    "P3_artifact_delta": 0,
+    "P3_error": "missing_candidate_id",
+    "P3_http": 400,
+    "risk_refined": "any authenticated platform user (any tenant, own CSRF) can unsigned-inject artifacts; anonymous requests are refused 401 by the global gate"
+  },
+  "output": {
+    "path": "data/raw/baseline-auth2-20260928T032039Z.txt",
+    "sha256": "66a603c3158d8a9246ef3da5266fd2e1aad08111273bf9f586912b314e9b0c60"
+  },
+  "probe_script": "repro_baseline_auth2.sh",
+  "probe_script_sha256": "692ced8ed1703db2ec653c12c3d235d373403382255732616b313e4492b72513",
+  "run_id": "R003",
+  "status": "ok",
+  "timestamp_end": "2026-09-28T03:20:39Z",
+  "timestamp_start": "2026-09-28T03:20:30Z"
+}
