@@ -108,10 +108,13 @@ test('H1b: unsigned and mis-signed webhooks are refused', async () => {
   assert.equal(await verifyVoiceWebhook(CFG, body, undefined), null);
   assert.equal(await verifyVoiceWebhook(CFG, body, 'not-a-jwt'), null);
   assert.equal(await verifyVoiceWebhook(CFG, body, sign('wrong-secret', body)), null);
-  /* Flip the last character for real: appending 'x' is a no-op when the
-     signature already ends in 'x', which made this test flaky. */
+  /* Tamper with the signature's first character. Its last character is
+     unsafe to flip: in a 32-byte HMAC it carries only 4 significant bits,
+     so w, x, y and z decode to the same bytes and the "tampered" token
+     still verified about one run in sixteen. */
   const good = sign(CFG.secret, body);
-  const tampered = good.slice(0, -1) + (good.endsWith('x') ? 'y' : 'x');
+  const at = good.lastIndexOf('.') + 1;
+  const tampered = good.slice(0, at) + (good[at] === 'A' ? 'B' : 'A') + good.slice(at + 1);
   assert.equal(await verifyVoiceWebhook(CFG, body, tampered), null);
   /* The sha256 claim covers the raw bytes: a mutated body fails. */
   assert.equal(await verifyVoiceWebhook(CFG, `${body} `, sign(CFG.secret, body)), null);

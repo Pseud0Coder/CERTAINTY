@@ -10,6 +10,7 @@
 
 import type { LlmProvider, JsonSchema } from './providers/llm.ts';
 import { structureResume, type ResumeFields } from './agents.ts';
+import { numbersAreGrounded } from './intelligence.ts';
 
 const RESUME_SCHEMA: JsonSchema = {
   type: 'object',
@@ -82,6 +83,20 @@ export async function structureResumeAssisted(llm: LlmProvider | undefined | nul
     system: SYSTEM, user: sanitizedText, schema: RESUME_SCHEMA,
     schemaName: 'resume_fields', tier: 'cheap', seed: 7,
   });
-  if (!result || !validResume(result.value)) return { fields: scripted, by: 'scripted' };
+  if (!result || !validResume(result.value) || !groundedResume(result.value, sanitizedText)) {
+    return { fields: scripted, by: 'scripted' };
+  }
   return { fields: result.value, by: 'model' };
+}
+
+/* Shape is not enough: every employer and title the model returns must
+   appear in the CV text, and every figure in its output must too
+   (numbersAreGrounded). One invented role rejects the whole parse. */
+export function groundedResume(r: ResumeFields, text: string): boolean {
+  const hay = text.toLowerCase().replace(/\s+/g, ' ');
+  const present = (s: string) => !s.trim() || hay.includes(s.toLowerCase().replace(/\s+/g, ' ').trim());
+  for (const role of r.roles) {
+    if (!present(role.company) || !present(role.title)) return false;
+  }
+  return numbersAreGrounded(JSON.stringify({ roles: r.roles, positioning: r.positioning }), text);
 }

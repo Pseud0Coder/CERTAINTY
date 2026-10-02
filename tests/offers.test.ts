@@ -24,7 +24,7 @@ function boot() {
   const req = createRequisition(store, ctx, rec, { title: 'Senior Platform Engineer', department: 'Platform', location: 'Dubai' });
   submitRequisition(store, ctx, rec, req.id);
   decideRequisition(store, ctx, hrm, req.id, 'approved');
-  const { application, candidateId } = applyToRequisition(store, ctx, rec, { requisitionId: req.id, candidateId: ids.candidateId });
+  const { application, candidateId } = applyToRequisition(store, ctx, rec, { requisitionId: req.id, name: 'Lena Ford', email: 'lena.ford@example.com' });
   return { store, ids, ctx, rec, hrm, req, application, candidateId };
 }
 
@@ -93,7 +93,7 @@ test('the letter is deterministic and free of em dashes and emoji (L8)', () => {
   assert.ok(letter.includes('AED 420,000 per year'));
   assert.ok(!/[\u2014\u2013]/.test(letter), 'no em or en dash');
   assert.ok(!/\p{Extended_Pictographic}/u.test(letter), 'no emoji');
-  const again = generateOfferLetter({ tenantName: store.tenantName(ctx)!, candidateName: 'Nadia Rowe', requisition: req, terms: offer.versions.at(-1)!.terms });
+  const again = generateOfferLetter({ tenantName: store.tenantName(ctx)!, candidateName: 'Lena Ford', requisition: req, terms: offer.versions.at(-1)!.terms });
   assert.equal(again, letter, 'generation is deterministic');
 });
 

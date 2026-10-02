@@ -224,7 +224,7 @@ export function applyToRequisition(store: Store, ctx: Ctx, actor: Actor, input: 
     primary: isFirst, answers: input.answers ?? {}, score: null, override: null,
     dedup: dedup ? { reason: dedup } : null, createdAt: now, updatedAt: now,
   };
-  app.score = scoreApplication(store, ctx, req, candidateId);
+  app.score = scoreApplication(store, ctx, req, candidateId, app.answers);
   app.status = progressionStatus(req, app);
   store.insertApplication(app);
   store.audit(ctx.tenantId, actor.name, actor.role, 'application_created', app.id);
@@ -243,7 +243,7 @@ export function rescoreRequisition(store: Store, ctx: Ctx, requisitionId: string
   let changed = 0;
   const apps = store.applications(ctx, { requisitionId });
   for (const app of apps) {
-    app.score = scoreApplication(store, ctx, req, app.candidateId);
+    app.score = scoreApplication(store, ctx, req, app.candidateId, app.answers);
     const before = app.status;
     app.status = progressionStatus(req, app);
     app.updatedAt = new Date().toISOString();
@@ -318,7 +318,9 @@ export function requisitionPipeline(store: Store, ctx: Ctx, requisitionId: strin
         id: row.application.candidateId,
         name: c?.name ?? 'Unknown',
         email: c?.email ?? null,
-        years: c ? candidateYears(c) : null,
+        /* The years scoring used (all dated CV roles), so the list and the
+           score never disagree; the one-role tenure is only a fallback. */
+        years: row.application.score?.years ?? (c ? candidateYears(c) : null),
       },
     };
   });
@@ -341,6 +343,46 @@ export interface HiringReport {
   generatedAt: string;
   totals: { requisitions: number; open: number; applications: number; knockedOut: number; overridden: number; hired: number };
   requisitions: RequisitionReport[];
+  /* Where applications came from, and why knocked-out ones were. */
+  bySource: Record<string, number>;
+  knockoutReasons: Array<{ rule: string; label: string; count: number }>;
+  offers: { sent: number; accepted: number; declined: number; acceptanceRate: number | null };
+  /* Average whole days spent in each stage, over completed stage moves
+     only (an application still in a stage is not counted, so the figure is
+     never biased by today's date). Stage history is the audit trail. */
+  daysInStage: Array<{ stage: string; averageDays: number | null; moves: number }>;
+}
+
+export interface PendingApprovals {
+  requisitions: Array<{ id: string; title: string; submittedBy: string; submittedAt: string }>;
+  /* The approver decides on the terms, so the latest version's salary and
+     the requisition band travel with the item (staff-only route). */
+  offers: Array<{
+    id: string; requisitionId: string; requisitionTitle: string; candidateName: string; submittedAt: string; submittedBy: string;
+    salary: number | null; currency: string; startDate: string; bandMin: number | null; bandMax: number | null;
+  }>;
+}
+
+/* What is waiting on an approver. The submitter is shown so an approver can
+   see at a glance which items they may not approve themselves. */
+export function pendingApprovals(store: Store, ctx: Ctx): PendingApprovals {
+  const reqs = store.requisitions(ctx).filter(r => r.status === 'pending_approval').map(r => {
+    const sub = [...r.approvals].reverse().find(a => a.action === 'submitted');
+    return { id: r.id, title: r.title, submittedBy: sub?.byName ?? '', submittedAt: sub?.at ?? r.updatedAt };
+  });
+  const offers = store.offers(ctx).filter(o => o.status === 'pending_approval').map(o => {
+    const req = store.requisition(ctx, o.requisitionId);
+    const c = store.candidate(ctx, o.candidateId);
+    const sub = [...o.approvals].reverse().find(a => a.action === 'submitted');
+    const terms = o.versions.at(-1)?.terms;
+    return {
+      id: o.id, requisitionId: o.requisitionId, requisitionTitle: req?.title ?? '', candidateName: c?.name ?? '',
+      submittedAt: sub?.at ?? o.updatedAt, submittedBy: sub?.byName ?? '',
+      salary: terms?.salary ?? null, currency: terms?.currency ?? req?.currency ?? '', startDate: terms?.startDate ?? '',
+      bandMin: req?.salaryMin ?? null, bandMax: req?.salaryMax ?? null,
+    };
+  });
+  return { requisitions: reqs, offers };
 }
 
 const APPLICATION_STATUSES: ApplicationStatus[] = ['new', 'screened', 'shortlisted', 'knocked_out', 'rejected', 'withdrawn', 'hired'];
@@ -376,5 +418,54 @@ export function hiringReports(store: Store, ctx: Ctx): HiringReport {
     overridden: acc.overridden + r.overridden,
     hired: acc.hired + (r.byStatus.hired ?? 0),
   }), { requisitions: 0, open: 0, applications: 0, knockedOut: 0, overridden: 0, hired: 0 });
-  return { generatedAt: new Date().toISOString(), totals, requisitions: reports };
+
+  const apps = store.applications(ctx);
+  const bySource: Record<string, number> = {};
+  const reasons = new Map<string, { rule: string; label: string; count: number }>();
+  for (const a of apps) {
+    bySource[a.source] = (bySource[a.source] ?? 0) + 1;
+    if (a.status !== 'knocked_out') continue;
+    for (const k of a.score?.knockouts ?? []) {
+      if (k.outcome !== 'knocked_out') continue;
+      const key = `${k.rule}:${k.label}`;
+      const cur = reasons.get(key) ?? { rule: k.rule, label: k.label, count: 0 };
+      cur.count += 1; reasons.set(key, cur);
+    }
+  }
+
+  const offers = store.offers(ctx);
+  const accepted = offers.filter(o => o.status === 'accepted').length;
+  const declined = offers.filter(o => o.status === 'declined').length;
+  const sent = offers.filter(o => ['sent', 'accepted', 'declined'].includes(o.status)).length;
+
+  /* Stage history: each application enters its first stage when created,
+     then every audited stage_advance "<applicationId>:<stage>" moves it. */
+  const stages = stagesFor(store, ctx);
+  const durations = new Map<string, number[]>();
+  /* Oldest first; the sort below is stable, so two moves in the same
+     millisecond (a bulk advance) keep the order they were written in. */
+  const advances = store.auditList(ctx, 100000).filter(e => e.action === 'stage_advance').reverse();
+  for (const a of apps) {
+    const moves = advances.filter(e => e.target.startsWith(`${a.id}:`))
+      .map(e => ({ stage: e.target.slice(a.id.length + 1), at: Date.parse(e.ts) }))
+      .sort((x, y) => x.at - y.at);
+    let stage = stages[0]!; let enteredAt = Date.parse(a.createdAt);
+    for (const m of moves) {
+      const list = durations.get(stage) ?? [];
+      list.push((m.at - enteredAt) / 86_400_000);
+      durations.set(stage, list);
+      stage = m.stage; enteredAt = m.at;
+    }
+  }
+  const daysInStage = stages.map(stage => {
+    const list = durations.get(stage) ?? [];
+    return { stage, moves: list.length, averageDays: list.length ? Math.round((list.reduce((x, y) => x + y, 0) / list.length) * 10) / 10 : null };
+  });
+
+  return {
+    generatedAt: new Date().toISOString(), totals, requisitions: reports,
+    bySource, knockoutReasons: [...reasons.values()].sort((a, b) => b.count - a.count),
+    offers: { sent, accepted, declined, acceptanceRate: sent ? Math.round((accepted / sent) * 100) : null },
+    daysInStage,
+  };
 }

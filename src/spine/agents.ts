@@ -193,7 +193,7 @@ export function parseResume(text: string): ResumeFields {
       if (!bullet) {
         const parts = line.split('|').map(s => s.trim());
         const dates = parts[2] ?? '';
-        const m = /^(\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{4})$/.exec(dates);
+        const m = /^(\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{4}|Present)$/i.exec(dates);
         if (parts.length >= 3 && m) {
           current = {
             company: parts[0]!, title: parts[1]!, start: m[1]!, end: m[2]!,

@@ -4,9 +4,12 @@ import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, setWidthPct, set
   railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, sealGauge,
   uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
 import type { MarkState, IconName } from '../shared/dom.js';
-import { renderRequisitions, renderRequisitionDetail, renderReports, type HiringCtx } from './hiring.js';
+import { renderRequisitions, renderRequisitionDetail, renderReports, renderApprovals, type HiringCtx } from './hiring.js';
 
-interface Me { user: { id: string; role: string; displayName: string; tenantId: string }; tenantName: string | null; entitlements: string[]; stages: string[] }
+interface Me {
+  user: { id: string; role: string; displayName: string; tenantId: string }; tenantName: string | null;
+  entitlements: string[]; stages: string[]; settings?: { hiringModel: 'agency' | 'in_house' };
+}
 interface CandidateCard { id: string; name: string; targetRole: string; stage: string; parked: boolean; openFlags: number; verifyFlags: number }
 interface Detail {
   candidate: { id: string; name: string; targetRole: string; employer: string; tenure: string; stage: string; parked: boolean;
@@ -25,13 +28,17 @@ let detailId: string | null = null;
 let requisitionId: string | null = null;
 const root = document.getElementById('root')!;
 
-const NAV: Array<{ id: string; label: string; module: string; icon: IconName; roles?: string[] }> = [
+/* Navigation by role and hiring model (ADR-0024): the submission builder is
+   an agency workflow; approvals and reports belong to HR and admin. */
+const NAV: Array<{ id: string; label: string; module: string; icon: IconName; roles?: string[]; models?: string[] }> = [
+  { id: 'requisitions', label: 'Requisitions', module: 'pipeline', icon: 'resume' },
   { id: 'pipeline', label: 'Pipeline', module: 'pipeline', icon: 'pipeline' },
-  { id: 'requisitions', label: 'Requisitions', module: 'pipeline', icon: 'builder' },
-  { id: 'builder', label: 'Submission builder', module: 'builder', icon: 'builder' },
+  { id: 'approvals', label: 'Approvals', module: 'pipeline', icon: 'audit', roles: ['hr', 'admin'] },
+  { id: 'builder', label: 'Submission builder', module: 'builder', icon: 'builder', models: ['agency'] },
   { id: 'notes', label: 'Notes', module: 'notes', icon: 'notes' },
-  { id: 'reports', label: 'Reports', module: 'pipeline', icon: 'pipeline', roles: ['hr', 'admin'] },
+  { id: 'reports', label: 'Reports', module: 'pipeline', icon: 'usage', roles: ['hr', 'admin'] },
 ];
+function hiringModel(): string { return me.settings?.hiringModel ?? 'agency'; }
 
 function entitled(m: string): boolean { return me.entitlements.includes(m); }
 
@@ -40,6 +47,8 @@ async function boot(): Promise<void> {
     me = await api.get('/api/me');
     if (me.user.role === 'candidate') { location.href = '/app/candidate'; return; }
     setCrumbRoot(me.tenantName);
+    /* An in-house team starts from its requisitions; an agency from its pipeline. */
+    if (hiringModel() === 'in_house') view = 'requisitions';
   } catch {
     location.href = '/login';
     return;
@@ -52,18 +61,20 @@ async function boot(): Promise<void> {
 function renderShell(): void {
   clear(root);
   const app = h('div', { class: 'app' });
-  const rail = h('aside', { class: 'rail' }, railHead('Recruiter'));
+  const workspace = me.user.role === 'hr' ? 'HR' : me.user.role === 'admin' ? 'Admin' : 'Recruiter';
+  const rail = h('aside', { class: 'rail' }, railHead(workspace));
   const nav = h('nav', { class: 'nav', 'aria-label': 'Recruiter' });
   const current = view === 'detail' ? 'pipeline' : view === 'requisition' ? 'requisitions' : view;
   for (const item of NAV) {
     if (item.roles && !item.roles.includes(me.user.role)) continue;
+    if (item.models && !item.models.includes(hiringModel())) continue;
     const b = h('button', { class: 'nav-item', 'aria-current': current === item.id ? 'page' : 'false', title: item.label },
       icon(item.icon), h('span', { class: 'lbl' }, item.label));
     if (!entitled(item.module)) b.setAttribute('aria-disabled', 'true');
     else b.addEventListener('click', () => { view = item.id; renderShell(); renderView(); });
     nav.append(b);
   }
-  rail.append(nav, railFoot(me.user.displayName, 'Recruiter'));
+  rail.append(nav, railFoot(me.user.displayName, workspace));
   const main = h('main', {}, topbar(), h('div', { class: 'content', id: 'content' }));
   app.append(rail, main);
   root.append(app);
@@ -79,13 +90,17 @@ async function renderView(): Promise<void> {
     role: me.user.role,
     stages: me.stages,
     onChange: () => renderView(),
+    hiringModel: hiringModel(),
     onOpen: (id: string) => { requisitionId = id; view = 'requisition'; renderShell(); renderView(); },
+    onCandidate: (candidateId: string) => { detailId = candidateId; view = 'detail'; renderShell(); renderView(); },
+    onNav: (next: string) => { view = next; renderShell(); renderView(); },
   };
   try {
     if (view === 'pipeline') await renderPipeline(content);
     else if (view === 'requisitions') await renderRequisitions(content, hiring);
     else if (view === 'requisition' && requisitionId) await renderRequisitionDetail(content, requisitionId, hiring);
     else if (view === 'reports') await renderReports(content);
+    else if (view === 'approvals') await renderApprovals(content, hiring);
     else if (view === 'builder') await renderBuilder(content);
     else if (view === 'notes') await renderNotes(content);
     else if (view === 'detail' && detailId) await renderDetail(content, detailId);

@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../src/spine/db.ts';
 import { seedDemo } from '../src/spine/seed.ts';
 import { profileInsight } from '../src/spine/insight.ts';
+import { parseResume } from '../src/spine/agents.ts';
 import { FIT_STRENGTH, normalizeRequirement, type RequirementMatch } from '../src/spine/requirement.ts';
 import {
   candidateYears, computeScore, effectiveScore, findDuplicate, isEligible,
@@ -151,6 +152,29 @@ test('progression sets screened and shortlisted by threshold, never downgrades',
   assert.equal(progressionStatus(r, app({ status: 'hired', score: scoreOf(90) })), 'hired');
 });
 
+test('a knockout clears when a later score no longer knocks out; a person\'s rejection stays', () => {
+  const r = { ...req(criteria([must('a', 'Kafka', 1, true)])), shortlistAt: 70 };
+  const scored = (status: 'gap' | 'claimed') => computeScore({
+    criteria: r.criteria, matches: [match(status)], years: null, location: null, workAuthorized: null,
+  });
+  /* Scored before the CV arrived: knocked out on the required must-have. */
+  assert.equal(progressionStatus(r, app({ status: 'new', score: scored('gap') })), 'knocked_out');
+  /* The CV evidences it: the agent's knockout is lifted on the re-score. */
+  assert.equal(progressionStatus(r, app({ status: 'knocked_out', score: scored('claimed') })), 'shortlisted');
+  assert.equal(progressionStatus(r, app({ status: 'rejected', score: scored('claimed') })), 'rejected');
+});
+
+test('the template parser reads an open-ended current role', () => {
+  const fields = parseResume(`Ada Lane
+Engineer
+Dubai | +971 50 555 0100 | ada@example.com
+EXPERIENCE
+Acme | Engineer | 04/2021 - Present | single
+- Built things.
+Beta | Developer | 01/2018 - 03/2021 | single`);
+  assert.deepEqual(fields.roles.map(r => [r.company, r.end]), [['Acme', 'Present'], ['Beta', '03/2021']]);
+});
+
 test('scoring and the profile insight judge every must-have identically', () => {
   const store = new Store(':memory:');
   const ids = seedDemo(store);
@@ -185,4 +209,34 @@ test('de-duplication matches email, phone, or name with an overlapping employer'
   assert.equal(findDuplicate(store, ctx, { phone: '971501234567' })!.candidateId, nadia.id);
   assert.equal(findDuplicate(store, ctx, { name: '  Nadia   Rowe ', employer: 'northline qa labs' })!.candidateId, nadia.id);
   assert.equal(findDuplicate(store, ctx, { email: 'nobody@example.test', name: 'Someone Else' }), null);
+});
+
+test('years of experience span all dated roles, without double counting overlap', async () => {
+  const { resumeYears } = await import('../src/spine/scoring.ts');
+  const now = Date.UTC(2026, 0, 1);
+  assert.equal(resumeYears([{ start: '01/2016', end: '01/2020' }, { start: '01/2020', end: 'Present' }], now), 10);
+  assert.equal(resumeYears([{ start: '01/2018', end: '01/2022' }, { start: '01/2020', end: '01/2021' }], now), 4, 'an overlap counts once');
+  assert.equal(resumeYears([{ start: '2015', end: '2019' }], now), 4, 'year-only dates count from January');
+  assert.equal(resumeYears([{ start: 'unknown', end: '' }], now), null);
+});
+
+test('the work authorisation answer is read strictly: only yes or no counts', async () => {
+  const { workAuthFromAnswers } = await import('../src/spine/scoring.ts');
+  assert.equal(workAuthFromAnswers({ workAuthorized: 'yes' }), true);
+  assert.equal(workAuthFromAnswers({ workAuthorized: 'No' }), false);
+  assert.equal(workAuthFromAnswers({ workAuthorized: 'maybe' }), null, 'unclear stays a check, never a knockout');
+  assert.equal(workAuthFromAnswers({}), null);
+});
+
+test('a CV-hash duplicate is found from the hash recorded at upload', async () => {
+  const { Store } = await import('../src/spine/db.ts');
+  const { seedDemo } = await import('../src/spine/seed.ts');
+  const { findDuplicate } = await import('../src/spine/scoring.ts');
+  const store = new Store(':memory:');
+  const ids = seedDemo(store);
+  const ctx = { tenantId: ids.tenantId };
+  const cv = store.artifacts(ctx, ids.candidateId, 'resume').at(-1)!;
+  store.updateArtifactFields(ctx, cv.id, { ...cv.fields, source: { sha256: 'abc123' } });
+  assert.deepEqual(findDuplicate(store, ctx, { cvHash: 'abc123' }), { candidateId: ids.candidateId, reason: 'Same CV.' });
+  assert.equal(findDuplicate(store, ctx, { cvHash: 'zzz' }), null);
 });

@@ -22,7 +22,8 @@ const goodFields = {
   skills: [], tools: [], education: [],
 };
 
-const MESSY = 'A CV with no parseable role headers\njust prose about a career';
+/* Facts present, but in prose the deterministic parser cannot structure. */
+const MESSY = 'A CV with no parseable role headers\nI have worked as an Engineer at Acme since 01/2020 and did work there.';
 
 test('the deterministic parser is used and the model is not called when roles were found', async () => {
   let calls = 0;
@@ -52,4 +53,12 @@ test('no provider or the scripted provider never reaches the network', async () 
   assert.equal((await structureResumeAssisted(null, MESSY)).by, 'scripted');
   const scripted: LlmProvider = { name: 'scripted', async complete() { return null; } };
   assert.equal((await structureResumeAssisted(scripted, MESSY)).by, 'scripted');
+});
+
+test('a model parse that invents a role or a figure is rejected for the scripted result', async () => {
+  const invented = { ...goodFields, roles: [{ company: 'Globex', title: 'Director', start: '03/2015', end: 'Present', bullets: ['Ran 40 teams'] }] };
+  const result = await structureResumeAssisted(fakeProvider(invented), MESSY);
+  assert.equal(result.by, 'scripted', 'Globex and Director appear nowhere in the CV');
+  const inventedFigure = { ...goodFields, roles: [{ ...goodFields.roles[0]!, bullets: ['Cut costs by 37%'] }] };
+  assert.equal((await structureResumeAssisted(fakeProvider(inventedFigure), MESSY)).by, 'scripted', '37 is not in the CV');
 });

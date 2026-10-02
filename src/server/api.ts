@@ -8,7 +8,7 @@ import type { User, Role } from '../spine/types.ts';
 import {
   assertNoInternalFields, candidateSelfView, recruiterCandidateView, candidatePublic,
 } from '../spine/projections.ts';
-import { advance, park } from '../spine/stages.ts';
+import { advance, advanceApplication, park } from '../spine/stages.ts';
 import { quarantine } from '../spine/quarantine.ts';
 import { assertModule, MODULES, invoice } from '../spine/billing.ts';
 import {
@@ -29,7 +29,7 @@ import {
 import { connectorStates, profileInsight } from '../spine/insight.ts';
 import { hashPassword, verifyPassword } from '../spine/seed.ts';
 import {
-  HiringError, createRequisition, updateRequisition, submitRequisition,
+  HiringError, pendingApprovals, createRequisition, updateRequisition, submitRequisition,
   decideRequisition, closeRequisition, applyToRequisition, rescoreRequisition,
   overrideApplication, requisitionPipeline, stagesFor, hiringReports, bulkApply, type Actor,
 } from '../spine/hiring.ts';
@@ -51,7 +51,7 @@ import {
   rescoreAssessment, startAttempt, submitAttempt,
 } from '../spine/assessments.ts';
 import { completeVoiceSession, liveAssist, completionNotes } from '../spine/interview-assist.ts';
-import { structureResumeAssisted } from '../spine/model-parse.ts';
+import { attachDocument, applyWithCv, IntakeError } from '../spine/intake.ts';
 import type { LlmProvider } from '../spine/providers/llm.ts';
 
 export class ApiError extends Error {
@@ -554,23 +554,11 @@ async function ingestDocument(r: ReqCtx, candidateId: string): Promise<void> {
       throw e;
     }
   }
-  const result = quarantine(store, r.ctx, {
-    candidateId, kind, title: filename ? `${DOC_TITLE[kind]}: ${filename}` : DOC_TITLE[kind], raw: text, createdBy: r.user.id,
+  const { artifact, fields, events } = await attachDocument(store, r.ctx, {
+    candidateId, kind, text, filename, source,
+    uploader: { id: r.user.id, name: r.user.displayName, role: r.user.role }, llm: r.deps.llm,
   });
-  /* Model-assisted resume parsing (ADR-0024): only when configured and only
-     when the deterministic parser found no roles. Fails closed. */
-  let artFields = result.artifact.fields;
-  if (kind === 'resume' && r.deps.llm && r.deps.llm.name !== 'scripted') {
-    const assisted = await structureResumeAssisted(r.deps.llm, result.artifact.sanitizedText ?? '');
-    if (assisted.by === 'model') artFields = { ...artFields, ...assisted.fields, parsedBy: 'model' };
-    else artFields = { ...artFields, parsedBy: 'scripted' };
-  }
-  const fields = {
-    ...artFields,
-    source: { ...source, uploadedBy: r.user.displayName, uploadedByRole: r.user.role, uploadedAt: result.artifact.createdAt },
-  };
-  store.updateArtifactFields(r.ctx, result.artifact.id, fields);
-  store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'document_uploaded', `${kind}:${result.artifact.id}`);
+  const result = { artifact, events };
   const f = fields as { roles?: Array<{ title: string; company: string; start: string; end: string; bullets: string[] }>; mustHave?: string[]; skills?: Array<{ items: string[] }>; education?: string[]; positioning?: string };
   r.send(200, {
     artifact: { id: result.artifact.id, kind, quarantine: result.artifact.quarantine, injectionAttempts: result.artifact.injectionAttempts },
@@ -993,6 +981,10 @@ route('POST', '/api/requisitions/:id/rescore', STAFF, r => {
 });
 
 /* Management reporting: HR and admin only (ADR-0024). */
+route('GET', '/api/hr/approvals', ['hr', 'admin'], r => {
+  r.send(200, pendingApprovals(r.deps.store, r.ctx));
+});
+
 route('GET', '/api/hr/reports', ['hr', 'admin'], r => {
   r.send(200, hiringReports(r.deps.store, r.ctx));
 });
@@ -1240,6 +1232,37 @@ route('POST', '/api/requisitions/:id/bulk', STAFF, r => {
   r.send(200, bulkApply(r.deps.store, r.ctx, actorOf(r), r.params.id!, rows));
 });
 
+/* Bulk CV upload, one file per request so the browser can show progress per
+   file: read, de-duplicate, attach, score (ADR-0026). A file that cannot be
+   read is refused before any candidate exists. */
+route('POST', '/api/requisitions/:id/upload', STAFF, async r => {
+  try {
+    const result = await applyWithCv(r.deps.store, r.ctx, {
+      requisitionId: r.params.id!, bytes: decodeUpload(r.body?.dataBase64),
+      filename: String(r.body?.filename ?? ''), source: 'bulk',
+      uploader: { id: r.user.id, name: r.user.displayName, role: r.user.role }, llm: r.deps.llm,
+    });
+    r.send(200, {
+      candidateId: result.candidateId, applicationId: result.application.id, name: result.name,
+      created: result.created, dedup: result.dedup, rolesRead: result.rolesRead, parsedBy: result.parsedBy,
+      status: result.application.status, score: result.application.score?.total ?? null,
+    });
+  } catch (e) {
+    if (e instanceof IntakeError || e instanceof DocumentError) throw new ApiError(e.code === 'document_too_large' ? 413 : 400, e.code);
+    throw e;
+  }
+}, { maxBody: UPLOAD_MAX_BODY });
+
+/* One application, one stage (A9: a human action). */
+route('POST', '/api/applications/:id/advance', STAFF, r => {
+  try {
+    const stage = advanceApplication(r.ctx, r.deps.store, r.params.id!, r.user.displayName, r.user.role);
+    r.send(200, { stage });
+  } catch (e) {
+    throw new ApiError(409, e instanceof Error ? e.message.toLowerCase().replace(/[^a-z]+/g, '_').replace(/^_|_$/g, '') : 'advance_failed');
+  }
+});
+
 route('POST', '/api/applications/:id/override', STAFF, r => {  const kind = String(r.body?.kind ?? '');
   if (!['adjust', 'include', 'exclude'].includes(kind)) throw new ApiError(400, 'bad_override');
   const application = overrideApplication(r.deps.store, r.ctx, actorOf(r), r.params.id!, {
@@ -1275,21 +1298,39 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, deps:
     } });
     return true;
   }
+  /* Public apply (ADR-0026): CV required, consent recorded as a
+     ConsentRecord, rate limited per source address, upload-sized body. */
   if (url.pathname.startsWith('/api/public/apply/') && req.method === 'POST') {
     const id = url.pathname.slice('/api/public/apply/'.length);
-    const body = await readBody(req);
+    const ip = `apply:${req.socket.remoteAddress ?? 'unknown'}`;
+    if (loginRateLimited(ip)) { send(429, { error: 'too_many_attempts' }); return true; }
+    recordFailure(ip);
+    let body: any;
+    try { body = await readBody(req, UPLOAD_MAX_BODY); } catch { send(413, { error: 'too_large' }); return true; }
     const req0 = deps.store.publicRequisition(id);
     if (!req0) { send(404, { error: 'not_found' }); return true; }
+    if (body?.consent !== true) { send(400, { error: 'consent_required' }); return true; }
+    if (!body?.dataBase64) { send(400, { error: 'cv_required' }); return true; }
+    const ctx = { tenantId: req0.tenantId };
     try {
-      const result = applyToRequisition(deps.store, { tenantId: req0.tenantId }, { id: 'public', name: 'Public applicant', role: 'candidate' }, {
-        requisitionId: req0.id, name: String(body?.name ?? ''),
+      const answers = (body?.answers && typeof body.answers === 'object' ? body.answers : {}) as Record<string, string>;
+      const result = await applyWithCv(deps.store, ctx, {
+        requisitionId: req0.id, bytes: decodeUpload(body.dataBase64), filename: String(body?.filename ?? 'CV'),
+        source: 'apply_page', answers: { workAuthorized: String(answers.workAuthorized ?? '') },
+        name: body?.name ? String(body.name) : undefined,
         email: body?.email ? String(body.email) : null, phone: body?.phone ? String(body.phone) : null,
-        employer: body?.employer ? String(body.employer) : '',
-        answers: (body?.answers as Record<string, string>) ?? {}, source: 'apply_page',
+        uploader: { id: 'public', name: 'Public applicant', role: 'candidate' }, llm: deps.llm,
       });
-      send(200, { applicationId: result.application.id, dedup: result.dedup });
+      const now = new Date().toISOString();
+      deps.store.insertConsent({
+        id: randomUUID(), tenantId: req0.tenantId, candidateId: result.candidateId, sessionId: null,
+        scope: `application:${req0.id}`, grantedAt: now, withdrawnAt: null,
+        retentionPolicy: '12 months after the requisition closes', createdAt: now,
+      });
+      deps.store.audit(req0.tenantId, 'Public applicant', 'candidate', 'application_consent', result.application.id);
+      send(200, { received: true, dedup: !!result.dedup });
     } catch (e) {
-      if (e instanceof HiringError) { send(400, { error: e.code }); return true; }
+      if (e instanceof HiringError || e instanceof IntakeError || e instanceof DocumentError) { send(400, { error: e.code }); return true; }
       throw e;
     }
     return true;

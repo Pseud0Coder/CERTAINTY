@@ -1,19 +1,23 @@
 /* Recruiter app. Dashboards render state; agents never touch the UI (A0). */
 import { api, subscribe } from '../shared/api.js';
 import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, setWidthPct, setLeftPct, icon, avatar, railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, sealGauge, uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
-import { renderRequisitions, renderRequisitionDetail, renderReports } from './hiring.js';
+import { renderRequisitions, renderRequisitionDetail, renderReports, renderApprovals } from './hiring.js';
 let me;
 let view = 'pipeline';
 let detailId = null;
 let requisitionId = null;
 const root = document.getElementById('root');
+/* Navigation by role and hiring model (ADR-0024): the submission builder is
+   an agency workflow; approvals and reports belong to HR and admin. */
 const NAV = [
+    { id: 'requisitions', label: 'Requisitions', module: 'pipeline', icon: 'resume' },
     { id: 'pipeline', label: 'Pipeline', module: 'pipeline', icon: 'pipeline' },
-    { id: 'requisitions', label: 'Requisitions', module: 'pipeline', icon: 'builder' },
-    { id: 'builder', label: 'Submission builder', module: 'builder', icon: 'builder' },
+    { id: 'approvals', label: 'Approvals', module: 'pipeline', icon: 'audit', roles: ['hr', 'admin'] },
+    { id: 'builder', label: 'Submission builder', module: 'builder', icon: 'builder', models: ['agency'] },
     { id: 'notes', label: 'Notes', module: 'notes', icon: 'notes' },
-    { id: 'reports', label: 'Reports', module: 'pipeline', icon: 'pipeline', roles: ['hr', 'admin'] },
+    { id: 'reports', label: 'Reports', module: 'pipeline', icon: 'usage', roles: ['hr', 'admin'] },
 ];
+function hiringModel() { return me.settings?.hiringModel ?? 'agency'; }
 function entitled(m) { return me.entitlements.includes(m); }
 async function boot() {
     try {
@@ -23,6 +27,9 @@ async function boot() {
             return;
         }
         setCrumbRoot(me.tenantName);
+        /* An in-house team starts from its requisitions; an agency from its pipeline. */
+        if (hiringModel() === 'in_house')
+            view = 'requisitions';
     }
     catch {
         location.href = '/login';
@@ -35,11 +42,14 @@ async function boot() {
 function renderShell() {
     clear(root);
     const app = h('div', { class: 'app' });
-    const rail = h('aside', { class: 'rail' }, railHead('Recruiter'));
+    const workspace = me.user.role === 'hr' ? 'HR' : me.user.role === 'admin' ? 'Admin' : 'Recruiter';
+    const rail = h('aside', { class: 'rail' }, railHead(workspace));
     const nav = h('nav', { class: 'nav', 'aria-label': 'Recruiter' });
     const current = view === 'detail' ? 'pipeline' : view === 'requisition' ? 'requisitions' : view;
     for (const item of NAV) {
         if (item.roles && !item.roles.includes(me.user.role))
+            continue;
+        if (item.models && !item.models.includes(hiringModel()))
             continue;
         const b = h('button', { class: 'nav-item', 'aria-current': current === item.id ? 'page' : 'false', title: item.label }, icon(item.icon), h('span', { class: 'lbl' }, item.label));
         if (!entitled(item.module))
@@ -48,7 +58,7 @@ function renderShell() {
             b.addEventListener('click', () => { view = item.id; renderShell(); renderView(); });
         nav.append(b);
     }
-    rail.append(nav, railFoot(me.user.displayName, 'Recruiter'));
+    rail.append(nav, railFoot(me.user.displayName, workspace));
     const main = h('main', {}, topbar(), h('div', { class: 'content', id: 'content' }));
     app.append(rail, main);
     root.append(app);
@@ -65,7 +75,10 @@ async function renderView() {
         role: me.user.role,
         stages: me.stages,
         onChange: () => renderView(),
+        hiringModel: hiringModel(),
         onOpen: (id) => { requisitionId = id; view = 'requisition'; renderShell(); renderView(); },
+        onCandidate: (candidateId) => { detailId = candidateId; view = 'detail'; renderShell(); renderView(); },
+        onNav: (next) => { view = next; renderShell(); renderView(); },
     };
     try {
         if (view === 'pipeline')
@@ -76,6 +89,8 @@ async function renderView() {
             await renderRequisitionDetail(content, requisitionId, hiring);
         else if (view === 'reports')
             await renderReports(content);
+        else if (view === 'approvals')
+            await renderApprovals(content, hiring);
         else if (view === 'builder')
             await renderBuilder(content);
         else if (view === 'notes')

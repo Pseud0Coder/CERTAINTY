@@ -186,7 +186,7 @@ export class Store {
   }
   auditList(ctx: Ctx, limit = 200): AuditEvent[] {
     return this.db.prepare(
-      'SELECT * FROM audit_events WHERE tenant_id = ? ORDER BY ts DESC LIMIT ?')
+      'SELECT * FROM audit_events WHERE tenant_id = ? ORDER BY ts DESC, rowid DESC LIMIT ?')
       .all(ctx.tenantId, limit) as unknown as AuditEvent[];
   }
 

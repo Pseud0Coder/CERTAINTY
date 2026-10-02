@@ -40,7 +40,9 @@ test('shipped pages contain no inline scripts (CSP script-src blocks them)', () 
 
 test('shipped modules use no bare import specifiers (they fail without an import map)', () => {
   assert.ok(scripts.length > 0, 'web-dist has modules; run npm run build:web');
-  const IMPORT_RE = /(?:\bfrom\s*|\bimport\s*|\bimport\(\s*)["']([^"']+)["']/g;
+  /* Statements only (a line that starts with import or export), plus dynamic
+     import(): a UI string that ends in "from" is not an import. */
+  const IMPORT_RE = /(?:^[ \t]*(?:import|export)\b[^;'"]*?\bfrom\s*|^[ \t]*import\s*|\bimport\(\s*)["']([^"']+)["']/gm;
   for (const file of scripts.filter(f => !f.includes('vendor'))) {
     const src = readFileSync(file, 'utf8');
     for (const m of src.matchAll(IMPORT_RE)) {

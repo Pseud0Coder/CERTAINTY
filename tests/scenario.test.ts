@@ -127,16 +127,19 @@ test('tenant name: each tenant reads only its own name', () => {
 test('tenant isolation: the second tenant sees only its own candidate', async () => {
   const { store, ids, engine } = setup();
   const ctx2: Ctx = { tenantId: ids.tenant2Id };
+  /* Iris Vale plus the six seeded applicants to the in-house data role. */
   const candidates = store.candidates(ctx2);
-  assert.equal(candidates.length, 1);
-  assert.equal(candidates[0]!.name, 'Iris Vale');
-  assert.equal(store.flags(ctx2, candidates[0]!.id).length, 0);
+  assert.equal(candidates.length, 7);
+  const iris = candidates.find(c => c.name === 'Iris Vale')!;
+  assert.ok(iris);
+  assert.ok(!candidates.some(c => ['Nadia Rowe', 'Priya Anand', 'Owen Castel'].includes(c.name)));
+  assert.equal(store.flags(ctx2, iris.id).length, 0);
   /* Nadia (complete), Priya (halfway through onboarding) and Owen (just starting). */
   assert.equal(store.candidates({ tenantId: ids.tenantId } as Ctx).length, 3);
 
   /* Flow runs are tenant-scoped too. */
   const run = await engine.startRun(ctx2, {
-    flowId: 'submission_builder', candidateId: candidates[0]!.id,
+    flowId: 'submission_builder', candidateId: iris.id,
     actorRole: 'recruiter', actor: 'T. Ellison',
   });
   assert.equal(run.status, 'awaiting_human', 'intake gate: 0 of 4 sources');

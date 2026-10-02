@@ -7,6 +7,7 @@
    reporting, voice interview -> transcript/summary, offers and acceptance. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { Store } from '../src/spine/db.ts';
 import { seedDemo, DEMO_PASSWORD, hashPassword } from '../src/spine/seed.ts';
@@ -111,8 +112,75 @@ test('demo path: requisition, approval, apply, rank and override through the rou
     assert.equal(pub.status, 200);
     assert.equal('salaryMin' in pub.body.requisition, false);
     assert.equal('approvals' in pub.body.requisition, false);
-    const pubApply = await t.anon('POST', `/api/public/apply/${openReq}`, { name: 'Walk In', email: 'walkin@example.test' });
+    /* Consent and a CV are both required; the consent is stored as a record. */
+    const cv = fixture('cv-word.docx');
+    assert.equal((await t.anon('POST', `/api/public/apply/${openReq}`, { name: 'Walk In', email: 'walkin@example.test', dataBase64: cv })).body.error, 'consent_required');
+    assert.equal((await t.anon('POST', `/api/public/apply/${openReq}`, { name: 'Walk In', email: 'walkin@example.test', consent: true })).body.error, 'cv_required');
+    const pubApply = await t.anon('POST', `/api/public/apply/${openReq}`, {
+      name: 'Walk In', email: 'walkin@example.test', consent: true, filename: 'cv.docx', dataBase64: cv,
+      answers: { workAuthorized: 'no' },
+    });
     assert.equal(pubApply.status, 200);
+    const walkIn = t.store.candidates({ tenantId: t.ids.tenantId }).find(c => c.email === 'walkin@example.test')!;
+    assert.ok(walkIn, 'applicant created from the apply page');
+    assert.ok(t.store.artifacts({ tenantId: t.ids.tenantId }, walkIn.id, 'resume').length === 1, 'their CV is attached as evidence');
+    const walkApp = t.store.applications({ tenantId: t.ids.tenantId }, { candidateId: walkIn.id })[0]!;
+    assert.equal(walkApp.score!.knockouts.find(k => k.rule === 'work_authorization')!.outcome, 'knocked_out',
+      'the apply form answer reaches the knockout rule');
+  } finally { await t.close(); }
+});
+
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url)).toString('base64');
+
+test('demo path: bulk CV upload is parsed, de-duplicated and ranked on evidence', async () => {
+  const t = await boot();
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const hr = t.as('hr@gennext.demo');
+    const reqId = (await rec.post('/api/requisitions', {
+      title: 'Backend Engineer', client: 'Harbourline',
+      criteria: {
+        mustHaves: [
+          { label: 'Kafka', weight: 3, required: true },
+          { label: 'Kubernetes', weight: 2, required: false },
+          { label: 'Terraform', weight: 1, required: false },
+        ],
+        minYears: 3,
+      },
+      shortlistAt: 60,
+    })).body.requisition.id as string;
+    await rec.post(`/api/requisitions/${reqId}/submit`);
+    await hr.post(`/api/requisitions/${reqId}/decision`, { decision: 'approved' });
+
+    /* Two real CV files: a two-column PDF and a Word file. */
+    const ravi = await rec.post(`/api/requisitions/${reqId}/upload`, { filename: 'ravi.pdf', dataBase64: fixture('cv-two-column.pdf') });
+    assert.equal(ravi.status, 200);
+    assert.equal(ravi.body.name, 'Ravi Menon', 'the name is read from the CV itself');
+    assert.equal(ravi.body.created, true);
+    assert.equal(ravi.body.rolesRead, 2);
+    const amara = await rec.post(`/api/requisitions/${reqId}/upload`, { filename: 'amara.docx', dataBase64: fixture('cv-word.docx') });
+    assert.equal(amara.body.name, 'Amara Okafor');
+
+    /* Ranked on evidence from the CVs, not on names. */
+    const detail = await rec.get(`/api/requisitions/${reqId}`);
+    const row = (name: string) => detail.body.rows.find((x: any) => x.candidate.name === name);
+    assert.equal(row('Ravi Menon').rank, 1, 'Kafka, Kubernetes and Terraform are all in his CV');
+    assert.ok(row('Ravi Menon').application.score.total >= 60);
+    assert.ok(row('Ravi Menon').application.score.years >= 5, 'years span his dated roles, not one role');
+    assert.equal(row('Amara Okafor').application.status, 'knocked_out', 'no Kafka in her CV, and it is required');
+    assert.equal(row('Amara Okafor').rank, null);
+
+    /* The same file again attaches to the existing candidate, explained. */
+    const again = await rec.post(`/api/requisitions/${reqId}/upload`, { filename: 'ravi-copy.pdf', dataBase64: fixture('cv-two-column.pdf') });
+    assert.equal(again.status, 409);
+    assert.equal(again.body.error, 'already_applied');
+    assert.equal(t.store.candidates({ tenantId: t.ids.tenantId }).filter(c => c.name === 'Ravi Menon').length, 1, 'no duplicate candidate');
+
+    /* An unreadable file is refused before any candidate is created. */
+    const before = t.store.candidates({ tenantId: t.ids.tenantId }).length;
+    const bad = await rec.post(`/api/requisitions/${reqId}/upload`, { filename: 'x.pdf', dataBase64: Buffer.from('not a document').toString('base64') });
+    assert.equal(bad.body.error, 'unsupported_format');
+    assert.equal(t.store.candidates({ tenantId: t.ids.tenantId }).length, before);
   } finally { await t.close(); }
 });
 
@@ -121,7 +189,7 @@ function createReqViaStore(t: Awaited<ReturnType<typeof boot>>, title: string): 
   const ctx = { tenantId: t.ids.tenantId };
   const rec: Actor = { id: 'r', name: 'R. Osei', role: 'recruiter' };
   const admin: Actor = { id: 'a', name: 'A. Mensah', role: 'admin' };
-  const r = createRequisition(t.store, ctx, rec, { title });
+  const r = createRequisition(t.store, ctx, rec, { title, criteria: { mustHaves: [], workAuthRequired: true } });
   submitRequisition(t.store, ctx, rec, r.id);
   decideRequisition(t.store, ctx, admin, r.id, 'approved');
   return r.id;

@@ -9,6 +9,7 @@ import { seedPrompts } from './flows/prompts.ts';
 import { quarantine } from './quarantine.ts';
 import { assembleCv, assembleProfilePage, parseResume } from './agents.ts';
 import type { Candidate, InterviewSession } from './types.ts';
+import { seedHiring } from './seed-hiring.ts';
 
 export const DEMO_PASSWORD = 'certainty-demo';
 
@@ -285,8 +286,9 @@ export function seedDemo(store: Store): SeedIds {
      brief) but has not logged in to submit a job description, resume or
      LinkedIn yet, so the onboarding gate is pending from a standing start. */
   const owenUser = store.createUser(tenant.id, 'owen@gennext.demo', pw, 'candidate', 'Owen Castel');
+  const owenId = randomUUID();
   store.insertCandidate({
-    id: randomUUID(), tenantId: tenant.id, userId: owenUser.id,
+    id: owenId, tenantId: tenant.id, userId: owenUser.id,
     name: 'Owen Castel', targetRole: 'Product Manager, Growth', targetCompany: 'Halden Retail',
     employer: '', tenure: '', cvTenureStart: null, cvTenureEnd: null,
     stage: 'Screening', parked: false, linkedinStatus: 'not linked',
@@ -322,10 +324,11 @@ export function seedDemo(store: Store): SeedIds {
   }
 
   /* Second tenant: runs one module only. Isolation proof (L9, P5 exit). */
-  const tenant2 = store.createTenant('Northgate Talent');
+  const tenant2 = store.createTenant('Northgate Health');
   for (const def of FLOW_DEFS) store.upsertFlowDef(tenant2.id, def);
   const ctx2 = { tenantId: tenant2.id };
-  store.createUser(tenant2.id, 'recruiter@northgate.demo', pw, 'recruiter', 'T. Ellison');
+  const ngRecruiter = store.createUser(tenant2.id, 'recruiter@northgate.demo', pw, 'recruiter', 'T. Ellison');
+  const ngHr = store.createUser(tenant2.id, 'hr@northgate.demo', pw, 'hr', 'H. Darrow');
   for (const m of ['pipeline', 'screener', 'builder', 'notes', 'journey', 'resume_studio', 'linkedin_studio', 'practice', 'admin', 'billing']) {
     store.setEntitlement(tenant2.id, m, m === 'pipeline');
   }
@@ -333,6 +336,13 @@ export function seedDemo(store: Store): SeedIds {
     ...candidate, id: randomUUID(), tenantId: tenant2.id, userId: null,
     name: 'Iris Vale', currentCompensation: null, compExpectations: null,
     noticePeriod: null, motivation: null, createdAt: now(),
+  });
+
+  /* Requisitions, applications and approvals for both hiring models. */
+  const actor = (u: { id: string; displayName: string; role: string }) => ({ id: u.id, name: u.displayName, role: u.role });
+  seedHiring(store, {
+    gennext: { ctx, recruiter: actor(recruiter), admin: actor(admin), candidates: { nadia: candidate.id, owen: owenId, priya: priyaCandidate.id } },
+    northgate: { ctx: ctx2, recruiter: actor(ngRecruiter), hr: actor(ngHr) },
   });
 
   store.audit(tenant.id, 'system', 'system', 'seed', `demo:${tr.artifact.id}`);

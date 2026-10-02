@@ -75,7 +75,7 @@ export function evaluateKnockouts(
   if (criteria.minYears !== null && criteria.minYears !== undefined) {
     const outcome: KnockoutResult['outcome'] = years === null ? 'check' : years >= criteria.minYears ? 'pass' : 'knocked_out';
     out.push({
-      rule: 'min_years', label: `${criteria.minYears}+ years`, outcome,
+      rule: 'min_years', label: `At least ${criteria.minYears} years`, outcome,
       reason: years === null ? 'Years of experience not established.'
         : `${years} years against a minimum of ${criteria.minYears}.`,
     });
@@ -124,18 +124,58 @@ export function computeScore(input: {
 }
 
 /* Gather the candidate's evidence and score it against a requisition. */
-export function scoreApplication(store: Store, ctx: Ctx, req: Requisition, candidateId: string): ApplicationScore {
+export function scoreApplication(store: Store, ctx: Ctx, req: Requisition, candidateId: string,
+  answers: Record<string, string> = {}): ApplicationScore {
   const candidate = store.candidate(ctx, candidateId);
-  const resumeFields = store.artifacts(ctx, candidateId, 'resume').at(-1)?.fields as { location?: string } | undefined;
+  const resumeFields = store.artifacts(ctx, candidateId, 'resume').at(-1)?.fields as
+    { location?: string; roles?: Array<{ start?: string; end?: string }> } | undefined;
   const sources = candidateEvidenceSources(store, ctx, candidateId);
   const matches = req.criteria.mustHaves.map(m => matchRequirement(normalizeRequirement(m.label), sources));
   return computeScore({
     criteria: req.criteria,
     matches,
-    years: candidate ? candidateYears(candidate) : null,
+    /* Experience spans the CV's dated roles; the candidate's conservative
+       tenure (one role) is only the fallback when no roles are dated. */
+    years: resumeYears(resumeFields?.roles ?? []) ?? (candidate ? candidateYears(candidate) : null),
     location: resumeFields?.location ?? null,
-    workAuthorized: null,
+    workAuthorized: workAuthFromAnswers(answers),
   });
+}
+
+/* The apply form's answer, read strictly: only an explicit yes or no counts;
+   anything else stays unknown, which is a check, never a knockout. */
+export function workAuthFromAnswers(answers: Record<string, string>): boolean | null {
+  const v = String(answers.workAuthorized ?? answers.workAuth ?? '').trim().toLowerCase();
+  if (v === 'yes' || v === 'true') return true;
+  if (v === 'no' || v === 'false') return false;
+  return null;
+}
+
+/* Years of experience from dated CV roles: the union of their spans, so
+   overlapping roles are not double counted. "Present" runs to today; a
+   year-only date counts from January. Null when no role is dated. */
+export function resumeYears(roles: Array<{ start?: string; end?: string }>, now = Date.now()): number | null {
+  const toMs = (s: string | undefined, isEnd: boolean): number | null => {
+    const t = (s ?? '').trim();
+    if (/^present$/i.test(t)) return isEnd ? now : null;
+    const mm = MONTH.exec(t);
+    if (mm) return Date.UTC(Number(mm[2]), Number(mm[1]) - 1, 1);
+    const yy = /^(\d{4})$/.exec(t);
+    if (yy) return Date.UTC(Number(yy[1]), 0, 1);
+    return null;
+  };
+  const spans = roles.map(r => [toMs(r.start, false), toMs(r.end, true)] as const)
+    .filter((p): p is readonly [number, number] => p[0] !== null && p[1] !== null && p[1] > p[0])
+    .map(p => [p[0], p[1]] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  if (!spans.length) return null;
+  let total = 0; let [curS, curE] = spans[0]!;
+  for (const [s, e] of spans.slice(1)) {
+    if (s <= curE) curE = Math.max(curE, e);
+    else { total += curE - curS; curS = s; curE = e; }
+  }
+  total += curE - curS;
+  return Math.round((total / (365.25 * 24 * 60 * 60 * 1000)) * 10) / 10;
 }
 
 /* The score a reader sees: the computed total plus any adjustment, clamped
@@ -210,8 +250,11 @@ export function rankApplications(apps: Application[]): ApplicationRankRow[] {
    sets the screening status, audited as agent:screening. */
 export function progressionStatus(req: Requisition, app: Application): ApplicationStatus {
   const include = app.override?.kind === 'include';
-  const inPlay = ['new', 'screened', 'shortlisted'].includes(app.status);
-  if (!inPlay && !(app.status === 'knocked_out' && include)) return app.status;
+  /* knocked_out is always the screening agent's call (a person rejects),
+     so it is re-evaluated on every score: an application scored before its
+     CV arrived clears once the CV evidences the must-haves. */
+  const inPlay = ['new', 'screened', 'shortlisted', 'knocked_out'].includes(app.status);
+  if (!inPlay) return app.status;
   if (hasKnockout(app) && !include) return 'knocked_out';
   const score = effectiveScore(app);
   if (score === null) return app.status === 'knocked_out' ? 'screened' : app.status;
@@ -248,8 +291,11 @@ export function findDuplicate(store: Store, ctx: Ctx, input: DedupInput): DedupM
     if (email && c.email && c.email.toLowerCase() === email) return { candidateId: c.id, reason: 'Same email.' };
     if (phone && c.phone && c.phone.replace(/\D+/g, '') === phone) return { candidateId: c.id, reason: 'Same phone.' };
     if (input.cvHash) {
-      const sha = (store.artifacts(ctx, c.id, 'resume').at(-1)?.fields as { sha256?: string } | undefined)?.sha256;
-      if (sha && sha === input.cvHash) return { candidateId: c.id, reason: 'Same CV.' };
+      /* Uploads record the file hash under fields.source (ADR-0022). */
+      const hashes = store.artifacts(ctx, c.id, 'resume')
+        .map(a => a.fields as { sha256?: string; source?: { sha256?: string } })
+        .map(f => f.source?.sha256 ?? f.sha256);
+      if (hashes.includes(input.cvHash)) return { candidateId: c.id, reason: 'Same CV.' };
     }
     if (name && normalizeName(c.name) === name && employer && (c.employer ?? '').toLowerCase() === employer) {
       return { candidateId: c.id, reason: 'Same name and employer.' };
