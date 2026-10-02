@@ -126,6 +126,7 @@ const server = createServer(async (req, res) => {
       const page = pages[url.pathname];
       if (page && serveFile(res, join(WEB_DIST, page))) return;
       if (/^\/p\/[^/]+$/.test(url.pathname) && serveFile(res, join(WEB_DIST, 'public-profile.html'))) return;
+      if (/^\/apply\/[^/]+$/.test(url.pathname) && serveFile(res, join(WEB_DIST, 'apply.html'))) return;
       if (url.pathname === '/tokens.css' && serveFile(res, join(ROOT, 'tokens.css'))) return;
       if (url.pathname.startsWith('/assets/') &&
         serveFile(res, join(WEB_DIST, normalize(url.pathname).replace('assets/', '')))) return;
@@ -147,7 +148,7 @@ function authFor(req: IncomingMessage) {
   return token ? userForToken(store, token) : null;
 }
 
-const deps: ApiDeps = { store, engine };
+const deps: ApiDeps = { store, engine, llm };
 
 const PORT = Number(process.env.PORT ?? 8331);
 server.listen(PORT, () => {

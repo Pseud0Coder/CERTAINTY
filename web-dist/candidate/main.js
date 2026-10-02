@@ -69,7 +69,7 @@ function openTasks() {
 let lastSelf = null;
 const VIEW_LABEL = {
     dashboard: 'Dashboard', resume: 'My Resume', linkedin: 'LinkedIn', portfolios: 'Portfolio',
-    interview: 'Interview', todo: 'To-Do',
+    interview: 'Interview', todo: 'To-Do', offers: 'Offers',
 };
 /* Moves to a view the same way a rail click does. */
 function go(id) {
@@ -137,6 +137,7 @@ function renderShell() {
         locked: j && j.practice === 'locked' ? (j.unlockNotes['practice'] ?? 'Locked') : undefined,
     }));
     nav.append(navItem('To-Do', 'todo', 'todo', { badge: openTasks() }));
+    nav.append(navItem('Offers', 'offers', 'builder'));
     rail.append(nav, railFoot(me.user.displayName, 'Candidate'));
     /* The recording indicator lives in the topbar, visible on every view. */
     const main = h('main', {}, topbar([h('span', { id: 'recSlot' })]), h('div', { class: 'content', id: 'content' }));
@@ -193,10 +194,49 @@ async function renderView() {
             await renderPortfolio(content);
         else if (view === 'interview')
             await renderInterview(content);
+        else if (view === 'offers')
+            await renderOffers(content);
     }
     catch (e) {
         content.append(empty('Something failed to load. Try again.'));
         console.error(e);
+    }
+}
+async function renderOffers(content) {
+    const data = await api.get('/api/candidate/offers');
+    content.append(viewHeader('Offers', 'Your offers, and only yours. Accept or decline from here; the decision is recorded.'));
+    if (!data.offers.length) {
+        content.append(empty('No offers yet. They appear here once a recruiter sends one.'));
+        return;
+    }
+    for (const o of data.offers) {
+        const panel = h('section', { class: 'panel mt-6' });
+        panel.append(h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, `Offer, version ${o.version}`), stamp(o.status, o.status === 'accepted' ? 'confirmed' : o.status === 'declined' ? 'gap' : 'claimed')));
+        panel.append(h('div', { class: 'handoff' }, o.letter));
+        if (o.status === 'sent') {
+            const accept = h('button', { class: 'btn btn-primary' }, 'Accept offer');
+            accept.addEventListener('click', async () => {
+                const note = prompt('Anything to add with your acceptance? (optional)') ?? '';
+                await api.post(`/api/candidate/offers/${o.id}/respond`, { accept: true, note });
+                toast('Offer accepted');
+                await renderView();
+            });
+            const decline = h('button', { class: 'btn ml-2' }, 'Decline');
+            decline.addEventListener('click', async () => {
+                const note = prompt('Reason for declining? (optional)') ?? '';
+                await api.post(`/api/candidate/offers/${o.id}/respond`, { accept: false, note });
+                toast('Offer declined');
+                await renderView();
+            });
+            panel.append(h('div', { class: 'mt-3' }, accept, decline));
+        }
+        else if (o.status === 'accepted' || o.status === 'declined') {
+            panel.append(h('p', { class: 't-caption mt-3' }, `${o.status === 'accepted' ? 'Accepted' : 'Declined'}${o.decidedAt ? ` on ${o.decidedAt.slice(0, 10)}` : ''}.${o.decisionNote ? ` ${o.decisionNote}` : ''}`));
+        }
+        else {
+            panel.append(h('p', { class: 't-caption mt-3' }, 'Waiting for internal approval. You are notified when it is sent.'));
+        }
+        content.append(panel);
     }
 }
 function latestDoc(kind) {

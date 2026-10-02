@@ -15,10 +15,12 @@
 import type { Store, Ctx } from './db.ts';
 import type { StarMetrics } from './types.ts';
 import type { ResumeFields } from './agents.ts';
-import { keywords } from './agents.ts';
-import { evidenceCorpus, profileUrl, type Snapshot, type Provider } from './connectors.ts';
+import { profileUrl } from './connectors.ts';
+import { candidateCorpora, connectorStates } from './evidence.ts';
+import { evidenceSources, matchRequirement, normalizeRequirement, type FitStatus } from './requirement.ts';
 
-export type FitStatus = 'verified' | 'claimed' | 'partial' | 'gap';
+export type { FitStatus };
+export { connectorStates };
 
 export interface ProfileInsight {
   targetRole: string;
@@ -43,73 +45,23 @@ export interface ProfileInsight {
   } | null;
 }
 
-interface ConnectorState { provider: Provider; username: string; verified: boolean; syncedAt: string; snapshot: Snapshot | null }
-
-export function connectorStates(store: Store, ctx: Ctx, candidateId: string): ConnectorState[] {
-  const arts = store.artifacts(ctx, candidateId);
-  return arts.filter(a => a.kind === 'connector_link').map(link => {
-    const f = link.fields as { provider: Provider; username: string; verified?: boolean };
-    const snap = arts.filter(a => a.kind === 'connector_snapshot' && (a.fields as { provider?: string }).provider === f.provider).at(-1);
-    const sf = snap?.fields as { data?: Snapshot; fetchedAt?: string } | undefined;
-    return { provider: f.provider, username: f.username, verified: !!f.verified, syncedAt: sf?.fetchedAt ?? '', snapshot: sf?.data ?? null };
-  });
-}
-
 export function profileInsight(store: Store, ctx: Ctx, candidateId: string): ProfileInsight | null {
   const c = store.candidate(ctx, candidateId);
   if (!c) return null;
   const arts = store.artifacts(ctx, candidateId).filter(a => a.quarantine !== 'rejected');
   const jd = arts.filter(a => a.kind === 'jd').at(-1);
   const resume = (arts.filter(a => a.kind === 'resume').at(-1)?.fields ?? {}) as unknown as ResumeFields;
-  const handoffs = arts.filter(a => a.kind === 'handoff_block');
   const page = arts.filter(a => a.kind === 'profile_page').at(-1);
 
-  const cvCorpus = [
-    ...(resume.roles ?? []).flatMap(r => r.bullets),
-    ...handoffs.flatMap(h => ((h.fields as { bullets?: string[] }).bullets ?? [])),
-    ...(resume.skills ?? []).flatMap(g => g.items),
-    ...(resume.tools ?? []),
-  ].join(' \n ').toLowerCase();
-
-  /* Only the candidate's own words from verified sessions, and only
-     sentences that do not deny something: "I have never run Kubernetes in
-     production" mentions every term and is evidence of the opposite. */
+  /* One evidence gathering, shared with scoring (ADR-0024). The candidate's
+     own words only, from verified sessions, and only sentences that do not
+     deny something. `connectors` also feeds the public profile display. */
+  const { cvCorpus, interviewCorpus, connectors } = candidateCorpora(store, ctx, candidateId);
   const verifiedSessions = store.sessions(ctx, candidateId).filter(s => s.mode === 'verified' && s.status !== 'stopped');
-  const NEGATION = /\b(not|never|no|none|haven'?t|hasn'?t|didn'?t|don'?t|doesn'?t|wasn'?t|without|lack|lacking)\b/i;
-  const interviewCorpus = verifiedSessions
-    .flatMap(s => (s.transcript ?? []).filter(t => !/^interviewer$/i.test(t.who)).map(t => t.text))
-    .flatMap(text => text.split(/(?<=[.!?])\s+/))
-    .filter(sentence => !NEGATION.test(sentence))
-    .join(' \n ').toLowerCase();
-
-  const connectors = connectorStates(store, ctx, candidateId);
-  const label: Record<Provider, string> = { github: 'GitHub', leetcode: 'LeetCode' };
 
   const musts = ((jd?.fields as { mustHave?: string[] } | undefined)?.mustHave ?? []);
-  const fit = musts.map(must => {
-    const requirement = must.replace(/^\s*(must[- ]have|required|essential)\s*:?\s*/i, '').replace(/[.\s]+$/, '');
-    const terms = keywords(requirement);
-    const covers = (corpus: string) => terms.length > 0 && terms.every(t => corpus.includes(t));
-    const touches = (corpus: string) => terms.some(t => corpus.includes(t));
-    const sources: string[] = [];
-    let verified = false; let claimed = false;
-    if (covers(interviewCorpus)) { sources.push('Verified interview'); verified = true; }
-    for (const k of connectors) {
-      if (k.snapshot && covers(evidenceCorpus(k.snapshot))) {
-        sources.push(k.verified ? label[k.provider] : `${label[k.provider]} (unverified)`);
-        if (k.verified) verified = true; else claimed = true;
-      }
-    }
-    if (covers(cvCorpus)) { sources.push('CV'); claimed = true; }
-    const partial: string[] = [];
-    if (!covers(interviewCorpus) && touches(interviewCorpus)) partial.push('Verified interview');
-    for (const k of connectors) {
-      if (k.snapshot && !covers(evidenceCorpus(k.snapshot)) && touches(evidenceCorpus(k.snapshot))) partial.push(label[k.provider]);
-    }
-    if (!covers(cvCorpus) && touches(cvCorpus)) partial.push('CV');
-    const status: FitStatus = verified ? 'verified' : claimed ? 'claimed' : partial.length ? 'partial' : 'gap';
-    return { requirement, status, sources, partial };
-  });
+  const sources = evidenceSources({ interviewCorpus, cvCorpus, connectors });
+  const fit = musts.map(must => matchRequirement(normalizeRequirement(must), sources));
 
   /* Achievements: the candidate's own revamped lines, quantified first. */
   const highlights = ((page?.fields as { highlights?: string[] } | undefined)?.highlights

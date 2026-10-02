@@ -5,7 +5,6 @@ import type { Store, Ctx } from '../spine/db.ts';
 import type { Engine } from '../spine/flows/engine.ts';
 import { FlowError } from '../spine/flows/engine.ts';
 import type { User, Role } from '../spine/types.ts';
-import { STAGES } from '../spine/types.ts';
 import {
   assertNoInternalFields, candidateSelfView, recruiterCandidateView, candidatePublic,
 } from '../spine/projections.ts';
@@ -19,7 +18,8 @@ import {
 import { applyRetention, gdprErase, gdprExport } from '../spine/retention.ts';
 import { provisionCandidate } from '../spine/profile.ts';
 import { journeyState } from '../spine/journey.ts';
-import { login, logout, loginRateLimited, recordFailure, clearFailures } from './auth.ts';
+import { login, logout, loginRateLimited, recordFailure, clearFailures, issueSession } from './auth.ts';
+import { entraFromEnv, resolveSsoUser } from '../spine/sso.ts';
 import { randomUUID } from 'node:crypto';
 import { extractDocument, decodeUpload, DocumentError, MAX_DOCUMENT_BYTES } from '../spine/documents.ts';
 import {
@@ -28,14 +28,40 @@ import {
 } from '../spine/connectors.ts';
 import { connectorStates, profileInsight } from '../spine/insight.ts';
 import { hashPassword, verifyPassword } from '../spine/seed.ts';
+import {
+  HiringError, createRequisition, updateRequisition, submitRequisition,
+  decideRequisition, closeRequisition, applyToRequisition, rescoreRequisition,
+  overrideApplication, requisitionPipeline, stagesFor, hiringReports, bulkApply, type Actor,
+} from '../spine/hiring.ts';
+import {
+  OfferError, candidateOfferView, createOffer, decideOffer, respondOffer,
+  sendOffer, submitOffer, updateOffer,
+} from '../spine/offers.ts';
+import {
+  CommunicationError, escalateMessage, queueMessage, recordInbound, sendQueued,
+  type MessageProvider,
+} from '../spine/communications.ts';
+import {
+  SchedulingError, cancelMeeting, completeMeeting, confirmMeeting, createMeeting,
+  icsForMeeting, proposeSlots, pushToCalendar, rescheduleMeeting,
+  type CalendarProvider,
+} from '../spine/scheduling.ts';
+import {
+  AssessmentError, candidateAttemptView, createAssessment, inviteAttempt,
+  rescoreAssessment, startAttempt, submitAttempt,
+} from '../spine/assessments.ts';
+import { completeVoiceSession, liveAssist, completionNotes } from '../spine/interview-assist.ts';
+import { structureResumeAssisted } from '../spine/model-parse.ts';
+import type { LlmProvider } from '../spine/providers/llm.ts';
 
 export class ApiError extends Error {
   status: number; code: string;
   constructor(status: number, code: string) { super(code); this.status = status; this.code = code; }
 }
 
-/* `fetch` is injectable so connector tests never touch the network. */
-export interface ApiDeps { store: Store; engine: Engine; fetch?: FetchLike }
+/* `fetch` is injectable so connector tests never touch the network. `llm` is
+   optional: absent, every model path fails closed to its scripted fallback. */
+export interface ApiDeps { store: Store; engine: Engine; fetch?: FetchLike; llm?: LlmProvider }
 
 interface ReqCtx {
   deps: ApiDeps; user: User; csrf: string; ctx: Ctx;
@@ -236,7 +262,8 @@ route('GET', '/api/me', null, r => {
   r.send(200, {
     user: { id: r.user.id, email: r.user.email, role: r.user.role, displayName: r.user.displayName, tenantId: r.user.tenantId,
       mustChangePassword: !!r.user.mustChangePassword },
-    tenantName: store.tenantName(r.ctx), candidateId, entitlements, stages: STAGES,
+    tenantName: store.tenantName(r.ctx), candidateId, entitlements, stages: stagesFor(store, r.ctx),
+    settings: store.tenantSettings(r.ctx),
   });
 });
 
@@ -256,7 +283,7 @@ route('POST', '/api/auth/password', null, r => {
 });
 
 /* ---------- recruiter: pipeline and candidates ---------- */
-route('POST', '/api/recruiter/candidates', ['recruiter', 'admin'], r => {
+route('POST', '/api/recruiter/candidates', ['recruiter', 'hr', 'admin'], r => {
   assertModule(r.deps.store, r.ctx.tenantId, 'pipeline');
   try {
     const result = provisionCandidate(r.deps.store, r.ctx, {
@@ -280,12 +307,12 @@ route('POST', '/api/recruiter/candidates', ['recruiter', 'admin'], r => {
   }
 });
 
-route('GET', '/api/recruiter/candidates/:id/journey', ['recruiter', 'admin'], r => {
+route('GET', '/api/recruiter/candidates/:id/journey', ['recruiter', 'hr', 'admin'], r => {
   const view = journeyState(r.deps.store, r.ctx, r.params.id!);
   r.send(200, { journey: view });
 });
 
-route('GET', '/api/recruiter/pipeline', ['recruiter', 'admin'], r => {
+route('GET', '/api/recruiter/pipeline', ['recruiter', 'hr', 'admin'], r => {
   assertModule(r.deps.store, r.ctx.tenantId, 'pipeline');
   const store = r.deps.store;
   const candidates = store.candidates(r.ctx).map(c => {
@@ -299,10 +326,10 @@ route('GET', '/api/recruiter/pipeline', ['recruiter', 'admin'], r => {
   const suggestions = store.flowRuns(r.ctx)
     .filter(run => run.stepStates['out:suggest'])
     .map(run => ({ candidateId: run.candidateId, stage: (JSON.parse(run.stepStates['out:suggest']!) as { suggestion: string }).suggestion }));
-  r.send(200, { candidates, stages: STAGES, suggestions });
+  r.send(200, { candidates, stages: stagesFor(store, r.ctx), suggestions });
 });
 
-route('GET', '/api/recruiter/candidates/:id', ['recruiter', 'admin'], r => {
+route('GET', '/api/recruiter/candidates/:id', ['recruiter', 'hr', 'admin'], r => {
   const view = recruiterCandidateView(r.ctx, r.deps.store, r.params.id!);
   if (!view) throw new ApiError(404, 'not_found');
   const suggestionRun = r.deps.store.flowRuns(r.ctx, r.params.id!)
@@ -313,16 +340,16 @@ route('GET', '/api/recruiter/candidates/:id', ['recruiter', 'admin'], r => {
   });
 });
 
-route('POST', '/api/recruiter/candidates/:id/advance', ['recruiter', 'admin'], r => {
+route('POST', '/api/recruiter/candidates/:id/advance', ['recruiter', 'hr', 'admin'], r => {
   const stage = advance(r.ctx, r.deps.store, r.params.id!, r.user.displayName, r.user.role);
   r.send(200, { stage });
 });
 
-route('POST', '/api/recruiter/candidates/:id/park', ['recruiter', 'admin'], r => {
+route('POST', '/api/recruiter/candidates/:id/park', ['recruiter', 'hr', 'admin'], r => {
   const parked = park(r.ctx, r.deps.store, r.params.id!, true, r.user.displayName, r.user.role);
   r.send(200, { parked });
 });
-route('POST', '/api/recruiter/candidates/:id/restore', ['recruiter', 'admin'], r => {
+route('POST', '/api/recruiter/candidates/:id/restore', ['recruiter', 'hr', 'admin'], r => {
   const parked = park(r.ctx, r.deps.store, r.params.id!, false, r.user.displayName, r.user.role);
   r.send(200, { parked });
 });
@@ -348,7 +375,7 @@ const SUGGESTION_PHRASING: Record<string, (title: string, body: string) => { tit
   }),
 };
 
-route('POST', '/api/recruiter/candidates/:id/flags/:flagId/action', ['recruiter', 'admin'], r => {
+route('POST', '/api/recruiter/candidates/:id/flags/:flagId/action', ['recruiter', 'hr', 'admin'], r => {
   const store = r.deps.store;
   const flag = store.flag(r.ctx, r.params.flagId!);
   if (!flag || flag.candidateId !== r.params.id) throw new ApiError(404, 'not_found');
@@ -377,7 +404,7 @@ route('POST', '/api/recruiter/candidates/:id/flags/:flagId/action', ['recruiter'
   throw new ApiError(400, 'unknown_action');
 });
 
-route('POST', '/api/recruiter/candidates/:id/artifacts', ['recruiter', 'admin'], r => {
+route('POST', '/api/recruiter/candidates/:id/artifacts', ['recruiter', 'hr', 'admin'], r => {
   const kind = String(r.body?.kind ?? '');
   const title = String(r.body?.title ?? 'Document');
   const text = String(r.body?.text ?? '');
@@ -392,7 +419,7 @@ route('POST', '/api/recruiter/candidates/:id/artifacts', ['recruiter', 'admin'],
   });
 });
 
-route('POST', '/api/recruiter/candidates/:id/builder/start', ['recruiter', 'admin'], async r => {
+route('POST', '/api/recruiter/candidates/:id/builder/start', ['recruiter', 'hr', 'admin'], async r => {
   assertModule(r.deps.store, r.ctx.tenantId, 'builder');
   const run = await r.deps.engine.startRun(r.ctx, {
     flowId: 'submission_builder', candidateId: r.params.id!,
@@ -401,7 +428,7 @@ route('POST', '/api/recruiter/candidates/:id/builder/start', ['recruiter', 'admi
   r.send(200, { run });
 });
 
-route('GET', '/api/recruiter/candidates/:id/builder', ['recruiter', 'admin'], r => {
+route('GET', '/api/recruiter/candidates/:id/builder', ['recruiter', 'hr', 'admin'], r => {
   assertModule(r.deps.store, r.ctx.tenantId, 'builder');
   const store = r.deps.store;
   const run = store.flowRuns(r.ctx, r.params.id!).find(x => x.flowId === 'submission_builder');
@@ -424,7 +451,7 @@ route('GET', '/api/recruiter/candidates/:id/builder', ['recruiter', 'admin'], r 
 });
 
 /* ---------- flows ---------- */
-route('POST', '/api/flows/:flowId/start/:candidateId', ['recruiter', 'admin'], async r => {
+route('POST', '/api/flows/:flowId/start/:candidateId', ['recruiter', 'hr', 'admin'], async r => {
   const run = await r.deps.engine.startRun(r.ctx, {
     flowId: r.params.flowId!, candidateId: r.params.candidateId!,
     actorRole: r.user.role, actor: r.user.displayName,
@@ -477,7 +504,7 @@ route('POST', '/api/flows/runs/:id/turn', ['candidate', 'recruiter', 'admin'], a
   r.send(200, { run: updated, reply });
 });
 
-route('POST', '/api/flows/runs/:id/resume', ['recruiter', 'admin'], async r => {
+route('POST', '/api/flows/runs/:id/resume', ['recruiter', 'hr', 'admin'], async r => {
   const { run } = { run: await r.deps.engine.resume(r.ctx, r.params.id!, r.user.displayName, r.user.role, String(r.body?.action ?? 'approve')) };
   r.send(200, { run });
 });
@@ -487,7 +514,7 @@ route('POST', '/api/flows/runs/:id/consent', ['candidate'], async r => {
   r.send(200, { run });
 });
 
-route('POST', '/api/flows/runs/:id/retry', ['recruiter', 'admin'], async r => {
+route('POST', '/api/flows/runs/:id/retry', ['recruiter', 'hr', 'admin'], async r => {
   const run = await r.deps.engine.retryFailed(r.ctx, r.params.id!, r.user.displayName, r.user.role);
   r.send(200, { run });
 });
@@ -530,8 +557,16 @@ async function ingestDocument(r: ReqCtx, candidateId: string): Promise<void> {
   const result = quarantine(store, r.ctx, {
     candidateId, kind, title: filename ? `${DOC_TITLE[kind]}: ${filename}` : DOC_TITLE[kind], raw: text, createdBy: r.user.id,
   });
+  /* Model-assisted resume parsing (ADR-0024): only when configured and only
+     when the deterministic parser found no roles. Fails closed. */
+  let artFields = result.artifact.fields;
+  if (kind === 'resume' && r.deps.llm && r.deps.llm.name !== 'scripted') {
+    const assisted = await structureResumeAssisted(r.deps.llm, result.artifact.sanitizedText ?? '');
+    if (assisted.by === 'model') artFields = { ...artFields, ...assisted.fields, parsedBy: 'model' };
+    else artFields = { ...artFields, parsedBy: 'scripted' };
+  }
   const fields = {
-    ...result.artifact.fields,
+    ...artFields,
     source: { ...source, uploadedBy: r.user.displayName, uploadedByRole: r.user.role, uploadedAt: result.artifact.createdAt },
   };
   store.updateArtifactFields(r.ctx, result.artifact.id, fields);
@@ -553,7 +588,7 @@ async function ingestDocument(r: ReqCtx, candidateId: string): Promise<void> {
 }
 
 route('POST', '/api/candidate/documents', ['candidate'], r => ingestDocument(r, candidateIdFor(r)), { maxBody: UPLOAD_MAX_BODY });
-route('POST', '/api/recruiter/candidates/:id/documents', ['recruiter', 'admin'], r => ingestDocument(r, r.params.id!), { maxBody: UPLOAD_MAX_BODY });
+route('POST', '/api/recruiter/candidates/:id/documents', ['recruiter', 'hr', 'admin'], r => ingestDocument(r, r.params.id!), { maxBody: UPLOAD_MAX_BODY });
 
 route('POST', '/api/candidate/onboarding', ['candidate'], async r => {
   const candidateId = candidateIdFor(r);
@@ -626,7 +661,7 @@ route('POST', '/api/candidate/profile/share', ['candidate'], r => {
   r.send(200, { share, live: shareIsLive({ share }) });
 });
 
-route('POST', '/api/recruiter/candidates/:id/profile/revoke', ['recruiter', 'admin'], r => {
+route('POST', '/api/recruiter/candidates/:id/profile/revoke', ['recruiter', 'hr', 'admin'], r => {
   const page = latestProfilePage(r, r.params.id!);
   if (!page) throw new ApiError(404, 'not_found');
   const share = { ...shareOf(page.fields), enabled: false };
@@ -635,7 +670,7 @@ route('POST', '/api/recruiter/candidates/:id/profile/revoke', ['recruiter', 'adm
   r.send(200, { share });
 });
 
-route('GET', '/api/recruiter/candidates/:id/insight', ['recruiter', 'admin'], r => {
+route('GET', '/api/recruiter/candidates/:id/insight', ['recruiter', 'hr', 'admin'], r => {
   const page = latestProfilePage(r, r.params.id!);
   r.send(200, {
     page: page ? { id: page.id, share: shareOf(page.fields), live: shareIsLive(page.fields) } : null,
@@ -761,7 +796,7 @@ route('POST', '/api/candidate/connectors/:provider/disconnect', ['candidate'], r
   r.send(200, { connectors: connectorView(r, candidateId) });
 });
 
-route('GET', '/api/recruiter/candidates/:id/connectors', ['recruiter', 'admin'], r => {
+route('GET', '/api/recruiter/candidates/:id/connectors', ['recruiter', 'hr', 'admin'], r => {
   if (!r.deps.store.candidate(r.ctx, r.params.id!)) throw new ApiError(404, 'not_found');
   r.send(200, { connectors: connectorView(r, r.params.id!) });
 });
@@ -844,6 +879,22 @@ route('GET', '/api/admin/usage', ['admin'], r => {
 route('GET', '/api/admin/users', ['admin'], r => {
   r.send(200, { users: r.deps.store.listUsers(r.ctx) });
 });
+/* Tenant hiring model and timezone (ADR-0024). Admin only: it decides the
+   stage set the whole tenant runs on. */
+route('GET', '/api/admin/settings', ['admin'], r => {
+  r.send(200, { settings: r.deps.store.tenantSettings(r.ctx) });
+});
+route('POST', '/api/admin/settings', ['admin'], r => {
+  const patch: { hiringModel?: 'agency' | 'in_house'; timezone?: string } = {};
+  if (r.body?.hiringModel !== undefined) {
+    if (!['agency', 'in_house'].includes(String(r.body.hiringModel))) throw new ApiError(400, 'bad_hiring_model');
+    patch.hiringModel = r.body.hiringModel;
+  }
+  if (r.body?.timezone !== undefined) patch.timezone = String(r.body.timezone);
+  r.deps.store.setTenantSettings(r.ctx, patch);
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, 'admin', 'settings_changed', JSON.stringify(patch));
+  r.send(200, { settings: r.deps.store.tenantSettings(r.ctx) });
+});
 route('GET', '/api/admin/flows', ['admin'], r => {
   r.send(200, { flows: r.deps.store.flowDefs(r.ctx).map(f => ({ id: f.id, version: f.version, title: f.title, enabled: f.enabled, steps: f.steps.map(s => ({ id: s.id, kind: s.kind, agent: s.agent, description: s.description })) })) });
 });
@@ -892,6 +943,311 @@ route('POST', '/api/gdpr/erase', ['candidate', 'admin'], r => {
   r.send(200, { ok: true });
 });
 
+/* ---------- requisitions and applications (ADR-0024) ---------- */
+const actorOf = (r: ReqCtx): Actor => ({ id: r.user.id, name: r.user.displayName, role: r.user.role });
+const STAFF: Role[] = ['recruiter', 'hr', 'admin'];
+const APPROVERS: Role[] = ['hr', 'admin'];
+
+route('GET', '/api/requisitions', STAFF, r => {
+  r.send(200, {
+    requisitions: r.deps.store.requisitions(r.ctx),
+    stages: stagesFor(r.deps.store, r.ctx),
+    settings: r.deps.store.tenantSettings(r.ctx),
+  });
+});
+
+route('POST', '/api/requisitions', STAFF, r => {
+  r.send(200, { requisition: createRequisition(r.deps.store, r.ctx, actorOf(r), r.body ?? {}) });
+});
+
+route('GET', '/api/requisitions/:id', STAFF, r => {
+  const { requisition, rows } = requisitionPipeline(r.deps.store, r.ctx, r.params.id!);
+  r.send(200, {
+    requisition, rows,
+    stages: stagesFor(r.deps.store, r.ctx),
+  });
+});
+
+route('POST', '/api/requisitions/:id/update', STAFF, r => {
+  r.send(200, { requisition: updateRequisition(r.deps.store, r.ctx, actorOf(r), r.params.id!, r.body ?? {}) });
+});
+
+route('POST', '/api/requisitions/:id/submit', STAFF, r => {
+  r.send(200, { requisition: submitRequisition(r.deps.store, r.ctx, actorOf(r), r.params.id!) });
+});
+
+route('POST', '/api/requisitions/:id/decision', APPROVERS, r => {
+  const decision = String(r.body?.decision ?? '');
+  if (!['approved', 'rejected', 'changes_requested'].includes(decision)) throw new ApiError(400, 'bad_decision');
+  r.send(200, {
+    requisition: decideRequisition(r.deps.store, r.ctx, actorOf(r), r.params.id!, decision as 'approved', String(r.body?.comment ?? '')),
+  });
+});
+
+route('POST', '/api/requisitions/:id/close', STAFF, r => {
+  r.send(200, { requisition: closeRequisition(r.deps.store, r.ctx, actorOf(r), r.params.id!) });
+});
+
+route('POST', '/api/requisitions/:id/rescore', STAFF, r => {
+  r.send(200, rescoreRequisition(r.deps.store, r.ctx, r.params.id!));
+});
+
+/* Management reporting: HR and admin only (ADR-0024). */
+route('GET', '/api/hr/reports', ['hr', 'admin'], r => {
+  r.send(200, hiringReports(r.deps.store, r.ctx));
+});
+
+/* ---------- offers (ADR-0024) ---------- */
+route('POST', '/api/applications/:id/offers', STAFF, r => {
+  r.send(200, { offer: createOffer(r.deps.store, r.ctx, actorOf(r), r.params.id!, r.body?.terms ?? {}) });
+});
+route('GET', '/api/offers/:id', STAFF, r => {
+  const offer = r.deps.store.offer(r.ctx, r.params.id!);
+  if (!offer) throw new ApiError(404, 'not_found');
+  r.send(200, { offer });
+});
+route('POST', '/api/offers/:id/update', STAFF, r => {
+  r.send(200, { offer: updateOffer(r.deps.store, r.ctx, actorOf(r), r.params.id!, r.body?.terms ?? {}) });
+});
+route('POST', '/api/offers/:id/submit', STAFF, r => {
+  r.send(200, { offer: submitOffer(r.deps.store, r.ctx, actorOf(r), r.params.id!) });
+});
+route('POST', '/api/offers/:id/decision', APPROVERS, r => {
+  const decision = String(r.body?.decision ?? '');
+  if (!['approved', 'rejected', 'changes_requested'].includes(decision)) throw new ApiError(400, 'bad_decision');
+  r.send(200, { offer: decideOffer(r.deps.store, r.ctx, actorOf(r), r.params.id!, decision as 'approved', String(r.body?.comment ?? '')) });
+});
+route('POST', '/api/offers/:id/send', STAFF, r => {
+  r.send(200, { offer: sendOffer(r.deps.store, r.ctx, actorOf(r), r.params.id!) });
+});
+
+/* The candidate sees only their own offers, and only their own view. */
+route('GET', '/api/candidate/offers', ['candidate'], r => {
+  const candidateId = candidateIdFor(r);
+  r.send(200, { offers: r.deps.store.offers(r.ctx, { candidateId }).map(candidateOfferView) });
+});
+route('POST', '/api/candidate/offers/:id/respond', ['candidate'], r => {
+  const candidateId = candidateIdFor(r);
+  const offer = r.deps.store.offer(r.ctx, r.params.id!);
+  if (!offer || offer.candidateId !== candidateId) throw new ApiError(404, 'not_found');
+  if (typeof r.body?.accept !== 'boolean') throw new ApiError(400, 'accept_required');
+  r.send(200, { offer: candidateOfferView(respondOffer(r.deps.store, r.ctx, r.params.id!, r.body.accept, String(r.body?.note ?? ''))) });
+});
+
+/* ---------- communications (ADR-0024) ---------- */
+
+/* Transport sits behind an interface and fails closed: with no
+   CERTAINTY_MESSAGE_URL configured this returns null and messages stay
+   queued rather than being silently dropped. */
+function messageProvider(deps: ApiDeps): MessageProvider | null {
+  const url = process.env.CERTAINTY_MESSAGE_URL;
+  if (!url) return null;
+  const fetchImpl = deps.fetch;
+  return {
+    name: 'webhook',
+    async send(m, to) {
+      const res = await (fetchImpl ?? fetch)(url, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to, subject: m.subject, body: m.body, channel: m.channel, locale: m.locale }),
+      });
+      if (!res.ok) throw new Error('provider_error');
+      const data = await res.json().catch(() => ({}));
+      return { providerId: String((data as { id?: string }).id ?? m.id) };
+    },
+  };
+}
+
+route('GET', '/api/messages', STAFF, r => {
+  r.send(200, {
+    messages: r.deps.store.messages(r.ctx, {
+      candidateId: r.query('candidateId') ?? undefined,
+      status: r.query('status') ?? undefined,
+      channel: r.query('channel') ?? undefined,
+    }),
+  });
+});
+route('POST', '/api/messages', STAFF, r => {
+  const candidateId = String(r.body?.candidateId ?? '');
+  if (!candidateId) throw new ApiError(400, 'candidate_required');
+  r.send(200, { message: queueMessage(r.deps.store, r.ctx, {
+    candidateId, applicationId: r.body?.applicationId ?? null,
+    channel: r.body?.channel, locale: r.body?.locale,
+    template: r.body?.template ?? 'status_update', vars: r.body?.vars,
+    subject: r.body?.subject, body: r.body?.body,
+  }) });
+});
+route('POST', '/api/messages/send', STAFF, async r => {
+  r.send(200, await sendQueued(r.deps.store, r.ctx, messageProvider(r.deps)));
+});
+route('POST', '/api/messages/:id/escalate', STAFF, r => {
+  r.send(200, { message: escalateMessage(r.deps.store, r.ctx, actorOf(r), r.params.id!, String(r.body?.reason ?? '')) });
+});
+route('POST', '/api/messages/inbound', STAFF, r => {
+  r.send(200, { message: recordInbound(r.deps.store, r.ctx, {
+    candidateId: String(r.body?.candidateId ?? ''), applicationId: r.body?.applicationId ?? null,
+    channel: r.body?.channel, locale: r.body?.locale, body: String(r.body?.body ?? ''),
+  }) });
+});
+route('GET', '/api/candidate/messages', ['candidate'], r => {
+  const candidateId = candidateIdFor(r);
+  r.send(200, { messages: r.deps.store.messages(r.ctx, { candidateId }).map(m => ({
+    id: m.id, channel: m.channel, locale: m.locale, subject: m.subject, body: m.body, status: m.status, createdAt: m.createdAt,
+  })) });
+});
+
+/* ---------- scheduling (ADR-0024) ---------- */
+
+/* Microsoft 365 in production. Fails closed: no CERTAINTY_CALENDAR_URL means
+   the meeting still exists and the ICS is still generated. */
+function calendarProvider(deps: ApiDeps): CalendarProvider | null {
+  const url = process.env.CERTAINTY_CALENDAR_URL;
+  if (!url) return null;
+  const fetchImpl = deps.fetch;
+  return {
+    name: 'm365',
+    async createEvent(meeting, details) {
+      const res = await (fetchImpl ?? fetch)(url, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ startsAt: meeting.startsAt, endsAt: meeting.endsAt, timezone: meeting.timezone, ...details }),
+      });
+      if (!res.ok) throw new Error('calendar_error');
+      const data = await res.json().catch(() => ({}));
+      return { eventId: String((data as { id?: string }).id ?? meeting.id) };
+    },
+  };
+}
+
+route('POST', '/api/scheduling/slots', STAFF, r => {
+  const duration = Number(r.body?.durationMinutes ?? 45);
+  const windows = (r.body?.windows ?? []) as Array<{ date: string; start: string; end: string }>;
+  const existing = r.deps.store.meetings(r.ctx).filter(m => !['cancelled'].includes(m.status)).map(m => m.startsAt);
+  r.send(200, { slots: proposeSlots(windows, duration, { existing, limit: Number(r.body?.limit ?? 12) }) });
+});
+route('POST', '/api/meetings', STAFF, r => {
+  r.send(200, { meeting: createMeeting(r.deps.store, r.ctx, actorOf(r), {
+    candidateId: String(r.body?.candidateId ?? ''), applicationId: r.body?.applicationId ?? null,
+    requisitionId: r.body?.requisitionId ?? null, kind: r.body?.kind,
+    startsAt: String(r.body?.startsAt ?? ''), endsAt: String(r.body?.endsAt ?? ''),
+    timezone: r.body?.timezone, location: r.body?.location,
+  }) });
+});
+route('GET', '/api/meetings', STAFF, r => {
+  r.send(200, { meetings: r.deps.store.meetings(r.ctx, { candidateId: r.query('candidateId') ?? undefined, status: r.query('status') ?? undefined }) });
+});
+route('GET', '/api/meetings/:id', STAFF, r => {
+  const meeting = r.deps.store.meeting(r.ctx, r.params.id!);
+  if (!meeting) throw new ApiError(404, 'not_found');
+  const req = meeting.requisitionId ? r.deps.store.requisition(r.ctx, meeting.requisitionId) : null;
+  r.send(200, { meeting, ics: icsForMeeting({ meeting, title: req?.title ?? 'Interview', description: req?.description ?? '' }) });
+});
+route('POST', '/api/meetings/:id/confirm', STAFF, r => { r.send(200, { meeting: confirmMeeting(r.deps.store, r.ctx, actorOf(r), r.params.id!) }); });
+route('POST', '/api/meetings/:id/reschedule', STAFF, r => {
+  r.send(200, { meeting: rescheduleMeeting(r.deps.store, r.ctx, actorOf(r), r.params.id!, String(r.body?.startsAt ?? ''), String(r.body?.endsAt ?? ''), String(r.body?.note ?? '')) });
+});
+route('POST', '/api/meetings/:id/cancel', STAFF, r => { r.send(200, { meeting: cancelMeeting(r.deps.store, r.ctx, actorOf(r), r.params.id!, String(r.body?.note ?? '')) }); });
+route('POST', '/api/meetings/:id/complete', STAFF, r => { r.send(200, { meeting: completeMeeting(r.deps.store, r.ctx, actorOf(r), r.params.id!) }); });
+route('POST', '/api/meetings/:id/calendar', STAFF, async r => {
+  const meeting = r.deps.store.meeting(r.ctx, r.params.id!);
+  if (!meeting) throw new ApiError(404, 'not_found');
+  const req = meeting.requisitionId ? r.deps.store.requisition(r.ctx, meeting.requisitionId) : null;
+  const result = await pushToCalendar(r.deps.store, r.ctx, calendarProvider(r.deps), meeting.id, { title: req?.title ?? 'Interview', description: req?.description ?? '' });
+  r.send(200, result);
+});
+route('GET', '/api/candidate/meetings', ['candidate'], r => {
+  const candidateId = candidateIdFor(r);
+  r.send(200, { meetings: r.deps.store.meetings(r.ctx, { candidateId }) });
+});
+
+/* ---------- assessments (ADR-0024) ---------- */
+route('POST', '/api/assessments', STAFF, r => {
+  r.send(200, { assessment: createAssessment(r.deps.store, r.ctx, actorOf(r), r.body ?? {}) });
+});
+route('GET', '/api/assessments', STAFF, r => {
+  r.send(200, { assessments: r.deps.store.assessments(r.ctx) });
+});
+route('GET', '/api/assessments/:id', STAFF, r => {
+  const assessment = r.deps.store.assessment(r.ctx, r.params.id!);
+  if (!assessment) throw new ApiError(404, 'not_found');
+  r.send(200, { assessment, attempts: r.deps.store.attempts(r.ctx, { assessmentId: assessment.id }) });
+});
+route('POST', '/api/assessments/:id/invite', STAFF, r => {
+  const candidateId = String(r.body?.candidateId ?? '');
+  if (!candidateId) throw new ApiError(400, 'candidate_required');
+  r.send(200, { attempt: inviteAttempt(r.deps.store, r.ctx, actorOf(r), r.params.id!, candidateId, r.body?.applicationId ?? null) });
+});
+route('POST', '/api/assessments/:id/rescore', STAFF, r => {
+  r.send(200, rescoreAssessment(r.deps.store, r.ctx, r.params.id!));
+});
+
+route('GET', '/api/candidate/attempts', ['candidate'], r => {
+  const candidateId = candidateIdFor(r);
+  r.send(200, { attempts: r.deps.store.attempts(r.ctx, { candidateId }).map(candidateAttemptView) });
+});
+route('POST', '/api/attempts/:id/start', ['candidate'], r => {
+  const attempt = r.deps.store.attempt(r.ctx, r.params.id!);
+  if (!attempt || attempt.candidateId !== candidateIdFor(r)) throw new ApiError(404, 'not_found');
+  const started = startAttempt(r.deps.store, r.ctx, attempt.id);
+  const assessment = r.deps.store.assessment(r.ctx, attempt.assessmentId)!;
+  /* The candidate sees the questions without the correct answers. */
+  r.send(200, { attempt: candidateAttemptView(started), questions: assessment.questions.map(q => ({ id: q.id, prompt: q.prompt, type: q.type, options: q.options, points: q.points, competency: q.competency })) });
+});
+route('POST', '/api/attempts/:id/submit', ['candidate'], r => {
+  const attempt = r.deps.store.attempt(r.ctx, r.params.id!);
+  if (!attempt || attempt.candidateId !== candidateIdFor(r)) throw new ApiError(404, 'not_found');
+  const scored = submitAttempt(r.deps.store, r.ctx, attempt.id, (r.body?.answers ?? {}) as Record<string, string>, r.body?.durationMinutes ?? null);
+  r.send(200, { attempt: candidateAttemptView(scored) });
+});
+
+/* ---------- live interview assist and voice completion (ADR-0024) ---------- */
+function competenciesFor(r: ReqCtx, sessionCandidateId: string): string[] {
+  const app = r.deps.store.applications(r.ctx, { candidateId: sessionCandidateId }).find(a => a.primary);
+  const req = app ? r.deps.store.requisition(r.ctx, app.requisitionId) : null;
+  return req ? req.criteria.mustHaves.map(m => m.label) : [];
+}
+
+/* Live assist for the human interviewer: follow-ups, compliance risks and a
+   running scorecard from the transcript so far. Never writes anything. */
+route('POST', '/api/sessions/:id/assist', STAFF, r => {
+  const session = r.deps.store.session(r.ctx, r.params.id!);
+  if (!session) throw new ApiError(404, 'not_found');
+  const competencies = (r.body?.competencies as string[] | undefined) ?? competenciesFor(r, session.candidateId);
+  r.send(200, liveAssist(session.transcript, competencies));
+});
+route('POST', '/api/sessions/:id/complete', STAFF, r => {
+  const session = r.deps.store.session(r.ctx, r.params.id!);
+  if (!session) throw new ApiError(404, 'not_found');
+  const competencies = (r.body?.competencies as string[] | undefined) ?? competenciesFor(r, session.candidateId);
+  r.send(200, completeVoiceSession(r.deps.store, r.ctx, session.id, competencies));
+});
+/* A candidate can read the completion notes for their own session. */
+route('GET', '/api/candidate/sessions/:id/notes', ['candidate'], r => {
+  const session = r.deps.store.session(r.ctx, r.params.id!);
+  if (!session || session.candidateId !== candidateIdFor(r)) throw new ApiError(404, 'not_found');
+  r.send(200, completionNotes(session.transcript, []));
+});
+
+/* A recruiter attaches a candidate to an open requisition (bulk or one at a
+   time). The candidate may already exist or arrive by name and email. */
+route('POST', '/api/requisitions/:id/apply', STAFF, r => {
+  const result = applyToRequisition(r.deps.store, r.ctx, actorOf(r), { ...r.body, requisitionId: r.params.id!, source: r.body?.source ?? 'recruiter' });
+  r.send(200, { applicationId: result.application.id, candidateId: result.candidateId, dedup: result.dedup });
+});
+
+/* Bulk add: a list of candidate rows. One bad row never fails the batch. */
+route('POST', '/api/requisitions/:id/bulk', STAFF, r => {
+  const rows = Array.isArray(r.body?.candidates) ? r.body.candidates : [];
+  if (!rows.length) throw new ApiError(400, 'candidates_required');
+  r.send(200, bulkApply(r.deps.store, r.ctx, actorOf(r), r.params.id!, rows));
+});
+
+route('POST', '/api/applications/:id/override', STAFF, r => {  const kind = String(r.body?.kind ?? '');
+  if (!['adjust', 'include', 'exclude'].includes(kind)) throw new ApiError(400, 'bad_override');
+  const application = overrideApplication(r.deps.store, r.ctx, actorOf(r), r.params.id!, {
+    kind: kind as 'adjust', delta: r.body?.delta, reason: String(r.body?.reason ?? ''),
+  });
+  r.send(200, { application });
+});
+
 /* ---------- dispatcher ---------- */
 export async function handleApi(req: IncomingMessage, res: ServerResponse, deps: ApiDeps,
   url: URL, auth: { user: User; csrf: string } | null): Promise<boolean> {
@@ -904,10 +1260,58 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, deps:
     return true;
   }
   if (req.method === 'GET' && handlePublicProfile(deps, url, send, auth)) return true;
+  /* The apply page is public by design (ADR-0024): only an open requisition
+     resolves, and only its public fields leave the server. */
+  if (url.pathname.startsWith('/api/public/requisitions/') && req.method === 'GET') {
+    const id = url.pathname.slice('/api/public/requisitions/'.length);
+    const req0 = deps.store.publicRequisition(id);
+    if (!req0) { send(404, { error: 'not_found' }); return true; }
+    send(200, { requisition: {
+      id: req0.id, title: req0.title, department: req0.department, location: req0.location,
+      description: req0.description, headcount: req0.headcount,
+      mustHaves: req0.criteria.mustHaves.map(m => ({ id: m.id, label: m.label, required: m.required })),
+      minYears: req0.criteria.minYears, remoteOk: req0.criteria.remoteOk,
+      workAuthRequired: req0.criteria.workAuthRequired,
+    } });
+    return true;
+  }
+  if (url.pathname.startsWith('/api/public/apply/') && req.method === 'POST') {
+    const id = url.pathname.slice('/api/public/apply/'.length);
+    const body = await readBody(req);
+    const req0 = deps.store.publicRequisition(id);
+    if (!req0) { send(404, { error: 'not_found' }); return true; }
+    try {
+      const result = applyToRequisition(deps.store, { tenantId: req0.tenantId }, { id: 'public', name: 'Public applicant', role: 'candidate' }, {
+        requisitionId: req0.id, name: String(body?.name ?? ''),
+        email: body?.email ? String(body.email) : null, phone: body?.phone ? String(body.phone) : null,
+        employer: body?.employer ? String(body.employer) : '',
+        answers: (body?.answers as Record<string, string>) ?? {}, source: 'apply_page',
+      });
+      send(200, { applicationId: result.application.id, dedup: result.dedup });
+    } catch (e) {
+      if (e instanceof HiringError) { send(400, { error: e.code }); return true; }
+      throw e;
+    }
+    return true;
+  }
   /* The webhook is public but signature-authenticated: it is verified
      against the raw body before anything else runs. */
   if (url.pathname === '/api/webhooks/livekit' && req.method === 'POST') {
     await handleVoiceWebhook(req, deps, send);
+    return true;
+  }
+  if (!auth && url.pathname === '/api/auth/sso' && req.method === 'POST') {
+    const body = await readBody(req);
+    const provider = entraFromEnv(process.env, deps.fetch);
+    const user = await resolveSsoUser(deps.store, provider, String(body?.token ?? ''), body?.tenantId ? String(body.tenantId) : undefined);
+    if (!user) { send(401, { error: provider ? 'sso_rejected' : 'sso_not_configured' }); return true; }
+    const session = issueSession(user);
+    deps.store.audit(user.tenantId, user.displayName, user.role, 'login_sso', user.id);
+    res.setHeader('Set-Cookie', [
+      `certainty_s=${session.token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`,
+      `certainty_csrf=${session.csrf}; Path=/; SameSite=Lax; Max-Age=43200`,
+    ]);
+    send(200, { user: { id: user.id, email: user.email, role: user.role, displayName: user.displayName, tenantId: user.tenantId } });
     return true;
   }
   if (!auth) { send(401, { error: 'unauthenticated' }); return true; }
@@ -931,6 +1335,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, deps:
     });
   } catch (e) {
     if (e instanceof ApiError) send(e.status, { error: e.code });
+    else if (e instanceof HiringError) send(e.code === 'not_found' ? 404 : e.code === 'not_approver' ? 403 : 409, { error: e.code });
+    else if (e instanceof OfferError) send(e.code.endsWith('not_found') ? 404 : e.code === 'not_approver' ? 403 : 409, { error: e.code });
+    else if (e instanceof CommunicationError) send(e.code === 'not_found' || e.code === 'candidate_not_found' ? 404 : 409, { error: e.code });
+    else if (e instanceof SchedulingError) send(e.code.endsWith('not_found') ? 404 : e.code.startsWith('invalid_') ? 400 : 409, { error: e.code });
+    else if (e instanceof AssessmentError) send(e.code === 'not_found' || e.code === 'candidate_not_found' ? 404 : e.code.endsWith('_required') ? 400 : 409, { error: e.code });
     else if (e instanceof FlowError) send(e.code === 'active_session_exists' ? 409 : 409, { error: e.code });
     else if (e instanceof Error && e.message.startsWith('module_not_entitled')) send(402, { error: e.message });
     else {

@@ -999,3 +999,134 @@ Verified: typecheck, 89/89 tests (no behaviour changed), and screenshots of
 the recruiter pipeline and candidate detail, candidate dashboard and
 portfolio, admin audit, login and the public profile, light and dark, at
 1440, 900 and 390px.
+
+## ADR-0024: The hiring data model: requisitions, applications, and per-tenant hiring models
+
+Date: 2026-10-02. Status: accepted. Governs phase 1 (the "build now, fully
+real" plan): every feature in it extends this model and keeps no private copy.
+
+**Why.** Certainty was candidate-centric: one candidate, one target role, one
+JD artifact, one pipeline stage. An enterprise hiring lifecycle needs a role
+that many candidates apply to, ranked against each other, with approvals and
+offers around it. The candidate journey (resume studio, CV, LinkedIn,
+practice) stays candidate-level and unchanged.
+
+**Tenant settings.** `tenants.settings` (JSON, additive migration):
+`hiringModel` (`agency` or `in_house`) and `timezone`. Stage sets come from
+the hiring model:
+- agency: Screening, Submission draft, With client, Interview, Offer, Placed
+- in-house: Applied, Screening, Assessment, Interview, Offer, Hired
+
+`Stage` becomes a string checked against the tenant's set; `STAGES` remains
+the agency set for existing callers.
+
+**Requisition.** A role being hired for: title, department, location,
+client (agency only), headcount, salary band (internal), description (the
+JD), status `draft -> pending_approval -> open -> closed` (or `rejected`;
+"changes requested" returns to draft), an approvals history, criteria and a
+progression rule. Criteria: must-haves (label, weight 1 to 3, required),
+minimum years, accepted locations with a remote flag, and whether work
+authorisation is required. The approver may not be the submitter.
+
+**Application.** Candidate x requisition, unique per pair, the unit of the
+pipeline: stage, status (`new`, `screened`, `shortlisted`, `knocked_out`,
+`rejected`, `withdrawn`, `hired`), source (`recruiter`, `bulk`,
+`apply_page`, `seed`), a `primary` flag, apply-form answers, the latest
+score snapshot, and an override. Stage lives here. `candidate.stage` is a
+mirror of the primary application's stage, written only by the same
+`advance` function; a test pins that the two never drift.
+
+**Scoring (deterministic, no model).** Per must-have, evidence strength from
+the shared requirement matcher (the one the profile insight uses): verified
+1.0, claimed 0.7, partly 0.35, gap 0. Weighted total, 0 to 100. Knockouts are
+evaluated apart from the score and only on explicit evidence: a required
+must-have with no evidence, years below the minimum, a location outside the
+accepted list without remote, a "no" to work authorisation. An unknown value
+is a "check" note, never a knockout. Rank is computed at read time among
+eligible applications, ties broken by verified count then application date.
+
+**Overrides.** A recruiter or HR can adjust a score (plus or minus, shown as
+its own line), include an application despite a knockout, or exclude it from
+the ranking. A reason is required; actor, role and time are stored and
+audited. An adjustment moves rank through the numbers, so every rank stays
+explainable from its components. Re-scoring never clears an override.
+
+**Progression.** A per-requisition threshold sets status automatically
+(knocked out, shortlisted, screened). Those changes are audited as
+`agent:screening`. Stage advances stay human (A9); a bulk "advance
+shortlisted" action is still a human action.
+
+**Candidates without logins.** Bulk upload and the apply page create
+candidates with no user account (`user_id` null), plus `email`, `phone` and
+`source` columns (additive). An account is created only on invitation.
+
+**De-duplication.** Before creating a candidate: same email, same phone,
+same CV hash, or the same normalised name with an overlapping employer. A
+match attaches a new application to the existing candidate and records why.
+
+**Later tables** (added in their batches, same tenant-scoped pattern):
+`offers` (versioned, approvals), `messages` (outbox and inbox with a `locale`
+field, English only in phase 1), `meetings` (scheduling), `assessments` and
+`assessment_attempts`. Stage history comes from audit `stage_advance`
+events, not a second table.
+
+**Role.** A new `hr` role approves requisitions and offers and sees every
+pipeline and the reports. It uses the recruiter app, with navigation by role.
+
+**Laws carried over.** Every store method is tenant-scoped; scores, rank,
+knockouts, overrides, salary bands and unsent offer terms are internal and
+never reach a candidate projection; every mutation is audited; agents
+suggest, humans decide.
+
+## ADR-0025: The rest of the lifecycle: communications, scheduling, assessments, live assist and SSO
+
+Date: 2026-10-02. Status: accepted. Extends ADR-0024 (batch 2 of the "build
+now, fully real" plan). Every module below is deterministic first, and every
+external service sits behind an interface that fails closed.
+
+**Communications.** Every automated candidate message is a stored `Message`,
+never a flow side effect. The template catalog has an English and an Arabic
+variant per event; the locale decides the render. The transport
+(`MessageProvider`) fails closed: with no `CERTAINTY_MESSAGE_URL`, messages
+stay `queued` and the outbox shows why. An inbound reply matching an
+escalation cue (in either language) flips to `escalated` for a human rather
+than being answered by an agent. Renders obey L8.
+
+**Scheduling.** `proposeSlots` is deterministic from windows and duration.
+A `Meeting` carries its own change history. The calendar file is a
+standards-compliant ICS any client opens. The calendar provider (Microsoft
+365 in production) fails closed: with no configured endpoint the meeting and
+the ICS still exist. Confirm and reschedule queue a reminder through the
+communications outbox. Times are UTC instants; the timezone is carried for
+display.
+
+**Assessments.** Multiple choice is exact; text and code score on rubric term
+coverage. No model is in the scoring path, so a score never moves between
+identical runs. Scores are min-max normalized across the cohort, recomputed
+on every submit. Anomalies (`fast_completion`, `impossible_speed`,
+`straightlining`, `duplicate_attempt`, `outlier`) are flagged to aid a human,
+never to change the score. The candidate view carries no flags.
+
+**Live interview assist and voice completion.** Follow-up suggestions target
+the weakest part of each answer (no result, no context, "we" for decisions),
+one per answer. Compliance-sensitive **questions** (age, family status,
+religion, national origin, health or disability, political affiliation,
+gender or orientation) are flagged to the interviewer, never accused.
+`completeVoiceSession` evaluates the transcript, writes the metrics and a
+deterministic summary with structured notes, and marks the session complete.
+
+**Model-assisted parsing.** The deterministic parser in `agents.ts` is the
+floor and always runs first. The model is consulted only when it found no
+roles, only on sanitized text (L1), and only its shape-validated output is
+used; anything otherwise falls back to the scripted result. The provider is
+optional in `ApiDeps`.
+
+**SSO.** Microsoft Entra sits behind an `SsoProvider`. The route is public
+but verified, fails closed with no configured verify URL, and never creates
+an account: a person is signed in only if their email already has a user, and
+only in that user's tenant.
+
+**Frontend.** The recruiter app gains Requisitions, Requisition detail
+(ranked pipeline, overrides, offers) and Reports (HR and admin only). The
+candidate app gains Offers (accept or decline). A public apply page at
+`/apply/:id` renders only open requisitions and only their public fields.

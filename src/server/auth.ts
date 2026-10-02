@@ -46,6 +46,15 @@ export function logout(token: string): void {
   sessions.delete(hashToken(token));
 }
 
+/* Issue a session for a user proven by another means (SSO). Same TTL and
+   CSRF handling as a password login. */
+export function issueSession(user: User): { token: string; csrf: string } {
+  const token = randomBytes(32).toString('base64url');
+  const csrf = randomBytes(16).toString('base64url');
+  sessions.set(hashToken(token), { userId: user.id, exp: Date.now() + SESSION_TTL_MS, csrf });
+  return { token, csrf };
+}
+
 export function sessionFor(token: string): AuthSession | null {
   const s = sessions.get(hashToken(token));
   if (!s) return null;

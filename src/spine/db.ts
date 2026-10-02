@@ -6,8 +6,10 @@ import { randomUUID } from 'node:crypto';
 import type {
   Artifact, AuditEvent, Candidate, CandidateTask, ConsentRecord, FlowDef,
   FlowRun, Flag, InterviewSession, ModuleEntitlement, QuarantineEvent,
-  Tenant, UsageMeter, User, Role,
+  Tenant, UsageMeter, User, Role, TenantSettings, Requisition, Application, Offer, Message, Meeting,
+  Assessment, AssessmentAttempt,
 } from './types.ts';
+import { DEFAULT_TENANT_SETTINGS } from './types.ts';
 
 export interface Ctx { tenantId: string }
 
@@ -34,6 +36,16 @@ export class Store {
       .map(c => c.name);
     if (!userCols.includes('must_change_password')) {
       this.db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+    }
+    /* ADR-0024: tenant settings, and contact fields for candidates who
+       arrive without a login. */
+    const tenantCols = (this.db.prepare('PRAGMA table_info(tenants)').all() as unknown as Array<{ name: string }>)
+      .map(c => c.name);
+    if (!tenantCols.includes('settings')) {
+      this.db.exec("ALTER TABLE tenants ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'");
+    }
+    for (const col of ['email', 'phone', 'source']) {
+      if (!cols.includes(col)) this.db.exec(`ALTER TABLE candidates ADD COLUMN ${col} TEXT`);
     }
   }
 
@@ -109,6 +121,47 @@ export class Store {
         flow_id TEXT NOT NULL, agent TEXT NOT NULL, version INTEGER NOT NULL,
         body TEXT NOT NULL, created_at TEXT NOT NULL,
         PRIMARY KEY (flow_id, agent, version));
+      CREATE TABLE IF NOT EXISTS requisitions (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, status TEXT NOT NULL,
+        data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS applications (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, requisition_id TEXT NOT NULL,
+        candidate_id TEXT NOT NULL, stage TEXT NOT NULL, status TEXT NOT NULL,
+        is_primary INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        UNIQUE (tenant_id, requisition_id, candidate_id));
+      CREATE INDEX IF NOT EXISTS ix_requisitions_tenant ON requisitions(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS ix_applications_req ON applications(tenant_id, requisition_id);
+      CREATE INDEX IF NOT EXISTS ix_applications_cand ON applications(tenant_id, candidate_id);
+      CREATE TABLE IF NOT EXISTS offers (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, requisition_id TEXT NOT NULL,
+        application_id TEXT NOT NULL, candidate_id TEXT NOT NULL, status TEXT NOT NULL,
+        data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS ix_offers_tenant ON offers(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS ix_offers_app ON offers(tenant_id, application_id);
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, candidate_id TEXT NOT NULL,
+        application_id TEXT, channel TEXT NOT NULL, direction TEXT NOT NULL,
+        locale TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL,
+        created_at TEXT NOT NULL, sent_at TEXT);
+      CREATE INDEX IF NOT EXISTS ix_messages_tenant ON messages(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS ix_messages_cand ON messages(tenant_id, candidate_id);
+      CREATE TABLE IF NOT EXISTS meetings (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, candidate_id TEXT NOT NULL,
+        application_id TEXT, starts_at TEXT NOT NULL, status TEXT NOT NULL,
+        data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS ix_meetings_tenant ON meetings(tenant_id, starts_at);
+      CREATE INDEX IF NOT EXISTS ix_meetings_cand ON meetings(tenant_id, candidate_id);
+      CREATE TABLE IF NOT EXISTS assessments (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, data TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS assessment_attempts (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, assessment_id TEXT NOT NULL,
+        candidate_id TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS ix_assessments_tenant ON assessments(tenant_id);
+      CREATE INDEX IF NOT EXISTS ix_attempts_assessment ON assessment_attempts(tenant_id, assessment_id);
+      CREATE INDEX IF NOT EXISTS ix_attempts_cand ON assessment_attempts(tenant_id, candidate_id);
       CREATE INDEX IF NOT EXISTS ix_candidates_tenant ON candidates(tenant_id);
       CREATE INDEX IF NOT EXISTS ix_audit_tenant ON audit_events(tenant_id, ts);
       CREATE INDEX IF NOT EXISTS ix_flags_tenant ON flags(tenant_id, candidate_id);
@@ -150,6 +203,14 @@ export class Store {
     const row = this.db.prepare('SELECT name FROM tenants WHERE id = ?').get(ctx.tenantId) as { name: string } | undefined;
     return row?.name ?? null;
   }
+  tenantSettings(ctx: Ctx): TenantSettings {
+    const row = this.db.prepare('SELECT settings FROM tenants WHERE id = ?').get(ctx.tenantId) as { settings: string } | undefined;
+    return { ...DEFAULT_TENANT_SETTINGS, ...(row ? JSON.parse(row.settings) as Partial<TenantSettings> : {}) };
+  }
+  setTenantSettings(ctx: Ctx, patch: Partial<TenantSettings>): void {
+    const next = { ...this.tenantSettings(ctx), ...patch };
+    this.db.prepare('UPDATE tenants SET settings = ? WHERE id = ?').run(JSON.stringify(next), ctx.tenantId);
+  }
   createUser(tenantId: string, email: string, passwordHash: string, role: Role, displayName: string): User {
     const u: User = {
       id: randomUUID(), tenantId, email: email.toLowerCase(), passwordHash,
@@ -186,11 +247,12 @@ export class Store {
   insertCandidate(c: Candidate): void {
     this.db.prepare(`INSERT INTO candidates (id, tenant_id, user_id, name, target_role, target_company,
       employer, tenure, cv_tenure_start, cv_tenure_end, stage, parked, linkedin_status,
-      current_compensation, comp_expectations, notice_period, motivation, created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      current_compensation, comp_expectations, notice_period, motivation, created_at, email, phone, source)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(c.id, c.tenantId, c.userId, c.name, c.targetRole, c.targetCompany, c.employer, c.tenure,
         c.cvTenureStart, c.cvTenureEnd, c.stage, c.parked ? 1 : 0, c.linkedinStatus,
-        c.currentCompensation, c.compExpectations, c.noticePeriod, c.motivation, c.createdAt);
+        c.currentCompensation, c.compExpectations, c.noticePeriod, c.motivation, c.createdAt,
+        c.email ?? null, c.phone ?? null, c.source ?? null);
   }
   candidate(ctx: Ctx, id: string): Candidate | null {
     const row = this.db.prepare('SELECT * FROM candidates WHERE tenant_id = ? AND id = ?')
@@ -220,6 +282,8 @@ export class Store {
       currentCompensation: 'current_compensation', compExpectations: 'comp_expectations',
       noticePeriod: 'notice_period', motivation: 'motivation',
       cvTenureStart: 'cv_tenure_start', cvTenureEnd: 'cv_tenure_end',
+      userId: 'user_id', email: 'email', phone: 'phone', employer: 'employer', tenure: 'tenure',
+      targetRole: 'target_role', name: 'name',
     };
     for (const [k, col] of Object.entries(map)) {
       if (k in patch) {
@@ -372,6 +436,182 @@ export class Store {
     return row ? rowToArtifact(row) : null;
   }
 
+  /* ---- requisitions (ADR-0024) ---- */
+  insertRequisition(r: Requisition): void {
+    this.db.prepare('INSERT INTO requisitions (id, tenant_id, status, data, created_at, updated_at) VALUES (?,?,?,?,?,?)')
+      .run(r.id, r.tenantId, r.status, JSON.stringify(r), r.createdAt, r.updatedAt);
+    this.emit(r.tenantId, 'requisition.changed', { id: r.id });
+  }
+  requisition(ctx: Ctx, id: string): Requisition | null {
+    const row = this.db.prepare('SELECT data FROM requisitions WHERE tenant_id = ? AND id = ?').get(ctx.tenantId, id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Requisition : null;
+  }
+  requisitions(ctx: Ctx): Requisition[] {
+    return (this.db.prepare('SELECT data FROM requisitions WHERE tenant_id = ? ORDER BY created_at').all(ctx.tenantId) as Array<{ data: string }>)
+      .map(r => JSON.parse(r.data) as Requisition);
+  }
+  updateRequisition(ctx: Ctx, r: Requisition): void {
+    const next = { ...r, tenantId: ctx.tenantId, updatedAt: new Date().toISOString() };
+    this.db.prepare('UPDATE requisitions SET status = ?, data = ?, updated_at = ? WHERE tenant_id = ? AND id = ?')
+      .run(next.status, JSON.stringify(next), next.updatedAt, ctx.tenantId, r.id);
+    this.emit(ctx.tenantId, 'requisition.changed', { id: r.id });
+  }
+  /* Apply-page lookups have no session: the requisition id is the public
+     handle, and only an open requisition resolves (like publicProfilePage). */
+  publicRequisition(id: string): Requisition | null {
+    const row = this.db.prepare("SELECT data FROM requisitions WHERE id = ? AND status = 'open'").get(id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Requisition : null;
+  }
+
+  /* ---- applications (ADR-0024) ---- */
+  insertApplication(a: Application): void {
+    this.db.prepare(`INSERT INTO applications (id, tenant_id, requisition_id, candidate_id, stage, status,
+      is_primary, data, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+      .run(a.id, a.tenantId, a.requisitionId, a.candidateId, a.stage, a.status, a.primary ? 1 : 0,
+        JSON.stringify(a), a.createdAt, a.updatedAt);
+    this.emit(a.tenantId, 'application.changed', { id: a.id, candidateId: a.candidateId, requisitionId: a.requisitionId });
+  }
+  application(ctx: Ctx, id: string): Application | null {
+    const row = this.db.prepare('SELECT data FROM applications WHERE tenant_id = ? AND id = ?').get(ctx.tenantId, id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Application : null;
+  }
+  applicationFor(ctx: Ctx, requisitionId: string, candidateId: string): Application | null {
+    const row = this.db.prepare('SELECT data FROM applications WHERE tenant_id = ? AND requisition_id = ? AND candidate_id = ?')
+      .get(ctx.tenantId, requisitionId, candidateId) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Application : null;
+  }
+  applications(ctx: Ctx, filter: { requisitionId?: string; candidateId?: string } = {}): Application[] {
+    const where = ['tenant_id = ?']; const vals: string[] = [ctx.tenantId];
+    if (filter.requisitionId) { where.push('requisition_id = ?'); vals.push(filter.requisitionId); }
+    if (filter.candidateId) { where.push('candidate_id = ?'); vals.push(filter.candidateId); }
+    return (this.db.prepare(`SELECT data FROM applications WHERE ${where.join(' AND ')} ORDER BY created_at`).all(...vals) as Array<{ data: string }>)
+      .map(r => JSON.parse(r.data) as Application);
+  }
+  updateApplication(ctx: Ctx, a: Application): void {
+    const next = { ...a, tenantId: ctx.tenantId, updatedAt: new Date().toISOString() };
+    this.db.prepare('UPDATE applications SET stage = ?, status = ?, is_primary = ?, data = ?, updated_at = ? WHERE tenant_id = ? AND id = ?')
+      .run(next.stage, next.status, next.primary ? 1 : 0, JSON.stringify(next), next.updatedAt, ctx.tenantId, a.id);
+    this.emit(ctx.tenantId, 'application.changed', { id: a.id, candidateId: a.candidateId, requisitionId: a.requisitionId });
+  }
+
+  /* ---- offers (ADR-0024) ---- */
+  insertOffer(o: Offer): void {
+    this.db.prepare('INSERT INTO offers (id, tenant_id, requisition_id, application_id, candidate_id, status, data, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(o.id, o.tenantId, o.requisitionId, o.applicationId, o.candidateId, o.status, JSON.stringify(o), o.createdAt, o.updatedAt);
+    this.emit(o.tenantId, 'offer.changed', { id: o.id, candidateId: o.candidateId, applicationId: o.applicationId });
+  }
+  offer(ctx: Ctx, id: string): Offer | null {
+    const row = this.db.prepare('SELECT data FROM offers WHERE tenant_id = ? AND id = ?').get(ctx.tenantId, id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Offer : null;
+  }
+  offerForApplication(ctx: Ctx, applicationId: string): Offer | null {
+    const row = this.db.prepare('SELECT data FROM offers WHERE tenant_id = ? AND application_id = ?').get(ctx.tenantId, applicationId) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Offer : null;
+  }
+  offers(ctx: Ctx, filter: { requisitionId?: string; candidateId?: string } = {}): Offer[] {
+    const where = ['tenant_id = ?']; const vals: string[] = [ctx.tenantId];
+    if (filter.requisitionId) { where.push('requisition_id = ?'); vals.push(filter.requisitionId); }
+    if (filter.candidateId) { where.push('candidate_id = ?'); vals.push(filter.candidateId); }
+    return (this.db.prepare(`SELECT data FROM offers WHERE ${where.join(' AND ')} ORDER BY created_at`).all(...vals) as Array<{ data: string }>)
+      .map(r => JSON.parse(r.data) as Offer);
+  }
+  updateOffer(ctx: Ctx, o: Offer): void {
+    const next = { ...o, tenantId: ctx.tenantId, updatedAt: new Date().toISOString() };
+    this.db.prepare('UPDATE offers SET status = ?, data = ?, updated_at = ? WHERE tenant_id = ? AND id = ?')
+      .run(next.status, JSON.stringify(next), next.updatedAt, ctx.tenantId, o.id);
+    this.emit(ctx.tenantId, 'offer.changed', { id: o.id, candidateId: o.candidateId, applicationId: o.applicationId });
+  }
+
+  /* ---- messages (ADR-0024) ---- */
+  insertMessage(m: Message): void {
+    this.db.prepare('INSERT INTO messages (id, tenant_id, candidate_id, application_id, channel, direction, locale, status, data, created_at, sent_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      .run(m.id, m.tenantId, m.candidateId, m.applicationId, m.channel, m.direction, m.locale, m.status, JSON.stringify(m), m.createdAt, m.sentAt);
+    this.emit(m.tenantId, 'message.changed', { id: m.id, candidateId: m.candidateId, status: m.status });
+  }
+  message(ctx: Ctx, id: string): Message | null {
+    const row = this.db.prepare('SELECT data FROM messages WHERE tenant_id = ? AND id = ?').get(ctx.tenantId, id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Message : null;
+  }
+  messages(ctx: Ctx, filter: { candidateId?: string; status?: string; channel?: string } = {}): Message[] {
+    const where = ['tenant_id = ?']; const vals: string[] = [ctx.tenantId];
+    if (filter.candidateId) { where.push('candidate_id = ?'); vals.push(filter.candidateId); }
+    if (filter.status) { where.push('status = ?'); vals.push(filter.status); }
+    if (filter.channel) { where.push('channel = ?'); vals.push(filter.channel); }
+    return (this.db.prepare(`SELECT data FROM messages WHERE ${where.join(' AND ')} ORDER BY created_at`).all(...vals) as Array<{ data: string }>)
+      .map(r => JSON.parse(r.data) as Message);
+  }
+  updateMessage(ctx: Ctx, m: Message): void {
+    const next = { ...m, tenantId: ctx.tenantId };
+    this.db.prepare('UPDATE messages SET status = ?, data = ?, sent_at = ? WHERE tenant_id = ? AND id = ?')
+      .run(next.status, JSON.stringify(next), next.sentAt, ctx.tenantId, m.id);
+    this.emit(ctx.tenantId, 'message.changed', { id: m.id, candidateId: m.candidateId, status: next.status });
+  }
+
+  /* ---- meetings (ADR-0024) ---- */
+  insertMeeting(m: Meeting): void {
+    this.db.prepare('INSERT INTO meetings (id, tenant_id, candidate_id, application_id, starts_at, status, data, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(m.id, m.tenantId, m.candidateId, m.applicationId, m.startsAt, m.status, JSON.stringify(m), m.createdAt, m.updatedAt);
+    this.emit(m.tenantId, 'meeting.changed', { id: m.id, candidateId: m.candidateId, status: m.status });
+  }
+  meeting(ctx: Ctx, id: string): Meeting | null {
+    const row = this.db.prepare('SELECT data FROM meetings WHERE tenant_id = ? AND id = ?').get(ctx.tenantId, id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Meeting : null;
+  }
+  meetings(ctx: Ctx, filter: { candidateId?: string; status?: string } = {}): Meeting[] {
+    const where = ['tenant_id = ?']; const vals: string[] = [ctx.tenantId];
+    if (filter.candidateId) { where.push('candidate_id = ?'); vals.push(filter.candidateId); }
+    if (filter.status) { where.push('status = ?'); vals.push(filter.status); }
+    return (this.db.prepare(`SELECT data FROM meetings WHERE ${where.join(' AND ')} ORDER BY starts_at`).all(...vals) as Array<{ data: string }>)
+      .map(r => JSON.parse(r.data) as Meeting);
+  }
+  updateMeeting(ctx: Ctx, m: Meeting): void {
+    const next = { ...m, tenantId: ctx.tenantId, updatedAt: new Date().toISOString() };
+    this.db.prepare('UPDATE meetings SET starts_at = ?, status = ?, data = ?, updated_at = ? WHERE tenant_id = ? AND id = ?')
+      .run(next.startsAt, next.status, JSON.stringify(next), next.updatedAt, ctx.tenantId, m.id);
+    this.emit(ctx.tenantId, 'meeting.changed', { id: m.id, candidateId: m.candidateId, status: next.status });
+  }
+
+  /* ---- assessments (ADR-0024) ---- */
+  insertAssessment(a: Assessment): void {
+    this.db.prepare('INSERT INTO assessments (id, tenant_id, data, created_at, updated_at) VALUES (?,?,?,?,?)')
+      .run(a.id, a.tenantId, JSON.stringify(a), a.createdAt, a.updatedAt);
+  }
+  assessment(ctx: Ctx, id: string): Assessment | null {
+    const row = this.db.prepare('SELECT data FROM assessments WHERE tenant_id = ? AND id = ?').get(ctx.tenantId, id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as Assessment : null;
+  }
+  assessments(ctx: Ctx): Assessment[] {
+    return (this.db.prepare('SELECT data FROM assessments WHERE tenant_id = ? ORDER BY created_at').all(ctx.tenantId) as Array<{ data: string }>)
+      .map(r => JSON.parse(r.data) as Assessment);
+  }
+  updateAssessment(ctx: Ctx, a: Assessment): void {
+    const next = { ...a, tenantId: ctx.tenantId, updatedAt: new Date().toISOString() };
+    this.db.prepare('UPDATE assessments SET data = ?, updated_at = ? WHERE tenant_id = ? AND id = ?')
+      .run(JSON.stringify(next), next.updatedAt, ctx.tenantId, a.id);
+  }
+  insertAttempt(a: AssessmentAttempt): void {
+    this.db.prepare('INSERT INTO assessment_attempts (id, tenant_id, assessment_id, candidate_id, status, data, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)')
+      .run(a.id, a.tenantId, a.assessmentId, a.candidateId, a.status, JSON.stringify(a), a.createdAt, a.updatedAt);
+    this.emit(a.tenantId, 'attempt.changed', { id: a.id, candidateId: a.candidateId, status: a.status });
+  }
+  attempt(ctx: Ctx, id: string): AssessmentAttempt | null {
+    const row = this.db.prepare('SELECT data FROM assessment_attempts WHERE tenant_id = ? AND id = ?').get(ctx.tenantId, id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) as AssessmentAttempt : null;
+  }
+  attempts(ctx: Ctx, filter: { assessmentId?: string; candidateId?: string } = {}): AssessmentAttempt[] {
+    const where = ['tenant_id = ?']; const vals: string[] = [ctx.tenantId];
+    if (filter.assessmentId) { where.push('assessment_id = ?'); vals.push(filter.assessmentId); }
+    if (filter.candidateId) { where.push('candidate_id = ?'); vals.push(filter.candidateId); }
+    return (this.db.prepare(`SELECT data FROM assessment_attempts WHERE ${where.join(' AND ')} ORDER BY created_at`).all(...vals) as Array<{ data: string }>)
+      .map(r => JSON.parse(r.data) as AssessmentAttempt);
+  }
+  updateAttempt(ctx: Ctx, a: AssessmentAttempt): void {
+    const next = { ...a, tenantId: ctx.tenantId, updatedAt: new Date().toISOString() };
+    this.db.prepare('UPDATE assessment_attempts SET status = ?, data = ?, updated_at = ? WHERE tenant_id = ? AND id = ?')
+      .run(next.status, JSON.stringify(next), next.updatedAt, ctx.tenantId, a.id);
+    this.emit(ctx.tenantId, 'attempt.changed', { id: a.id, candidateId: a.candidateId, status: next.status });
+  }
+
   /* ---- quarantine events ---- */
   insertQuarantineEvent(q: QuarantineEvent): void {
     this.db.prepare(
@@ -513,6 +753,7 @@ function rowToCandidate(r: any): Candidate {
     stage: r.stage, parked: !!r.parked, linkedinStatus: r.linkedin_status,
     currentCompensation: r.current_compensation, compExpectations: r.comp_expectations,
     noticePeriod: r.notice_period, motivation: r.motivation, createdAt: r.created_at,
+    email: r.email ?? null, phone: r.phone ?? null, source: r.source ?? null,
   };
 }
 function rowToConsent(r: any): ConsentRecord {

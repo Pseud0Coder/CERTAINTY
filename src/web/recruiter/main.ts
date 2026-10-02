@@ -4,6 +4,7 @@ import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, setWidthPct, set
   railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, sealGauge,
   uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
 import type { MarkState, IconName } from '../shared/dom.js';
+import { renderRequisitions, renderRequisitionDetail, renderReports, type HiringCtx } from './hiring.js';
 
 interface Me { user: { id: string; role: string; displayName: string; tenantId: string }; tenantName: string | null; entitlements: string[]; stages: string[] }
 interface CandidateCard { id: string; name: string; targetRole: string; stage: string; parked: boolean; openFlags: number; verifyFlags: number }
@@ -21,12 +22,15 @@ interface Detail {
 let me: Me;
 let view = 'pipeline';
 let detailId: string | null = null;
+let requisitionId: string | null = null;
 const root = document.getElementById('root')!;
 
-const NAV: Array<{ id: string; label: string; module: string; icon: IconName }> = [
+const NAV: Array<{ id: string; label: string; module: string; icon: IconName; roles?: string[] }> = [
   { id: 'pipeline', label: 'Pipeline', module: 'pipeline', icon: 'pipeline' },
+  { id: 'requisitions', label: 'Requisitions', module: 'pipeline', icon: 'builder' },
   { id: 'builder', label: 'Submission builder', module: 'builder', icon: 'builder' },
   { id: 'notes', label: 'Notes', module: 'notes', icon: 'notes' },
+  { id: 'reports', label: 'Reports', module: 'pipeline', icon: 'pipeline', roles: ['hr', 'admin'] },
 ];
 
 function entitled(m: string): boolean { return me.entitlements.includes(m); }
@@ -50,8 +54,9 @@ function renderShell(): void {
   const app = h('div', { class: 'app' });
   const rail = h('aside', { class: 'rail' }, railHead('Recruiter'));
   const nav = h('nav', { class: 'nav', 'aria-label': 'Recruiter' });
-  const current = view === 'detail' ? 'pipeline' : view;
+  const current = view === 'detail' ? 'pipeline' : view === 'requisition' ? 'requisitions' : view;
   for (const item of NAV) {
+    if (item.roles && !item.roles.includes(me.user.role)) continue;
     const b = h('button', { class: 'nav-item', 'aria-current': current === item.id ? 'page' : 'false', title: item.label },
       icon(item.icon), h('span', { class: 'lbl' }, item.label));
     if (!entitled(item.module)) b.setAttribute('aria-disabled', 'true');
@@ -70,8 +75,17 @@ async function renderView(): Promise<void> {
   clear(content);
   const label = NAV.find(n => n.id === view)?.label;
   if (label) setCrumbs([{ label }]);
+  const hiring: HiringCtx = {
+    role: me.user.role,
+    stages: me.stages,
+    onChange: () => renderView(),
+    onOpen: (id: string) => { requisitionId = id; view = 'requisition'; renderShell(); renderView(); },
+  };
   try {
     if (view === 'pipeline') await renderPipeline(content);
+    else if (view === 'requisitions') await renderRequisitions(content, hiring);
+    else if (view === 'requisition' && requisitionId) await renderRequisitionDetail(content, requisitionId, hiring);
+    else if (view === 'reports') await renderReports(content);
     else if (view === 'builder') await renderBuilder(content);
     else if (view === 'notes') await renderNotes(content);
     else if (view === 'detail' && detailId) await renderDetail(content, detailId);

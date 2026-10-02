@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certainty mockup B: Instrument</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Direction B, "Instrument". Certainty as a measuring device: a dark
+   console, a dot grid, tick marks, monospaced readouts. One signal colour
+   (lime) means verified and nothing else; cyan is claimed, coral a gap.
+   Symmetric bento grid on 8px units; every panel shares one header style. */
+:root{
+  --bg:#08090B; --panel:#0F1114; --panel-2:#14171B; --line:#1D2126; --line-2:#2A2F36;
+  --ink:#ECEEF1; --ink-2:#9AA3AE; --ink-3:#5C6570;
+  --lime:#C8F04A; --lime-dim:rgba(200,240,74,.14); --cyan:#5CC8E8; --cyan-dim:rgba(92,200,232,.14);
+  --coral:#FF7A66; --coral-dim:rgba(255,122,102,.14); --amber:#F2B84B;
+  --sans:'Geist',system-ui,sans-serif; --mono:'Geist Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0}
+html,body{background:#050607}
+body{font:400 14px/1.5 var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.stage{width:1440px;transform-origin:top left}
+.app{width:1440px;min-height:1080px;background:var(--bg);background-image:radial-gradient(circle at 1px 1px,#1A1E23 1px,transparent 0);background-size:24px 24px;display:grid;grid-template-columns:72px 1fr}
+
+/* icon rail */
+.rail{border-right:1px solid var(--line);background:rgba(8,9,11,.85);display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:6px}
+.mark{width:36px;height:36px;margin-bottom:22px}
+.ri{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;color:var(--ink-3)}
+.ri.on{background:var(--panel-2);color:var(--lime);box-shadow:inset 0 0 0 1px var(--line-2)}
+.ri svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.rail .sp{flex:1}
+.me{width:34px;height:34px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line-2);display:grid;place-items:center;font:600 11px var(--mono);color:var(--ink-2)}
+
+.wrap{padding:28px 40px 48px}
+.bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.path{font:500 12px var(--mono);color:var(--ink-3);letter-spacing:.02em}
+.path b{color:var(--ink-2);font-weight:500}
+.search{width:360px;height:38px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 14px;color:var(--ink-3);font:400 13px var(--sans)}
+.search kbd{margin-left:auto;font:500 11px var(--mono);padding:2px 6px;border:1px solid var(--line-2);border-radius:5px}
+
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.p{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:22px;position:relative;overflow:hidden}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.ph h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);display:flex;gap:10px;align-items:center}
+.ph h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--lime);box-shadow:0 0 10px var(--lime)}
+.ph span{font:400 12px var(--mono);color:var(--ink-3)}
+
+/* hero: identity left, gauge centre, readouts right (mirror widths) */
+.hero{grid-column:1/-1;display:grid;grid-template-columns:1fr 280px 1fr;align-items:center;padding:28px 32px}
+.id h1{font:600 40px/1.05 var(--sans);letter-spacing:-.03em}
+.id p{color:var(--ink-2);margin-top:8px;font-size:15px}
+.chips{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.chip{font:500 12px var(--mono);padding:5px 10px;border-radius:7px;background:var(--panel);border:1px solid var(--line-2);color:var(--ink-2)}
+.chip.l{color:var(--lime);border-color:rgba(200,240,74,.35);background:var(--lime-dim)}
+.gauge{justify-self:center;position:relative;width:240px;height:240px}
+.gauge .c{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.gauge .c b{font:600 56px/1 var(--sans);letter-spacing:-.04em}
+.gauge .c b span{color:var(--ink-3);font-weight:500;font-size:30px}
+.gauge .c small{font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-top:8px}
+.read{justify-self:end;display:grid;grid-template-columns:repeat(2,140px);gap:12px}
+.r{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.r small{font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.r b{display:block;font:500 26px/1.1 var(--mono);margin-top:6px}
+.r b.l{color:var(--lime)}.r b.c{color:var(--cyan)}.r b.k{color:var(--coral)}
+.acts{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:14px 32px;border-top:1px solid var(--line);margin:24px -32px -28px;background:rgba(0,0,0,.25)}
+.acts .meta{display:flex;gap:22px;font:400 12.5px var(--mono);color:var(--ink-3)}
+.acts .meta i{font-style:normal;color:var(--lime)}
+.btn{font:500 13px var(--sans);height:36px;padding:0 16px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel-2);color:var(--ink)}
+.btn.p{background:var(--lime);border-color:var(--lime);color:#0B0D0F;font-weight:600}
+.bs{display:flex;gap:8px}
+
+.c8{grid-column:span 8}.c4{grid-column:span 4}.c6{grid-column:span 6}.c12{grid-column:1/-1}
+
+/* evidence matrix */
+.mx{display:grid;gap:8px}
+.mr{display:grid;grid-template-columns:22px 1fr repeat(3,92px) 100px;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+.mr .n{font:500 14px var(--sans)}
+.mr .q{font:400 12px var(--mono);color:var(--ink-3);margin-top:2px}
+.cell{height:26px;border-radius:6px;display:grid;place-items:center;font:500 11px var(--mono);color:var(--ink-3);border:1px dashed var(--line-2)}
+.cell.l{background:var(--lime-dim);border:1px solid rgba(200,240,74,.35);color:var(--lime)}
+.cell.c{background:var(--cyan-dim);border:1px solid rgba(92,200,232,.35);color:var(--cyan)}
+.cell.h{background:transparent;border:1px solid rgba(242,184,75,.4);color:var(--amber)}
+.verdict{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;text-align:right}
+.mh{display:grid;grid-template-columns:22px 1fr repeat(3,92px) 100px;gap:12px;padding:0 14px 6px;font:500 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.mh span{text-align:center}.mh span:last-child{text-align:right}
+.dot{width:10px;height:10px;border-radius:3px}
+
+/* STAR readout */
+.st{display:grid;gap:16px}
+.st-row{display:grid;grid-template-columns:24px 1fr 78px;gap:12px;align-items:center}
+.st-row b{font:600 13px var(--mono);color:var(--ink-2)}
+.st-row em{font-style:normal;font:500 12px var(--mono);color:var(--ink-2);text-align:right}
+.tk{position:relative;height:10px;border-radius:3px;background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 10px),var(--panel)}
+.tk .f{position:absolute;inset:0 auto 0 0;border-radius:3px;background:linear-gradient(90deg,rgba(200,240,74,.35),var(--lime))}
+.tk .t{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);box-shadow:0 0 0 2px var(--bg)}
+.own{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* journey line */
+.jl{display:grid;grid-template-columns:repeat(6,1fr);position:relative;margin-top:6px}
+.jl::before{content:"";position:absolute;left:8.3%;right:8.3%;top:13px;height:2px;background:var(--lime);box-shadow:0 0 12px rgba(200,240,74,.5)}
+.jn{text-align:center;position:relative}
+.jn i{display:grid;place-items:center;margin:0 auto;width:28px;height:28px;border-radius:50%;background:var(--bg);border:2px solid var(--lime);color:var(--lime);font:600 11px var(--mono)}
+.jn.now i{background:var(--lime);color:#0B0D0F;box-shadow:0 0 0 6px var(--lime-dim)}
+.jn b{display:block;font:500 13px var(--sans);margin-top:10px}
+.jn span{font:400 11.5px var(--mono);color:var(--ink-3)}
+
+/* portfolio + flags */
+.pf{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pc{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.pc .t{display:flex;justify-content:space-between;align-items:center}
+.pc .t b{font:500 14px var(--sans)}
+.pc .big{font:500 34px/1 var(--mono);margin-top:14px}
+.pc p{font:400 12px var(--mono);color:var(--ink-3);margin-top:6px}
+.spark{display:flex;gap:3px;align-items:flex-end;height:28px;margin-top:12px}
+.spark i{flex:1;background:var(--lime);opacity:.75;border-radius:1px}
+.fl{display:grid;gap:10px}
+.fr{display:grid;grid-template-columns:4px 1fr auto;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px 12px 0;overflow:hidden}
+.fr .s{align-self:stretch}
+.fr b{font:500 13.5px var(--sans)}.fr p{font:400 12px var(--mono);color:var(--ink-3);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+<div class="app">
+  <aside class="rail">
+    <svg class="mark" viewBox="0 0 36 36" aria-hidden="true"><rect x="1" y="1" width="34" height="34" rx="9" fill="#14171B" stroke="#2A2F36"/><path d="M12 9H9v18h3M24 9h3v18h-3" fill="none" stroke="#9AA3AE" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.5 18.3l3 2.9 6-6.7" fill="none" stroke="#C8F04A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="ri"><svg viewBox="0 0 20 20"><path d="M3 4h4v12H3zM8 4h4v8H8zM13 4h4v5h-4z"/></svg></div>
+    <div class="ri on"><svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.2"/><path d="M3.5 17c.7-3 3.4-5 6.5-5s5.8 2 6.5 5"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 20 20"><path d="M5 3h7l3 3v11H5zM12 3v3h3M7.5 10h5M7.5 13h5"/></svg></div>
+    <div class="ri"><svg viewBox="0 0 20 20"><path d="M10 2.5l6 2.5v5c0 3.6-2.6 6.2-6 7-3.4-.8-6-3.4-6-7V5z"/></svg></div>
+    <div class="sp"></div>
+    <div class="me">RO</div>
+  </aside>
+
+  <div class="wrap">
+    <div class="bar">
+      <div class="path">gennext / pipeline / screening / <b>nadia-rowe</b></div>
+      <div class="search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#5C6570" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>Search candidates, evidence, flags<kbd>/</kbd></div>
+    </div>
+
+    <div class="grid">
+      <section class="p hero">
+        <div class="id">
+          <h1>Nadia Rowe</h1>
+          <p>Senior Software Engineer, FinTech &middot; London</p>
+          <div class="chips"><span class="chip l">Screening</span><span class="chip">target: Ledgerline</span><span class="chip">profile live until 01 Nov</span></div>
+        </div>
+        <div class="gauge">
+          <svg viewBox="0 0 240 240">
+            <g stroke="#2A2F36" stroke-width="1.5">
+              <!-- 60 ticks -->
+              <g id="ticks"></g>
+            </g>
+            <circle cx="120" cy="120" r="92" fill="none" stroke="#1D2126" stroke-width="12"/>
+            <circle cx="120" cy="120" r="92" fill="none" stroke="#C8F04A" stroke-width="12" stroke-linecap="round" stroke-dasharray="190 578" transform="rotate(-90 120 120)" style="filter:drop-shadow(0 0 8px rgba(200,240,74,.55))"/>
+            <circle cx="120" cy="120" r="92" fill="none" stroke="#5CC8E8" stroke-width="12" stroke-linecap="round" stroke-dasharray="184 578" stroke-dashoffset="-196" transform="rotate(-90 120 120)"/>
+          </svg>
+          <div class="c"><b>4<span>/6</span></b><small>evidenced</small></div>
+        </div>
+        <div class="read">
+          <div class="r"><small>Verified</small><b class="l">02</b></div>
+          <div class="r"><small>Claimed</small><b class="c">02</b></div>
+          <div class="r"><small>Gaps</small><b class="k">01</b></div>
+          <div class="r"><small>Open flags</small><b>03</b></div>
+        </div>
+        <div class="acts">
+          <div class="meta"><span><i>&#9679;</i> verified interview 2026-09-12 14:02</span><span>roles 3/3</span><span>cv + linkedin complete</span></div>
+          <div class="bs"><button class="btn">Open profile</button><button class="btn">Builder</button><button class="btn p">Advance to submission draft</button></div>
+        </div>
+      </section>
+
+      <section class="p c12">
+        <div class="ph"><h2>Journey</h2><span>6 of 6 stages reached</span></div>
+        <div class="jl">
+          <div class="jn"><i>&#10003;</i><b>Setup</b><span>done</span></div>
+          <div class="jn"><i>&#10003;</i><b>Research</b><span>done</span></div>
+          <div class="jn"><i>&#10003;</i><b>Resume</b><span>3/3 roles</span></div>
+          <div class="jn"><i>&#10003;</i><b>CV</b><span>assembled</span></div>
+          <div class="jn"><i>&#10003;</i><b>LinkedIn</b><span>6 sections</span></div>
+          <div class="jn now"><i>06</i><b>Interview</b><span>scored</span></div>
+        </div>
+      </section>
+
+      <section class="p c8">
+        <div class="ph"><h2>Evidence matrix</h2><span>ledgerline jd &middot; 6 must-haves</span></div>
+        <div class="mh"><span></span><span style="text-align:left">Requirement</span><span>CV</span><span>Interview</span><span>GitHub</span><span>Verdict</span></div>
+        <div class="mx">
+          <div class="mr"><i class="dot" style="background:var(--lime)"></i><div><div class="n">REST API design at scale</div><div class="q">"exposed it as a REST API"</div></div><div class="cell c">claim</div><div class="cell l">verified</div><div class="cell l">verified</div><div class="verdict" style="color:var(--lime)">verified</div></div>
+          <div class="mr"><i class="dot" style="background:var(--lime)"></i><div><div class="n">SQL optimisation, high volume</div><div class="q">"processing time dropped 30%"</div></div><div class="cell c">claim</div><div class="cell l">verified</div><div class="cell">none</div><div class="verdict" style="color:var(--lime)">verified</div></div>
+          <div class="mr"><i class="dot" style="background:var(--cyan)"></i><div><div class="n">TypeScript</div><div class="q">skills section</div></div><div class="cell c">claim</div><div class="cell">none</div><div class="cell h">partial</div><div class="verdict" style="color:var(--cyan)">claimed</div></div>
+          <div class="mr"><i class="dot" style="background:var(--cyan)"></i><div><div class="n">Leading a small team</div><div class="q">"ran the workstream"</div></div><div class="cell c">claim</div><div class="cell h">partial</div><div class="cell">none</div><div class="verdict" style="color:var(--cyan)">claimed</div></div>
+          <div class="mr"><i class="dot" style="background:var(--coral)"></i><div><div class="n">Kubernetes in production</div><div class="q">"never owned the clusters"</div></div><div class="cell">none</div><div class="cell">denied</div><div class="cell">none</div><div class="verdict" style="color:var(--coral)">gap</div></div>
+        </div>
+      </section>
+
+      <section class="p c4">
+        <div class="ph"><h2>STAR balance</h2><span>target tick</span></div>
+        <div class="st">
+          <div class="st-row"><b>S</b><div class="tk"><div class="f" style="width:36%"></div><div class="t" style="left:30%"></div></div><em>18 / 15</em></div>
+          <div class="st-row"><b>T</b><div class="tk"><div class="f" style="width:18%"></div><div class="t" style="left:20%"></div></div><em>09 / 10</em></div>
+          <div class="st-row"><b>A</b><div class="tk"><div class="f" style="width:88%"></div><div class="t" style="left:99%"></div></div><em>44 / 50</em></div>
+          <div class="st-row"><b>R</b><div class="tk"><div class="f" style="width:58%"></div><div class="t" style="left:50%"></div></div><em>29 / 25</em></div>
+        </div>
+        <div class="own"><div class="r"><small>Ownership</small><b class="l">61%</b></div><div class="r"><small>Trailing ends</small><b>02</b></div></div>
+      </section>
+
+      <section class="p c6">
+        <div class="ph"><h2>Connected work</h2><span>synced 2h ago</span></div>
+        <div class="pf">
+          <div class="pc"><div class="t"><b>GitHub @nrowe</b><span class="chip l">verified</span></div><div class="big">06</div><p>merged PRs to other projects</p><div class="spark"><i style="height:30%"></i><i style="height:55%"></i><i style="height:40%"></i><i style="height:80%"></i><i style="height:20%"></i><i style="height:65%"></i><i style="height:90%"></i><i style="height:45%"></i><i style="height:70%"></i><i style="height:10%"></i><i style="height:60%"></i><i style="height:85%"></i></div></div>
+          <div class="pc"><div class="t"><b>LeetCode @nadiar</b><span class="chip">claimed</span></div><div class="big">312</div><p>solved &middot; 98 easy 176 med 38 hard</p><div class="spark"><i style="height:31%;background:var(--cyan)"></i><i style="height:56%;background:var(--cyan)"></i><i style="height:12%;background:var(--cyan)"></i></div></div>
+        </div>
+      </section>
+
+      <section class="p c6">
+        <div class="ph"><h2>Flags for review</h2><span>3 open</span></div>
+        <div class="fl">
+          <div class="fr"><i class="s" style="background:var(--cyan)"></i><div><b>Claim not on the CV</b><p>coordinated four engineers; no leadership line</p></div><button class="btn">Send to To-Do</button></div>
+          <div class="fr"><i class="s" style="background:var(--amber)"></i><div><b>Source conflict on end date</b><p>linkedin 10/2022 vs cv 10/2020</p></div><button class="btn">Review</button></div>
+          <div class="fr"><i class="s" style="background:var(--coral)"></i><div><b>JD must-have not evidenced</b><p>kubernetes in production</p></div><button class="btn">Review</button></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+const g=document.getElementById('ticks');for(let i=0;i<60;i++){const a=i*6*Math.PI/180,r1=i%5?110:105,r2=114;const l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',120+r1*Math.sin(a));l.setAttribute('y1',120-r1*Math.cos(a));l.setAttribute('x2',120+r2*Math.sin(a));l.setAttribute('y2',120-r2*Math.cos(a));g.append(l)}
+const s=document.getElementById('stage');function fit(){const k=Math.min(1,innerWidth/1440);s.style.transform=`scale(${k})`;document.body.style.height=s.scrollHeight*k+'px'}addEventListener('resize',fit);fit();
+</script>
+</body>
+</html>

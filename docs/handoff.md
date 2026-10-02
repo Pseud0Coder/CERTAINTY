@@ -378,3 +378,103 @@ pre-registered prediction holds.
       event; expect 200 from a correctly signed request, 401 otherwise.
 - [ ] Start the next experiment (voice session completion, section 7 P1)
       with a fresh `prereg.md` before writing code, per section 6.
+
+---
+
+## 11. Update 2026-10-02: the hiring lifecycle (ADR-0024), batch 1
+
+The "build now, fully real" plan (approved in a later thread) begins here.
+This batch is the shared data model plus the requisition and offer
+lifecycle. Everything is deterministic; no model writes a score, a gate or
+a stage change.
+
+**New and changed**
+- `docs/adr-log.md` ADR-0024: requisitions, applications, per-tenant hiring
+  models, scoring, knockouts, overrides, progression, de-duplication.
+- `src/spine/requirement.ts`: the one requirement matcher. The profile
+  insight and application scoring both call it, so a requirement is judged
+  identically everywhere. Strength weights gap 0, partial 0.35, claimed 0.7,
+  verified 1.
+- `src/spine/evidence.ts`: `connectorStates`, the candidate corpora, and the
+  ordered evidence sources, gathered once and shared.
+- `src/spine/insight.ts`: refactored onto the matcher; behavior unchanged
+  (all previous insight tests pass).
+- `src/spine/scoring.ts`: weighted 0 to 100 scoring, knockouts evaluated
+  apart from the score, read-time ranking (score, then verified count, then
+  application date), overrides (adjust, include, exclude) with a required
+  reason, progression, `candidateYears`, and `findDuplicate`.
+- `src/spine/hiring.ts`: the requisition service (create, edit, submit,
+  approve/reject/request changes, close), apply with de-duplication, rescore,
+  override, `requisitionPipeline`, and `hiringReports`. Approvals enforce
+  that the approver is never the submitter.
+- `src/spine/offers.ts`: versioned offers, the internal approval workflow
+  (same approver rule), sending, and candidate accept/decline. The letter is
+  generated deterministically and obeys L8.
+- `src/spine/types.ts`, `src/spine/db.ts`: the `hr` role, `STAGE_SETS` by
+  hiring model, requisition/application/offer entities and store methods,
+  `tenants.settings`, and candidate contact columns.
+- `src/spine/stages.ts`: `advance` now follows the tenant stage set and
+  mirrors the primary application's stage, so the two can never drift.
+- `src/server/api.ts`: requisition, application, offer and HR-report routes;
+  public apply endpoints (`GET /api/public/requisitions/:id`,
+  `POST /api/public/apply/:id`) before the auth gate; tenant stages in `/api/me`
+  and the recruiter pipeline; `admin` settings for the hiring model.
+- Tests: `tests/scoring.test.ts`, `tests/hiring.test.ts`, `tests/offers.test.ts`,
+  and `tests/demo-path.test.ts` (the plan's end-to-end anchor, through the
+  real router: requisition, approval, apply, rank, override, offer,
+  acceptance, public apply).
+
+**State:** 116 tests passing, typecheck clean (server + web). No frontend
+for requisitions, offers, reports or the apply page yet, and the remaining
+Tier 1 items (communications, scheduling, assessments, live interview
+assist, voice session completion) are not started.
+
+**Next batch:** the recruitment dashboard surfaces for these APIs, or the
+communications module, whichever is reviewed first. Keep the demo-path test
+green as each lands.
+
+---
+
+## 12. Update 2026-10-02: the rest of the lifecycle (ADR-0025), batch 2
+
+Batch 2 completes the Tier 1 plan items and the Tier 2 providers that are
+built against fakes.
+
+**New modules (all deterministic, all fail closed)**
+- `src/spine/communications.ts`: stored, templated, localized messages, a
+  provider that fails closed, and human escalation. Wired into apply and
+  offer-sent events.
+- `src/spine/scheduling.ts`: deterministic slots, a meeting with change
+  history, an ICS, and a calendar provider that fails closed.
+- `src/spine/assessments.ts`: deterministic scoring, cohort normalization,
+  anomaly flags. Candidate routes hide flags and correct answers.
+- `src/spine/interview-assist.ts`: follow-ups, compliance detection, a
+  scorecard, and voice session completion with a summary and structured
+  notes.
+- `src/spine/model-parse.ts`: guarded model-assisted resume parsing on the
+  sanitized text, with the scripted parser as the floor.
+- `src/spine/sso.ts`: Entra SSO behind an interface, fails closed, never
+  creates an account.
+- `src/spine/hiring.ts` gained `bulkApply`.
+
+**API:** requisition bulk apply, messages (outbox, send, inbound, escalate),
+scheduling slots and meetings plus calendar push, assessments and candidate
+attempts, live assist and voice completion, candidate offers and messages,
+and `/api/auth/sso`. `ApiDeps` gained an optional `llm`.
+
+**Frontend:** recruiter Requisitions, Requisition detail and Reports views;
+candidate Offers view; public apply page at `/apply/:id`.
+
+**Tests:** `communications`, `scheduling`, `assessments`,
+`interview-assist`, `model-parse`, `sso`, plus a bulk-apply case and the
+enlarged `demo-path` anchor.
+
+**State:** 152 tests passing, typecheck clean (server + web), `build:web`
+synced. Not built: the bulk-upload UI (the endpoint exists), a dedicated SMS
+transport (the messaging interface covers SMS and WhatsApp channels), and the
+M365 push needs a real endpoint and credentials to exercise.
+
+**Remaining from the estimate:** Cisco telephony (needs a lab), the move off
+SQLite to a production database, UAE hosting, WhatsApp business approval, a
+coding-test sandbox, licensed psychometric tests, and the Tier 3 placeholder
+work.

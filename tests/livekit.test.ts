@@ -108,7 +108,11 @@ test('H1b: unsigned and mis-signed webhooks are refused', async () => {
   assert.equal(await verifyVoiceWebhook(CFG, body, undefined), null);
   assert.equal(await verifyVoiceWebhook(CFG, body, 'not-a-jwt'), null);
   assert.equal(await verifyVoiceWebhook(CFG, body, sign('wrong-secret', body)), null);
-  assert.equal(await verifyVoiceWebhook(CFG, body, sign(CFG.secret, body).slice(0, -1) + 'x'), null);
+  /* Flip the last character for real: appending 'x' is a no-op when the
+     signature already ends in 'x', which made this test flaky. */
+  const good = sign(CFG.secret, body);
+  const tampered = good.slice(0, -1) + (good.endsWith('x') ? 'y' : 'x');
+  assert.equal(await verifyVoiceWebhook(CFG, body, tampered), null);
   /* The sha256 claim covers the raw bytes: a mutated body fails. */
   assert.equal(await verifyVoiceWebhook(CFG, `${body} `, sign(CFG.secret, body)), null);
   assert.ok(await verifyVoiceWebhook(CFG, body, sign(CFG.secret, body)));

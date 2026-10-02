@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certainty mockup C: Atrium</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Direction C, "Atrium". Warm and human: the same evidence, presented to
+   people who are nervous about being judged (candidates) and busy people
+   deciding (recruiters). An indigo-to-violet brand gradient used once per
+   screen, soft cream ground, 20px radii, generous air. The layout mirrors
+   around a centre profile column: left rail of evidence, right of action.
+   Semantics: indigo = verified, sky = claimed, coral = gap. */
+:root{
+  --bg:#F7F5F1; --card:#FFFFFF; --ink:#1B1A2E; --ink-2:#5E5B76; --ink-3:#9C99B2; --line:#ECE8F2;
+  --indigo:#4F46E5; --violet:#7C3AED; --indigo-soft:#EEF0FE; --sky:#0EA5E9; --sky-soft:#E7F6FD;
+  --coral:#F0603F; --coral-soft:#FEEDE8; --amber:#D9900B; --amber-soft:#FDF4E1; --mint:#10B981;
+  --grad:linear-gradient(135deg,#4F46E5 0%,#7C3AED 55%,#C026D3 100%);
+  --sans:'Plus Jakarta Sans',system-ui,sans-serif;
+  --shadow:0 1px 2px rgba(27,26,46,.04),0 8px 24px rgba(27,26,46,.06);
+}
+*{box-sizing:border-box;margin:0}
+html,body{background:#EFECE6}
+body{font:400 14px/1.55 var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.stage{width:1440px;transform-origin:top left}
+.app{width:1440px;min-height:1080px;background:var(--bg)}
+
+.top{height:72px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 40px}
+.brand{display:flex;align-items:center;gap:10px;font:800 21px var(--sans);letter-spacing:-.03em}
+.nav{display:flex;gap:6px}
+.nav a{font:600 13.5px var(--sans);color:var(--ink-2);padding:9px 16px;border-radius:12px;text-decoration:none}
+.nav a.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.right{justify-self:end;display:flex;align-items:center;gap:12px}
+.bell{width:40px;height:40px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);display:grid;place-items:center}
+.me{display:flex;align-items:center;gap:10px;padding:5px 12px 5px 5px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);font:600 13px var(--sans)}
+.me i{width:30px;height:30px;border-radius:10px;background:var(--indigo-soft);color:var(--indigo);display:grid;place-items:center;font-style:normal;font-size:12px}
+
+.body{padding:12px 40px 48px;display:grid;grid-template-columns:1fr 440px 1fr;gap:24px;align-items:start}
+.col{display:grid;gap:24px}
+.card{background:var(--card);border-radius:22px;box-shadow:var(--shadow);padding:24px}
+.card h3{font:700 16px var(--sans);letter-spacing:-.01em;display:flex;justify-content:space-between;align-items:center}
+.card h3 small{font:600 12px var(--sans);color:var(--ink-3)}
+
+/* centre: profile hero with the one gradient */
+.hero{padding:0;overflow:hidden;text-align:center}
+.hero .band{height:120px;background:var(--grad);position:relative}
+.hero .band::after{content:"";position:absolute;inset:0;background:radial-gradient(120px 80px at 20% 30%,rgba(255,255,255,.28),transparent 70%),radial-gradient(160px 90px at 85% 80%,rgba(255,255,255,.18),transparent 70%)}
+.face{width:104px;height:104px;border-radius:32px;margin:-56px auto 0;position:relative;background:linear-gradient(160deg,#FDE68A,#F9A8D4);border:5px solid var(--card);display:grid;place-items:center;font:800 32px var(--sans);color:#7C2D12;box-shadow:0 10px 30px rgba(79,70,229,.25)}
+.face .ok{position:absolute;right:-8px;bottom:-8px;width:34px;height:34px;border-radius:12px;background:var(--indigo);border:4px solid var(--card);display:grid;place-items:center}
+.hero h1{font:800 30px/1.1 var(--sans);letter-spacing:-.035em;margin-top:16px}
+.hero p{color:var(--ink-2);margin-top:6px}
+.pills{display:flex;justify-content:center;gap:8px;margin-top:14px}
+.pill{font:600 12px var(--sans);padding:6px 12px;border-radius:999px;background:var(--bg);color:var(--ink-2)}
+.pill.i{background:var(--indigo-soft);color:var(--indigo)}
+.ring{position:relative;width:200px;height:200px;margin:22px auto 6px}
+.ring .t{position:absolute;inset:0;display:grid;place-content:center}
+.ring .t b{font:800 40px/1 var(--sans);letter-spacing:-.04em;background:var(--grad);-webkit-background-clip:text;color:transparent}
+.ring .t small{font:600 12px var(--sans);color:var(--ink-3);margin-top:4px}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);margin:8px 24px 0;border-top:1px solid var(--line)}
+.trio div{padding:16px 0}
+.trio div+div{border-left:1px solid var(--line)}
+.trio b{display:block;font:800 24px var(--sans);letter-spacing:-.02em}
+.trio small{font:600 12px var(--sans);color:var(--ink-3)}
+.cta{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:20px 24px 24px}
+.btn{font:700 13.5px var(--sans);height:44px;border-radius:14px;border:0;background:var(--bg);color:var(--ink)}
+.btn.p{background:var(--grad);color:#fff;box-shadow:0 8px 20px rgba(79,70,229,.3)}
+.btn.w{grid-column:1/-1}
+
+/* evidence list (left) */
+.ev{margin-top:16px;display:grid;gap:10px}
+.ev-row{display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;padding:12px;border-radius:16px;background:var(--bg)}
+.ic{width:36px;height:36px;border-radius:12px;display:grid;place-items:center}
+.ic.v{background:var(--indigo-soft)}.ic.c{background:var(--sky-soft)}.ic.p{background:var(--amber-soft)}.ic.g{background:var(--coral-soft)}
+.ev-row b{font:600 13.5px var(--sans);display:block}
+.ev-row span{font:500 12px var(--sans);color:var(--ink-3)}
+.badge{font:700 11px var(--sans);padding:4px 9px;border-radius:999px}
+.badge.v{background:var(--indigo-soft);color:var(--indigo)}.badge.c{background:var(--sky-soft);color:#0369A1}.badge.p{background:var(--amber-soft);color:#92400E}.badge.g{background:var(--coral-soft);color:#B42318}
+
+/* journey (left bottom) */
+.steps{margin-top:16px;display:grid;gap:4px}
+.step{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;padding:8px 4px}
+.step i{width:28px;height:28px;border-radius:10px;display:grid;place-items:center;background:var(--indigo);color:#fff;font:700 12px var(--sans);font-style:normal}
+.step.now i{background:var(--card);color:var(--indigo);box-shadow:inset 0 0 0 2px var(--indigo)}
+.step b{font:600 13.5px var(--sans)}.step span{font:500 12px var(--sans);color:var(--ink-3)}
+
+/* right column */
+.star{margin-top:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:end;height:150px}
+.col-bar{display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end}
+.col-bar .bar{width:100%;border-radius:12px 12px 6px 6px;background:var(--grad);position:relative}
+.col-bar .bar.soft{background:linear-gradient(180deg,#C7C3FA,#A5A0F5)}
+.col-bar .tg{position:absolute;left:-4px;right:-4px;height:2px;background:var(--ink);border-radius:2px}
+.col-bar b{font:700 12px var(--sans)}.col-bar small{font:600 11px var(--sans);color:var(--ink-3)}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.mini div{background:var(--bg);border-radius:14px;padding:12px 14px}
+.mini b{font:800 22px var(--sans);letter-spacing:-.02em;display:block}.mini small{font:600 12px var(--sans);color:var(--ink-3)}
+.acc{margin-top:14px;display:grid;gap:10px}
+.acc-row{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:12px;border-radius:16px;background:var(--bg)}
+.lg{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:#fff;font:800 14px var(--sans)}
+.acc-row b{font:600 13.5px var(--sans);display:block}.acc-row span{font:500 12px var(--sans);color:var(--ink-3)}
+.acc-row .n{text-align:right;font:800 20px var(--sans)}.acc-row .n small{display:block;font:600 11px var(--sans);color:var(--ink-3)}
+.flag{margin-top:14px;padding:14px;border-radius:16px;background:linear-gradient(0deg,var(--card),var(--card)) padding-box,var(--grad) border-box;border:1.5px solid transparent}
+.flag b{font:700 13.5px var(--sans)}.flag p{font:500 12.5px var(--sans);color:var(--ink-2);margin-top:3px}
+.flag .q{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--indigo-soft);color:#3730A3;font:600 13px var(--sans)}
+.flag .row{display:flex;gap:8px;margin-top:10px}
+.flag .row .btn{height:36px;padding:0 14px;font-size:12.5px;border-radius:11px}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4F46E5"/><stop offset=".6" stop-color="#7C3AED"/><stop offset="1" stop-color="#C026D3"/></linearGradient></defs><rect width="32" height="32" rx="10" fill="url(#g)"/><path d="M21.5 10.2A8 8 0 1 0 21.5 21.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M13.2 16.2l2.4 2.3 4.6-5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      certainty
+    </div>
+    <nav class="nav"><a>Pipeline</a><a class="on">Candidates</a><a>Submissions</a><a>Notes</a></nav>
+    <div class="right">
+      <div class="bell"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#5E5B76" stroke-width="1.7" stroke-linecap="round"><path d="M5 8a5 5 0 0 1 10 0c0 5 2 6 2 6H3s2-1 2-6M8.5 17a1.8 1.8 0 0 0 3 0"/></svg></div>
+      <div class="me"><i>RO</i>R. Osei</div>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- left: what is evidenced -->
+    <div class="col">
+      <section class="card">
+        <h3>Fit for Ledgerline <small>6 must-haves</small></h3>
+        <div class="ev">
+          <div class="ev-row"><div class="ic v"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5l3 3 7-7.5"/></svg></div><div><b>REST API design at scale</b><span>Interview + GitHub</span></div><span class="badge v">Verified</span></div>
+          <div class="ev-row"><div class="ic v"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5l3 3 7-7.5"/></svg></div><div><b>SQL optimisation</b><span>Interview: "dropped 30%"</span></div><span class="badge v">Verified</span></div>
+          <div class="ev-row"><div class="ic c"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round"><path d="M5 9h8"/></svg></div><div><b>TypeScript</b><span>Stated in CV</span></div><span class="badge c">Claimed</span></div>
+          <div class="ev-row"><div class="ic c"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round"><path d="M5 9h8"/></svg></div><div><b>Leading a small team</b><span>CV, partly in interview</span></div><span class="badge c">Claimed</span></div>
+          <div class="ev-row"><div class="ic p"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#D9900B" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="9" r="4"/></svg></div><div><b>Compliance domain</b><span>Adjacent: WCAG audits</span></div><span class="badge p">Partly</span></div>
+          <div class="ev-row"><div class="ic g"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#F0603F" stroke-width="2" stroke-linecap="round"><path d="M5.5 5.5l7 7M12.5 5.5l-7 7"/></svg></div><div><b>Kubernetes in production</b><span>"Never owned the clusters"</span></div><span class="badge g">Gap</span></div>
+        </div>
+      </section>
+      <section class="card">
+        <h3>Journey <small>all stages reached</small></h3>
+        <div class="steps">
+          <div class="step"><i>&#10003;</i><b>Setup and research</b><span>Done</span></div>
+          <div class="step"><i>&#10003;</i><b>Resume, 3 roles</b><span>Done</span></div>
+          <div class="step"><i>&#10003;</i><b>CV and LinkedIn</b><span>Done</span></div>
+          <div class="step now"><i>4</i><b>Verified interview</b><span>Scored</span></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- centre: who, how sure, what next -->
+    <section class="card hero">
+      <div class="band"></div>
+      <div class="face">NR<span class="ok"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l2.5 2.5L11 4"/></svg></span></div>
+      <h1>Nadia Rowe</h1>
+      <p>Senior Software Engineer, FinTech &middot; London</p>
+      <div class="pills"><span class="pill i">Screening</span><span class="pill">For Ledgerline</span></div>
+      <div class="ring">
+        <svg viewBox="0 0 200 200"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4F46E5"/><stop offset=".6" stop-color="#7C3AED"/><stop offset="1" stop-color="#C026D3"/></linearGradient></defs>
+          <circle cx="100" cy="100" r="84" fill="none" stroke="#F0EEF6" stroke-width="16"/>
+          <circle cx="100" cy="100" r="84" fill="none" stroke="url(#rg)" stroke-width="16" stroke-linecap="round" stroke-dasharray="172 528" transform="rotate(-90 100 100)"/>
+          <circle cx="100" cy="100" r="84" fill="none" stroke="#7DD3FC" stroke-width="16" stroke-linecap="round" stroke-dasharray="160 528" stroke-dashoffset="-182" transform="rotate(-90 100 100)"/>
+        </svg>
+        <div class="t"><b>4 of 6</b><small>evidenced</small></div>
+      </div>
+      <div class="trio"><div><b style="color:var(--indigo)">2</b><small>verified</small></div><div><b style="color:var(--sky)">2</b><small>claimed</small></div><div><b style="color:var(--coral)">1</b><small>gap</small></div></div>
+      <div class="cta"><button class="btn">Open profile</button><button class="btn">Builder</button><button class="btn p w">Advance to submission draft</button></div>
+    </section>
+
+    <!-- right: interview, work, flags -->
+    <div class="col">
+      <section class="card">
+        <h3>Structured interview <small>12 Sep &middot; 14:02</small></h3>
+        <div class="star">
+          <div class="col-bar"><div class="bar soft" style="height:36%"><i class="tg" style="bottom:83%"></i></div><b>18%</b><small>Situation</small></div>
+          <div class="col-bar"><div class="bar soft" style="height:18%"><i class="tg" style="bottom:111%"></i></div><b>9%</b><small>Task</small></div>
+          <div class="col-bar"><div class="bar" style="height:88%"><i class="tg" style="bottom:113%"></i></div><b>44%</b><small>Action</small></div>
+          <div class="col-bar"><div class="bar soft" style="height:58%"><i class="tg" style="bottom:86%"></i></div><b>29%</b><small>Result</small></div>
+        </div>
+        <p style="margin-top:14px;font:600 11.5px var(--sans);color:var(--ink-3);display:flex;gap:8px;align-items:center"><i style="width:16px;height:2px;background:var(--ink);display:inline-block;border-radius:2px"></i>strong-answer target</p>
+        <div class="mini"><div><b>61%</b><small>spoken in first person</small></div><div><b>2</b><small>trailing endings</small></div></div>
+      </section>
+      <section class="card">
+        <h3>Work you can see <small>connected</small></h3>
+        <div class="acc">
+          <div class="acc-row"><div class="lg" style="background:#1B1A2E">GH</div><div><b>@nrowe on GitHub</b><span>Verified &middot; Go, TypeScript</span></div><div class="n">6<small>merged PRs</small></div></div>
+          <div class="acc-row"><div class="lg" style="background:#F59E0B">LC</div><div><b>@nadiar on LeetCode</b><span>Not yet verified</span></div><div class="n">312<small>solved</small></div></div>
+        </div>
+      </section>
+      <section class="card">
+        <h3>Worth a look <small>3 flags</small></h3>
+        <div class="flag"><b>A claim missing from her CV</b><p>She coordinated four engineers on WCAG automation.</p><div class="q">"I ran the workstream day to day."</div><div class="row"><button class="btn p">Send to her To-Do</button><button class="btn">Dismiss</button></div></div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+const s=document.getElementById('stage');function fit(){const k=Math.min(1,innerWidth/1440);s.style.transform=`scale(${k})`;document.body.style.height=s.scrollHeight*k+'px'}addEventListener('resize',fit);fit();
+</script>
+</body>
+</html>
