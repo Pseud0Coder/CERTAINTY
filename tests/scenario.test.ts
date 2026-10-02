@@ -115,6 +115,15 @@ test('demo loop: verified screener needs consent, then yields transcript, metric
   assert.ok(store.consent(ctx, consent.id)!.withdrawnAt);
 });
 
+test('tenant name: each tenant reads only its own name', () => {
+  const { store, ids, ctx } = setup();
+  const own = store.tenantName(ctx);
+  const other = store.tenantName({ tenantId: ids.tenant2Id });
+  assert.ok(own && other, 'both seeded tenants are named');
+  assert.notEqual(own, other);
+  assert.equal(store.tenantName({ tenantId: 'no-such-tenant' }), null);
+});
+
 test('tenant isolation: the second tenant sees only its own candidate', async () => {
   const { store, ids, engine } = setup();
   const ctx2: Ctx = { tenantId: ids.tenant2Id };

@@ -637,7 +637,9 @@ marketing-page section between Platform and Features, making the same
 promises the implementation actually keeps: consent before capture,
 deterministic scoring, ownership measured.
 
-## ADR-0018: The LiveKit client bundle is self-hosted; no CDN, no import map
+## ADR-0019: The LiveKit client bundle is self-hosted; no CDN, no import map
+Numbering note: this entry and the previous one both carried ADR-0018;
+corrected to 0019 when ADR-0020 was appended.
 
 Date: 2026-09-26. Status: accepted.
 
@@ -675,3 +677,273 @@ Verified end to end: the served page carries one module script and no
 inline scripts, the CSP header ships `script-src 'self'`, the vendor asset
 serves through the `/assets` route, and the full compiled module graph of
 the candidate app resolves with no import map.
+
+## ADR-0020: Voice consent is a server-side chain; webhooks are signed and consent-gated
+
+Date: 2026-09-28. Status: accepted. Verified by the experiment record at
+experiments/2026-09-28-p0-voice-consent-webhook-auth/ (prereg.md, journal.md,
+runs R001-R006, raw outputs hashed).
+
+Three P0 defects were found on the voice path:
+
+1. Consent bypass (L4). The candidate client connected a LiveKit room and
+   published a microphone track after a checkbox, with no ConsentRecord
+   created. The token endpoint minted a room token for any authenticated
+   candidate with no consent check. Verified: pre-fix, a no-chain request
+   returned 200 and a token (R001).
+2. The webhook was unverified and wrote artifacts into a tenant resolved
+   from an unchecked body field. Verified: any authenticated platform user
+   (any tenant, own CSRF) could inject a handoff_block with no signature and
+   no consent (R003).
+3. Candidate resolution read `participant.metadata` as an object while real
+   payloads carry a JSON string. Verified: string metadata returned 400
+   missing_candidate_id (R003).
+
+The fix, all in src/server/livekit.ts plus the client:
+
+- voiceChain: the only path to a room token. Requires a verified
+  interview_screener run of the same candidate whose consent record is
+  granted, not withdrawn, and whose session exists with mode verified and is
+  not stopped. The token carries {candidateId, sessionId, consentId} in its
+  metadata.
+- Signature verification over the raw body with the SDK WebhookReceiver
+  (HS256, iss = API key, exp required, sha256 claim), refused 401 with no
+  parsing when absent or invalid. The webhook is handled before the generic
+  JSON path because the signature covers exact bytes.
+- Consent-gated ingestion: the candidate resolves from string or object
+  metadata, then the room name interview-<candidateId>, then an explicit
+  data field; artifacts are written only inside an active consented verified
+  session (a named session must itself be active) and every artifact carries
+  sessionId, consentId and source. Bullets cap at 50, fields at 400 and the
+  note at 2000 characters. Every ingest is audited.
+- Client: the verified start now runs the server chain (start flow, grant
+  consent, mint token) before connecting; one stopVoice cleanup stops the
+  track, disconnects the room and clears the recording indicator on
+  withdrawal, mode switch, navigation and beforeunload. The run branch's
+  withdraw control routes through it, and a dedicated voice-active panel
+  exposes "Withdraw consent and stop" while the room is live.
+
+Consequences: the token endpoint now requires {runId}; requests without a
+chain fail closed with 409 consent_required regardless of the reason
+(specific codes for run-not-found and wrong flow). The journey gate
+(ADR-0011) still applies first to candidate-initiated verified starts, so a
+locked candidate cannot reach the consent gate at all. Voice sessions still
+do not complete the screener flow's evaluate and suggest steps; that is
+recorded as the next experiment.
+
+## ADR-0021: Neutral certainty: the interface returns to achromatic, structure returns to hairlines
+
+Date: 2026-10-01. Status: accepted. Supersedes the palette of ADR-0015 and
+the elevation and field treatment of ADR-0016. Keeps ADR-0016's type sizes
+and brand mark.
+
+Review of the running app found three problems. The parchment-and-brass
+palette tinted every surface (ground, rail, cards, inputs, chips), so the
+evidence hues no longer stood out and the product read as a reading app
+rather than a verification tool; design-language.md section 2 had
+rejected exactly this ("warm cream ground"). ADR-0016's fix for the
+"ledger" feel put a shadow on nearly every container, which produced
+shadowed cards inside shadowed panels and pipeline trays. And the layout
+did not prioritise: on candidate detail the verified insights sat below a
+shareable-URL panel, empty pipeline stages dominated the board, the topbar
+repeated the role already shown in the rail, and the candidate dashboard
+never said what to do next.
+
+**Palette (tokens.css only).** Neutral ground (#F7F7F8 light, #0B0B0C
+dark), white sheets, near-black ink, and near-black primary actions. Hue
+is spent only on evidence (positive #14664A, warning #8A4B0A, blocking
+#B0231A, and brightened dark-mode pairs), recording, and focus (#1A5FD0,
+now its own hue again instead of brass). These are the section 3 values
+from design-language.md. The blue, yellow, purple and pink pastel token
+names survive but resolve to neutrals, so no component can carry meaning
+through them. Research findings now map to evidence roles: good is
+positive, improve is warning, needs work is blocking. Role chips in the
+audit table are neutral: roles are identities, not evidence. The brand
+mark is ink.
+
+**Type.** Geist stays and Geist Mono joins it for timestamps and
+identifiers (same Google Fonts origin, already allowed by the CSP). The
+serif role is retired (`--font-serif` aliases sans). Titles are 600 weight
+with tight tracking; the accent dot before view titles is gone.
+
+**Surfaces.** Structure comes from hairlines and space. Panels and cards
+carry at most a one-pixel lift (`--elev-sheet`, none in dark mode);
+`--elev-1` and `--elev-2` are reserved for toast, login card and modal.
+Inputs are white wells with a strong hairline and a focus-hue ring. Each
+pipeline stage is one continuous sheet with hairline-divided candidate
+rows; empty stages collapse to a narrow dashed column. Research findings
+are list rows rather than shadowed cards. Flag cards keep the severity
+spine (an app.css rule restates it, since the flat card border would
+otherwise override tokens.css).
+
+**Shell.** New shared helpers in shared/dom.ts: a 16px line icon set,
+initials avatars, `railHead`, `railFoot` (the account block: name, role,
+theme toggle, log out), `topbar` with a breadcrumb trail, and
+`viewHeader`. The topbar's breadcrumb starts at the tenant name, exposed
+by a new tenant-scoped `Store.tenantName(ctx)` as `tenantName` on
+`/api/me` (additive, tested). Below 720px the account controls move into
+the topbar, because the rail becomes the bottom tab bar.
+
+**Candidate detail.** An identity header (avatar, name, stage, role line)
+with the profile link actions in it, a stats strip (open flags, verified
+sessions, roles revamped, CV, LinkedIn, interview), then tabs with an open
+flag count and a roving tabindex. The stage advisor suggestion is a
+one-line callout.
+
+**Candidate dashboard.** The stepper is ink (completed stages filled,
+current ringed) inside a progress card that ends in one next-step action
+derived from the same journey state, so the two cannot disagree.
+
+**Bugs fixed on the way:**
+- At 720 to 1099px the rail collapses to icons, but nav items had no
+  icons, so they rendered as blank buttons. Every nav item now carries one.
+- Recruiter detail printed "One source conflict flagged. Conservative
+  dates in use." for every candidate. It is now derived from the open
+  source-conflict flags and omitted when there are none.
+- The ownership line printed "trailing ends: 0" from a reduce that always
+  returned zero. It now reads the session's `trailing` value, which the
+  projection already carried.
+- STAR meters now draw the target as a 2px tick (design-language 8).
+- The mobile tab bar clipped "To-Do" and stacked the lock over
+  "Sessions". Items now share the bar equally and the lock is a corner
+  mark.
+- The candidate rail showed the "Target role" placeholder and no To-Do
+  count on first load, because the shell rendered before the candidate
+  record arrived. The record now loads first.
+- Transcript annotations sat on top of the preceding turn's hairline.
+- The builder title-cased raw kind names ("Jd", "Linkedin Snapshot"). It
+  now uses a label map.
+
+**Marketing screenshots.** The five captures in src/web/img were
+recaptured from the running app in dark mode at 1600x1000, 2x. The
+interview shot needs Nadia's interview unlocked, which the seed does not
+have, so it was taken on a backed-up copy of the local demo database after
+completing the LinkedIn studio flow through the real API (scripted
+agents). The database was restored afterwards. The marketing page itself
+(ADR-0017) is unchanged and keeps its separate design system.
+
+Verified: typecheck (server and web), 74/74 tests (one new: tenant name
+isolation), and screenshots of every surface in both themes at 1440px,
+900px (icon rail) and 390px (bottom tab bar).
+
+## ADR-0022: One CV upload, portfolio connectors, and a profile page that says how sure it is
+
+Date: 2026-10-01. Status: accepted. Follows a review of counterintuitive
+practices in the product. Decisions the owner did not make explicitly were
+taken on the recommended default and are marked (default).
+
+**Documents arrive once, as files.** Onboarding asked the candidate to
+paste their CV as plain text, the JD as text, and the recruiter's builder
+asked again for everything by paste. Now a CV (and optionally a JD) is
+uploaded once, by whoever has it first (default), through
+`POST /api/candidate/documents` or `/api/recruiter/candidates/:id/documents`.
+Format is sniffed from the bytes. PDFs are read by LiteParse
+(`@llamaindex/liteparse` 2.15, Apache 2.0, a Rust core with prebuilt
+binaries for macOS, Linux glibc and musl, and Windows), locally, with OCR
+off (default: CVs never leave our infrastructure, and LlamaParse's cloud
+fallback is not wired). LiteParse's text output projects onto a spatial
+grid, which keeps sidebar columns on shared lines, so the JSON output's text
+items are split at a detected gutter and each column read top to bottom.
+LiteParse converts Office files through LibreOffice, which a Node host does
+not have, so DOCX is read directly from `word/document.xml` with `node:zlib`
+(tabs become field separators, numbered paragraphs become bullets). A scan
+with no text layer is refused with a plain message rather than guessed at.
+The text then goes through `quarantine()` unchanged: parsing is extraction,
+not trust (L1). Each artifact records its source (file name, parser, size,
+hash, who uploaded it).
+
+The structurer was the bigger weakness: `parseResume` read exactly one
+template (positioning on line 2, "|" separated contact, upper-case
+headings), so real CVs produced no roles. `structureResume` keeps it for
+template input and falls back to `parseResumeLoose`, which handles heading
+variants, five date formats, open ends, title and company in either order on
+one line or two, bullet glyphs and wrapped bullets. The candidate sees what
+was read (roles, dates, bullet counts) and re-uploads if it is wrong; there
+is no field editor yet.
+
+Around it: onboarding no longer asks for anything already on file; the
+recruiter's target and JD are shown as set by the recruiter, not editable
+duplicates; the profile picture field is gone (it was stored, never shown,
+and pushed through the text sanitizer); the builder counts a recorded
+verified interview as its transcript source instead of demanding a paste,
+says when only a LinkedIn URL is on file and what the profile text is for,
+and uploads CVs and JDs as files.
+
+**Connectors (GitHub, LeetCode).** `src/spine/connectors.ts`. Linking is a
+consented act (ConsentRecord scope `connect:<provider>`), counts as a claim,
+and becomes verified when a one-time code appears in the account's public
+bio, which needs no OAuth app for either provider. Fetching is allowlisted
+per host, redirect-free, timed out at 8s and capped at 1 MB; bios, repo
+descriptions and PR titles pass the document sanitizer. Figures are counted
+in code: owned non-fork repositories, languages, merged pull requests to
+repositories the candidate does not own (the hardest public signal to
+game), months active in the last year; LeetCode solved counts, contest
+rating, badges. Raw commit counts and stars are not used as evidence.
+LeetCode has no official API; its public GraphQL endpoint is best effort and
+fails closed. Disconnecting withdraws the consent and deletes link and
+snapshot. Connector evidence feeds the profile insight; it does not yet feed
+the research report or the suggested-gap queue.
+
+**The profile page is a one-page insight.** `src/spine/insight.ts` builds,
+at view time and from public-safe data only: each JD must-have with a status
+(verified, claimed, partly evidenced, not evidenced) and the sources behind
+it; top achievements, quantified first; GitHub and LeetCode work; the
+verified interview's STAR proportions (numbers only, never transcript text);
+background; and the CV download. "Verified" is reserved for what the
+platform checked itself: a verified interview, or a connected account whose
+ownership was proven. Matching reuses the research agent's term extraction
+so the page and the report cannot judge one requirement two ways. Interview
+evidence ignores sentences that deny something: Nadia's "I have not,
+honestly... I never owned the clusters" contains the Kubernetes terms and is
+evidence of the opposite (a regression test pins this). Keyword matching is
+still literal; a model-backed matcher with the number-grounding guard is the
+obvious next step.
+
+Sharing changed from a permanent capability URL to an approval: nothing is
+shared until the candidate approves, an approval lasts 30 days, the
+candidate can stop it and the recruiter can revoke it, and an inactive link
+answers 410. The candidate and their agency can preview an unapproved page.
+One page per candidate, tied to the candidate's target role and JD
+(default); per-submission pages for several companies would need a
+submission entity first. The page moved off the marketing design system onto
+tokens.css, because it is evidence in the product's language, not
+marketing; print styles make it a one-page PDF.
+
+**Accounts.** A recruiter-generated password is now temporary
+(`users.must_change_password`, an additive migration); the server refuses
+every route but `/api/me` and `/api/auth/password` until the candidate sets
+their own. The login page lists demo accounts only when `/api/public/config`
+reports demo mode (on unless `CERTAINTY_DEMO=off`).
+
+**Controls that now do what they look like.** The Verified toggle opens the
+consent dialog and moves only once consent exists; cancelling or Escape
+leave practice untouched. Without LiveKit configured, a consented session
+runs as text instead of stalling after consent. The microphone switch that
+changed only a label is gone; the console states the real mode (text
+session, your turn, thinking, live audio). Private practice opens after
+research instead of after LinkedIn copywriting (`journey.practice`, enforced
+server-side as `practice_locked`). Locked nav items open a page that says
+what unlocks them and links there, instead of a disabled-looking item that
+only toasted. LinkedIn Studio is six saved cards with copy buttons, written
+in one action, saved section by section (`linkedin_sections` artifact), not
+a chat whose output vanished on navigation. "Copy bullets" is gone (they go
+into the CV automatically). The To-Do action says "I have fixed this" and
+the recruiter's flag card shows "Candidate says fixed. Check the CV",
+because the candidate's word is a claim. Pipeline cards say where Advance
+goes; the submission builder exists once, linked from candidate detail; the
+theme toggle shows and names the theme it switches to; STAR figures are
+spelled out; admin modules are on/off switches with product names; nav
+labels match page titles ("Interview", "Portfolio").
+
+**Verification.** 89/89 tests, 15 new: document intake against fictional
+fixtures regenerated by `tests/fixtures/make-fixtures.mjs` (a two-column PDF
+and a deflated Word file with real list numbering), and an HTTP-level suite
+(`tests/platform.test.ts`) running the real router with a fake `fetch` that
+refuses unlisted hosts: temporary passwords, one upload reused through
+onboarding, practice gating, connector ownership proof, sanitization and
+deletion, LeetCode parsing, profile approval, preview, revocation and
+expiry, the denial regression, the builder transcript rule, and LinkedIn
+persistence. Every changed screen was checked in the running app at desktop
+and phone widths. Not done: the pre-registered parser comparison against a
+real CV corpus that the experiment discipline calls for (the fixtures are
+synthetic and few); it should run before claiming extraction accuracy.

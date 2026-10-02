@@ -1,16 +1,27 @@
-/* Public candidate profile: the shareable "brief overview" a recruiter
-   sends to the end customer. Unauthenticated by design, the id in the
-   URL is the capability token (see Store.publicProfilePage server side).
-   No session, no cookies sent, no CSRF: this is a plain read plus a
-   client-side document download, same as the rest of the CV pipeline. */
-import { h, checkGlyph, clear } from '../shared/dom.js';
+/* Public candidate profile: the one-page insight a recruiter sends to the
+   target company (ADR-0022). Unauthenticated by design: the id in the URL
+   is the capability token, and the link works only while the candidate's
+   approval stands. The candidate and their agency may preview it first.
+
+   Its job is a hiring manager's first minute: how well does this person
+   fit the role, and how sure can I be? Every requirement shows its
+   evidence and where it came from, and "verified" is reserved for what
+   Certainty checked itself. Contact details stay inside the CV download. */
+import { h, clear, mark, brandMark, setWidthPct, setLeftPct } from '../shared/dom.js';
+import { initTheme } from '../shared/theme.js';
 import { cvBlocks } from '../shared/cv-template.js';
 import { buildCvPdf } from '../shared/pdf.js';
 import { buildCvDocx } from '../shared/docx.js';
 const root = document.getElementById('root');
+const FIT = {
+    verified: { mark: 'confirmed', word: 'Verified' },
+    claimed: { mark: 'claimed', word: 'Claimed' },
+    partial: { mark: 'gap', word: 'Partly evidenced' },
+    gap: { mark: 'gap', word: 'Not evidenced' },
+};
 function initials(name) {
     const parts = name.trim().split(/\s+/);
-    return ((parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase();
+    return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 function downloadBlob(blob, filename) {
     const a = document.createElement('a');
@@ -19,75 +30,141 @@ function downloadBlob(blob, filename) {
     a.click();
     URL.revokeObjectURL(a.href);
 }
-function renderNotFound() {
-    root.append(h('div', { class: 'profile-notfound' }, h('h1', {}, 'This link is not available'), h('p', {}, 'The profile may not be ready yet, or the link has expired. Ask the recruiter for a fresh one.')));
+function section(title, ...children) {
+    return h('section', { class: 'pp-sec' }, h('h2', { class: 'pp-h2' }, title), ...children);
 }
-function renderProfile(p, cv) {
-    const hero = h('div', { class: 'profile-hero' }, h('div', { class: 'profile-avatar' }, initials(p.name)), h('div', { class: 'profile-id' }, h('h1', { class: 'profile-name' }, p.name), h('p', { class: 'profile-headline' }, p.headline), h('p', { class: 'profile-loc' }, p.location)));
-    root.append(hero);
-    if (p.verified) {
-        const badge = h('span', { class: 'verified-badge' }, checkGlyph(12), h('span', {}, 'Verified via structured interview'));
-        root.append(badge);
+function verifiedStamp(ok) {
+    return h('span', { class: 'stamp' }, mark(ok ? 'confirmed' : 'claimed'), ok ? 'Ownership verified' : 'Not verified');
+}
+function renderNotFound() {
+    root.append(h('div', { class: 'pp-notfound' }, h('h1', { class: 't-view' }, 'This link is not available'), h('p', { class: 't-secondary' }, 'The candidate may have stopped sharing it, or it has expired. Ask the recruiter for a fresh link.')));
+}
+function renderProfile(d) {
+    const p = d.profile;
+    const ins = d.insight;
+    /* Top bar: brand, and who prepared the page. */
+    root.append(h('header', { class: 'pp-top' }, h('span', { class: 'pp-brand' }, brandMark(20), h('span', {}, 'Certainty')), h('span', { class: 't-caption' }, d.tenantName ? `Prepared by ${d.tenantName}` : '')));
+    if (d.preview) {
+        root.append(h('div', { class: 'pp-preview', role: 'note' }, 'Preview. This page is not shared yet: it works for others only after the candidate approves sharing.'));
     }
-    if (p.companies.length) {
-        const sec = h('div', { class: 'profile-section' }, h('h2', {}, 'Worked with'));
-        const wrap = h('div', { class: 'chip-wrap' });
-        for (const c of p.companies)
-            wrap.append(h('span', { class: 'chip' }, c));
-        sec.append(wrap);
-        root.append(sec);
+    /* Identity and the one-line verdict. */
+    const facts = h('div', { class: 'pp-facts' });
+    if (ins?.fitSummary.total) {
+        facts.append(h('span', { class: 'stamp' }, mark(ins.fitSummary.verified ? 'confirmed' : 'claimed'), `${ins.fitSummary.evidenced} of ${ins.fitSummary.total} requirements evidenced, ${ins.fitSummary.verified} verified`));
     }
-    if (p.highlights.length) {
-        const sec = h('div', { class: 'profile-section' }, h('h2', {}, 'Highlights'));
-        const list = h('div', { class: 'highlight-list' });
-        for (const item of p.highlights)
-            list.append(h('p', { class: 'highlight-item' }, item));
-        sec.append(list);
-        root.append(sec);
-    }
-    if (p.skills.length) {
-        const sec = h('div', { class: 'profile-section' }, h('h2', {}, 'Skills'));
-        for (const g of p.skills) {
-            sec.append(h('p', { class: 'skill-group' }, h('b', {}, `${g.group}: `), document.createTextNode(g.items.join(', '))));
+    if (ins?.interview)
+        facts.append(h('span', { class: 'stamp' }, mark('confirmed'), `Verified interview, ${ins.interview.date}`));
+    root.append(h('div', { class: 'pp-hero' }, h('span', { class: 'avatar avatar-lg' }, initials(p.name)), h('div', { class: 'pp-id' }, h('h1', { class: 't-display' }, p.name), h('p', { class: 't-secondary' }, [p.headline, p.location].filter(Boolean).join(' · ')), ins?.targetRole ? h('p', { class: 'pp-target' }, `For the ${ins.targetRole} role${ins.targetCompany ? ` at ${ins.targetCompany}` : ''}`) : '', facts)));
+    /* Fit: each requirement, its evidence, and where the evidence is from. */
+    if (ins && ins.fit.length) {
+        const list = h('ul', { class: 'pp-fit' });
+        for (const f of ins.fit) {
+            const meta = FIT[f.status];
+            list.append(h('li', { class: `pp-fit-row is-${f.status}` }, mark(meta.mark), h('div', { class: 'pp-fit-main' }, h('span', { class: 'pp-fit-req' }, f.requirement), h('span', { class: 't-caption' }, f.sources.length ? `Evidence: ${f.sources.join(', ')}`
+                : f.partial?.length ? `Partly in: ${f.partial.join(', ')}` : 'No evidence found yet')), h('span', { class: 'pp-fit-word' }, meta.word)));
         }
-        root.append(sec);
+        root.append(section('Fit for this role', list, h('p', { class: 'pp-legend t-caption' }, 'Verified means Certainty checked it: in a recorded, consented interview, or on an account whose ownership the candidate proved. Claimed means it is stated in the CV or on an account not yet verified.')));
     }
-    if (p.education.length) {
-        const sec = h('div', { class: 'profile-section' }, h('h2', {}, 'Education'));
-        const list = h('div', { class: 'edu-list' });
-        for (const e of p.education)
-            list.append(h('p', {}, e));
-        sec.append(list);
-        root.append(sec);
+    if (ins?.achievements.length) {
+        const ol = h('ol', { class: 'pp-ach' });
+        for (const a of ins.achievements)
+            ol.append(h('li', {}, a));
+        root.append(section('Key achievements', ol));
     }
-    if (cv) {
-        const fields = cv;
-        const filenameBase = p.name.replace(/\s+/g, '-');
-        const dl = h('div', { class: 'profile-dl' }, h('p', {}, 'The full CV, including contact details, is available as a download.'));
-        const actions = h('div', { class: 'profile-dl-actions' });
-        const pdfBtn = h('button', { class: 'mbtn mbtn-primary' }, 'Download PDF');
-        pdfBtn.addEventListener('click', () => downloadBlob(buildCvPdf(cvBlocks(p.name, fields)), `${filenameBase}-CV.pdf`));
-        const docxBtn = h('button', { class: 'mbtn mbtn-line' }, 'Download DOCX');
-        docxBtn.addEventListener('click', () => downloadBlob(buildCvDocx(cvBlocks(p.name, fields)), `${filenameBase}-CV.docx`));
-        actions.append(pdfBtn, docxBtn);
-        dl.append(actions);
-        root.append(dl);
+    /* Contributions and problem solving, from connected accounts. */
+    const work = h('div', { class: 'pp-grid' });
+    if (ins?.github) {
+        const g = ins.github;
+        const card = h('div', { class: 'pp-card' }, h('div', { class: 'pp-card-head' }, h('h3', { class: 't-section' }, 'Contributions'), verifiedStamp(g.verified)), h('p', { class: 't-caption' }, 'GitHub · ', h('a', { href: g.url, target: '_blank', rel: 'noopener' }, `@${g.username}`)), h('div', { class: 'pp-nums' }, h('div', {}, h('b', { class: 'figures' }, String(g.mergedPrCount)), h('span', { class: 't-caption' }, 'merged PRs to other projects')), h('div', {}, h('b', { class: 'figures' }, `${g.activeMonths}/12`), h('span', { class: 't-caption' }, 'active months, last year'))));
+        if (g.languages.length)
+            card.append(h('p', { class: 't-caption' }, `Languages: ${g.languages.join(', ')}`));
+        const repos = h('ul', { class: 'pp-list' });
+        for (const r of g.repos.slice(0, 3)) {
+            repos.append(h('li', {}, h('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.name), h('span', { class: 't-caption' }, [r.language, r.description].filter(Boolean).join(' · '))));
+        }
+        for (const pr of g.mergedPrs.slice(0, 2)) {
+            repos.append(h('li', {}, h('a', { href: pr.url, target: '_blank', rel: 'noopener' }, pr.repo), h('span', { class: 't-caption' }, `Merged: ${pr.title}`)));
+        }
+        card.append(repos);
+        work.append(card);
     }
+    if (ins?.leetcode) {
+        const l = ins.leetcode;
+        const card = h('div', { class: 'pp-card' }, h('div', { class: 'pp-card-head' }, h('h3', { class: 't-section' }, 'Problem solving'), verifiedStamp(l.verified)), h('p', { class: 't-caption' }, 'LeetCode · ', h('a', { href: l.url, target: '_blank', rel: 'noopener' }, `@${l.username}`)), h('div', { class: 'pp-nums' }, h('div', {}, h('b', { class: 'figures' }, String(l.solved.all)), h('span', { class: 't-caption' }, `solved: ${l.solved.easy} easy, ${l.solved.medium} medium, ${l.solved.hard} hard`)), l.contest ? h('div', {}, h('b', { class: 'figures' }, String(l.contest.rating)), h('span', { class: 't-caption' }, `contest rating, ${l.contest.attended} contests`)) : ''));
+        if (l.badges.length)
+            card.append(h('p', { class: 't-caption' }, `Badges: ${l.badges.join(', ')}`));
+        work.append(card);
+    }
+    if (work.childElementCount)
+        root.append(section('Work you can inspect', work));
+    /* The verified interview, in numbers only; no transcript leaves. */
+    if (ins?.interview) {
+        const targets = { S: 15, T: 10, A: 50, R: 25 };
+        const names = { S: 'Situation', T: 'Task', A: 'Action', R: 'Result' };
+        const bars = h('div', { class: 'pp-star' });
+        for (const k of ['S', 'T', 'A', 'R']) {
+            const v = ins.interview.star[k] ?? 0;
+            bars.append(h('div', { class: 'meter' }, h('div', { class: 'meter-head' }, h('span', { class: 't-secondary' }, names[k]), h('span', { class: 't-caption figures' }, `${v}% · target ${targets[k]}%`)), h('div', { class: 'meter-track' }, setWidthPct(h('div', { class: 'meter-fill' }), v * 2), setLeftPct(h('span', { class: 'meter-tick' }), targets[k] * 2))));
+        }
+        root.append(section('Structured interview', h('p', { class: 't-caption' }, `How the candidate's answers divided between situation, task, action and result, against a strong-answer target.${ins.interview.ownership !== null ? ` ${ins.interview.ownership}% of answers spoke in the first person.` : ''}`), bars));
+    }
+    /* Background: where, what, and education. */
+    const bg = h('div', { class: 'pp-bg' });
+    if (p.companies.length)
+        bg.append(h('div', {}, h('h3', { class: 't-caption' }, 'Worked with'), h('p', { class: 't-body' }, p.companies.join(', '))));
+    if (p.skills.length)
+        bg.append(h('div', {}, h('h3', { class: 't-caption' }, 'Skills'), h('p', { class: 't-body' }, p.skills.flatMap(s => s.items).join(', '))));
+    if (p.education.length)
+        bg.append(h('div', {}, h('h3', { class: 't-caption' }, 'Education'), h('p', { class: 't-body' }, p.education.join('; '))));
+    if (bg.childElementCount)
+        root.append(section('Background', bg));
+    /* The formatted CV travels with the page. */
+    const foot = h('footer', { class: 'pp-foot' }, h('p', { class: 't-secondary' }, d.cv ? 'The full CV, with contact details, is attached.' : 'The full CV follows from the recruiter.'));
+    if (d.cv) {
+        const fields = d.cv;
+        const base = p.name.replace(/\s+/g, '-');
+        const pdf = h('button', { class: 'btn btn-primary' }, 'Download CV (PDF)');
+        pdf.addEventListener('click', () => downloadBlob(buildCvPdf(cvBlocks(p.name, fields)), `${base}-CV.pdf`));
+        const docx = h('button', { class: 'btn' }, 'Download CV (Word)');
+        docx.addEventListener('click', () => downloadBlob(buildCvDocx(cvBlocks(p.name, fields)), `${base}-CV.docx`));
+        const print = h('button', { class: 'btn btn-ghost' }, 'Print this page');
+        print.addEventListener('click', () => window.print());
+        foot.append(h('div', { class: 'pp-actions' }, pdf, docx, print));
+    }
+    root.append(foot);
+}
+/* Paper is light: switch tokens for printing, restore afterwards. */
+function printInLight() {
+    let previous = null;
+    window.addEventListener('beforeprint', () => {
+        previous = document.documentElement.getAttribute('data-theme');
+        document.documentElement.setAttribute('data-theme', 'light');
+    });
+    window.addEventListener('afterprint', () => {
+        if (previous)
+            document.documentElement.setAttribute('data-theme', previous);
+    });
 }
 async function boot() {
+    initTheme();
+    printInLight();
     const id = location.pathname.split('/').filter(Boolean).at(-1) ?? '';
     clear(root);
+    let data;
     try {
-        const res = await fetch(`/api/public/profile/${encodeURIComponent(id)}`);
+        const res = await fetch(`/api/public/profile/${encodeURIComponent(id)}`, { credentials: 'same-origin' });
         if (!res.ok) {
             renderNotFound();
             return;
         }
-        const data = await res.json();
-        renderProfile(data.profile, data.cv);
+        data = await res.json();
     }
     catch {
         renderNotFound();
+        return;
     }
+    /* A rendering fault is not a missing link: let it surface as an error
+       rather than telling the reader the candidate withdrew the page. */
+    renderProfile(data);
 }
 boot();

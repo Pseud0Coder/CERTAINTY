@@ -30,6 +30,11 @@ export class Store {
     if (!cols.includes('target_company')) {
       this.db.exec('ALTER TABLE candidates ADD COLUMN target_company TEXT');
     }
+    const userCols = (this.db.prepare('PRAGMA table_info(users)').all() as unknown as Array<{ name: string }>)
+      .map(c => c.name);
+    if (!userCols.includes('must_change_password')) {
+      this.db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   private ensureSchema(): void {
@@ -139,6 +144,12 @@ export class Store {
       .run(t.id, t.name, t.createdAt);
     return t;
   }
+  /* The caller's own tenant name, for chrome (the agency a user works in).
+     Scoped by ctx like every read, so no tenant can name another. */
+  tenantName(ctx: Ctx): string | null {
+    const row = this.db.prepare('SELECT name FROM tenants WHERE id = ?').get(ctx.tenantId) as { name: string } | undefined;
+    return row?.name ?? null;
+  }
   createUser(tenantId: string, email: string, passwordHash: string, role: Role, displayName: string): User {
     const u: User = {
       id: randomUUID(), tenantId, email: email.toLowerCase(), passwordHash,
@@ -148,6 +159,12 @@ export class Store {
       'INSERT INTO users (id, tenant_id, email, password_hash, role, display_name, created_at) VALUES (?,?,?,?,?,?,?)')
       .run(u.id, u.tenantId, u.email, u.passwordHash, u.role, u.displayName, u.createdAt);
     return u;
+  }
+  /* Replaces a password hash. `mustChange` marks a password someone else
+     chose (a recruiter-generated one), which the user must replace. */
+  setPassword(userId: string, passwordHash: string, mustChange: boolean): void {
+    this.db.prepare('UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?')
+      .run(passwordHash, mustChange ? 1 : 0, userId);
   }
   userByEmail(email: string): User | null {
     const row = this.db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as
@@ -326,6 +343,17 @@ export class Store {
           .all(ctx.tenantId, candidateId) as any[];
     return rows.map(rowToArtifact);
   }
+  updateArtifactFields(ctx: Ctx, id: string, fields: Record<string, unknown>): void {
+    this.db.prepare('UPDATE artifacts SET fields = ? WHERE tenant_id = ? AND id = ?')
+      .run(JSON.stringify(fields), ctx.tenantId, id);
+    this.emit(ctx.tenantId, 'artifact.changed', { id });
+  }
+  /* Hard delete, for data the candidate takes back (a disconnected
+     account). Tenant-scoped like every other write. */
+  deleteArtifact(ctx: Ctx, id: string): void {
+    this.db.prepare('DELETE FROM artifacts WHERE tenant_id = ? AND id = ?').run(ctx.tenantId, id);
+    this.emit(ctx.tenantId, 'artifact.changed', { id });
+  }
   updateArtifactContent(ctx: Ctx, id: string, content: string): void {
     this.db.prepare('UPDATE artifacts SET content = ? WHERE tenant_id = ? AND id = ?')
       .run(content, ctx.tenantId, id);
@@ -473,6 +501,7 @@ function rowToUser(r: any): User {
   return {
     id: r.id, tenantId: r.tenant_id, email: r.email, passwordHash: r.password_hash,
     role: r.role, displayName: r.display_name, createdAt: r.created_at,
+    mustChangePassword: r.must_change_password === 1,
   };
 }
 function rowToCandidate(r: any): Candidate {

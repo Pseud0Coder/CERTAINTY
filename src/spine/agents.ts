@@ -212,6 +212,149 @@ export function parseResume(text: string): ResumeFields {
   };
 }
 
+/* Real CVs do not follow the seeded template above. This reads the common
+   shapes instead: section headings in any case ("Work Experience:",
+   "PROFESSIONAL EXPERIENCE", "Skills"), dates as 07/2019, Jul 2019, July
+   2019 or 2019, ranges with hyphens, en dashes or "to", an open end
+   ("Present"), the role and company on one line or split over two, bullet
+   glyphs, and bullets wrapped onto a second line. Deterministic and
+   offline; anything it cannot place is left out rather than invented. */
+const MONTHS: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', sept: '09', oct: '10', nov: '11', dec: '12',
+};
+const DATE_TOKEN = String.raw`(?:(?:0?[1-9]|1[0-2])\/\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4})`;
+const RANGE = new RegExp(String.raw`(${DATE_TOKEN})\s*(?:-|\u2013|\u2014|to)\s*(${DATE_TOKEN}|present|current|now|today)`, 'i');
+const SECTION_RE: Array<[keyof typeof SECTION_NAMES, RegExp]> = [
+  ['experience', /^(work |professional |employment |relevant |career )?(experience|history|employment)( history)?:?$/i],
+  ['skills', /^((key|core|technical|professional) )?skills( (&|and) (tools|technologies))?:?$/i],
+  ['tools', /^(tools|technologies|tech stack)( (&|and) (tools|technologies))?:?$/i],
+  ['education', /^(education|qualifications|education (&|and) (training|qualifications))( history)?:?$/i],
+  ['summary', /^(summary|profile|about( me)?|professional summary|objective):?$/i],
+  ['other', /^(certifications?|projects|awards|languages|interests|publications|volunteering|references):?$/i],
+];
+const SECTION_NAMES = { experience: 1, skills: 1, tools: 1, education: 1, summary: 1, other: 1 } as const;
+const TITLE_WORDS = /\b(engineer|developer|manager|lead|director|analyst|designer|consultant|specialist|scientist|intern|head|officer|architect|associate|administrator|coordinator|executive|programmer|tester|founder|president|vp|principal|owner|assistant|advisor|researcher|technician|editor|writer|accountant|recruiter)\b/i;
+const BULLET_RE = /^\s*(?:[-*•▪●◦‣⁃–]|\d+[.)])\s+/;
+
+function normDate(token: string): string {
+  const t = token.trim().toLowerCase();
+  if (/^(present|current|now|today)$/.test(t)) return 'Present';
+  const mm = /^(\d{1,2})\/(\d{4})$/.exec(t);
+  if (mm) return `${mm[1]!.padStart(2, '0')}/${mm[2]}`;
+  const mon = /^([a-z]+)\.?\s+(\d{4})$/.exec(t);
+  if (mon) return `${MONTHS[mon[1]!.slice(0, 4)] ?? MONTHS[mon[1]!.slice(0, 3)] ?? '01'}/${mon[2]}`;
+  return t;
+}
+
+function splitTitleCompany(text: string): { title: string; company: string } {
+  const cleaned = text.replace(/[\s,|\u2013\u2014-]+$/, '').replace(/^[\s,|\u2013\u2014-]+/, '').trim();
+  const parts = cleaned.split(/\s+\|\s+|\s+(?:at|@)\s+|\s+[\u2013\u2014-]\s+|,\s+/).map(s => s.trim()).filter(Boolean);
+  if (parts.length < 2) return { title: TITLE_WORDS.test(cleaned) ? cleaned : '', company: TITLE_WORDS.test(cleaned) ? '' : cleaned };
+  const titleIdx = parts.findIndex(p => TITLE_WORDS.test(p));
+  if (titleIdx < 0) return { title: parts[0]!, company: parts.slice(1).join(', ') };
+  const title = parts[titleIdx]!;
+  const company = parts.filter((_, i) => i !== titleIdx).join(', ');
+  return { title, company };
+}
+
+export function parseResumeLoose(text: string): ResumeFields {
+  const lines = text.split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const sectionOf = (line: string): keyof typeof SECTION_NAMES | null =>
+    line.length <= 48 ? (SECTION_RE.find(([, re]) => re.test(line))?.[0] ?? null) : null;
+
+  const firstSection = lines.findIndex(l => sectionOf(l));
+  const head = lines.slice(0, firstSection < 0 ? Math.min(lines.length, 6) : firstSection);
+  const email = head.join(' ').match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? '';
+  const phone = head.join(' ').match(/\+?\d[\d\s().-]{7,}\d/)?.[0]?.trim() ?? '';
+  /* Contact lines carry an email, a phone or a "|" run; the positioning
+     line is the first other line after the name. */
+  const isContact = (l: string) => /@|\+?\d[\d\s().-]{7,}\d|\|/.test(l) || /linkedin\.com|github\.com|https?:\/\//i.test(l);
+  const positioning = head.slice(1).find(l => !isContact(l)) ?? '';
+  const contactLine = head.find(l => l.includes('|')) ?? '';
+  const location = contactLine.split('|').map(s => s.trim())
+    .find(s => s && !/@|\d{5,}|\+?\d[\d\s().-]{7,}\d|https?:|linkedin|github/i.test(s))
+    /* Otherwise a "City, Country" line on its own near the top. */
+    ?? head.find(l => /^[A-Z][A-Za-z .'-]{1,30},\s*[A-Z][A-Za-z .'-]{1,30}$/.test(l) && !TITLE_WORDS.test(l)) ?? '';
+
+  const roles: RoleField[] = [];
+  const skills: Array<{ group: string; items: string[] }> = [];
+  const tools: string[] = [];
+  const education: string[] = [];
+  let section: keyof typeof SECTION_NAMES | null = null;
+  let current: RoleField | null = null;
+  let pendingHeader = '';
+
+  for (const line of lines.slice(Math.max(0, firstSection))) {
+    const s = sectionOf(line);
+    if (s) { section = s; current = null; pendingHeader = ''; continue; }
+    if (section === 'experience') {
+      const range = RANGE.exec(line);
+      if (range) {
+        const rest = line.replace(range[0], '').replace(/[()]/g, ' ').trim();
+        let { title, company } = splitTitleCompany(rest);
+        /* Two-line headers: "Senior Engineer" then "Acme Ltd, London  Jan
+           2020 - Present", or the reverse. The line carrying a job-title
+           word is the title; the other line is the company, kept whole. */
+        if (pendingHeader) {
+          const headIsTitle = TITLE_WORDS.test(pendingHeader);
+          const restIsTitle = TITLE_WORDS.test(rest);
+          if (!rest) ({ title, company } = splitTitleCompany(pendingHeader));
+          else if (headIsTitle && !restIsTitle) { title = pendingHeader; company = rest.replace(/[\s,|]+$/, ''); }
+          else if (!headIsTitle && restIsTitle) { company = pendingHeader; title = rest.replace(/[\s,|]+$/, ''); }
+          else {
+            const prev = splitTitleCompany(pendingHeader);
+            if (!title) title = prev.title || pendingHeader;
+            if (!company) company = prev.company || (prev.title ? '' : pendingHeader);
+          }
+        }
+        if (!title && !company) continue;
+        current = { company, title, start: normDate(range[1]!), end: normDate(range[2]!), bullets: [] };
+        roles.push(current);
+        pendingHeader = '';
+        continue;
+      }
+      if (BULLET_RE.test(line)) {
+        if (current) current.bullets.push(line.replace(BULLET_RE, '').trim());
+        continue;
+      }
+      /* A wrapped bullet continues in lower case or mid-sentence. */
+      if (current && current.bullets.length && /^[a-z(,;]/.test(line)) {
+        current.bullets[current.bullets.length - 1] += ` ${line}`;
+        continue;
+      }
+      /* Otherwise a short line is a header for the next role; a long one is
+         an unbulleted achievement sentence under the current role. */
+      if (line.length <= 80 && !/[.!?]$/.test(line)) pendingHeader = line;
+      else if (current) current.bullets.push(line);
+      continue;
+    }
+    if (section === 'skills') {
+      const idx = line.indexOf(':');
+      const items = (idx > 0 ? line.slice(idx + 1) : line).replace(BULLET_RE, '')
+        .split(/\s*[|,;•]\s*/).map(x => x.trim()).filter(Boolean);
+      if (items.length) skills.push({ group: idx > 0 ? line.slice(0, idx).trim() : 'Skills', items });
+      continue;
+    }
+    if (section === 'tools') {
+      tools.push(...line.replace(BULLET_RE, '').split(/\s*[|,;•]\s*/).map(x => x.trim()).filter(Boolean));
+      continue;
+    }
+    if (section === 'education') education.push(line.replace(BULLET_RE, ''));
+  }
+
+  return { positioning, location, phone, email, roles, skills, tools, education };
+}
+
+/* The resume structurer used at ingestion: the strict template reader
+   first (seeded and app-generated CVs match it exactly), the tolerant
+   reader when the template yields no roles. */
+export function structureResume(text: string): ResumeFields & { structuredBy: 'template' | 'loose' } {
+  const strict = parseResume(text);
+  if (strict.roles.length) return { ...strict, structuredBy: 'template' };
+  return { ...parseResumeLoose(text), structuredBy: 'loose' };
+}
+
 /* ---------- submission composer ---------- */
 
 function formatDates(d: string): string { return d; }
@@ -306,7 +449,7 @@ export function composeSubmission(evidence: {
 
 const STOPWORDS = new Set(['must', 'have', 'with', 'the', 'and', 'for', 'from', 'that', 'this', 'their', 'into', 'over', 'under', 'scale', 'high', 'level', 'experience', 'strong', 'good']);
 
-function keywords(s: string): string[] {
+export function keywords(s: string): string[] {
   return s.toLowerCase().split(/[^a-z0-9+#]+/).filter(w => w.length > 2 && !STOPWORDS.has(w));
 }
 
@@ -727,7 +870,8 @@ export function screenerTurn(state: SessionState, jdMustHave: string[], text: st
 }
 
 /* LinkedIn Studio generation agent. The completed resume is the source of truth. */
-const SECTION_LIST = ['banner', 'headline', 'about', 'experience', 'keywords', 'skills'];
+export const LINKEDIN_SECTIONS = ['banner', 'headline', 'about', 'experience', 'keywords', 'skills'] as const;
+const SECTION_LIST: string[] = [...LINKEDIN_SECTIONS];
 
 export function linkedinTurn(state: SessionState, resume: ResumeFields, text: string):
   { reply: string; state: SessionState; declareComplete?: { sections: number } } {

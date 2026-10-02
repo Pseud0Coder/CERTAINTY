@@ -20,6 +20,10 @@ export interface JourneyState {
   cv: 'pending' | 'complete';
   linkedin: 'locked' | 'unlocked' | 'complete';
   interview: 'locked' | 'unlocked';
+  /* Private practice opens as soon as the research report exists: it is
+     low stakes and most useful early. Only the verified, shared session
+     waits for the finished CV and LinkedIn (ADR-0022). */
+  practice: 'locked' | 'unlocked';
   findings: ResearchFinding[];
   unlockNotes: Record<string, string>;
 }
@@ -62,6 +66,7 @@ export function journeyState(store: Store, ctx: Ctx, candidateId: string): Journ
     .some(run => run.flowId === 'linkedin_studio' && run.status === 'complete');
   const linkedin = linkedinRun ? 'complete' as const : (rolesDone && research === 'complete' ? 'unlocked' as const : 'locked' as const);
   const interview = (cv === 'complete' && linkedin === 'complete') ? 'unlocked' as const : 'locked' as const;
+  const practice = (onboarding === 'complete' && research === 'complete') ? 'unlocked' as const : 'locked' as const;
 
   const unlockNotes: Record<string, string> = {};
   if (linkedin === 'locked') {
@@ -72,10 +77,11 @@ export function journeyState(store: Store, ctx: Ctx, candidateId: string): Journ
   if (interview === 'locked') {
     unlockNotes['interview'] = cv !== 'complete'
       ? 'Your revamped CV is generated once every role is complete'
-      : 'Finish your LinkedIn sections to unlock the interview';
+      : 'Finish your LinkedIn sections to unlock the verified interview';
   }
+  if (practice === 'locked') unlockNotes['practice'] = 'Practice opens once your research report is ready';
   return {
-    onboarding, research, roles, rolesDone, cv, linkedin, interview,
+    onboarding, research, roles, rolesDone, cv, linkedin, interview, practice,
     findings, unlockNotes,
   };
 }

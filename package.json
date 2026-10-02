@@ -15,9 +15,10 @@
     "build:web": "node scripts/sync-web.mjs"
   },
   "dependencies": {
+    "@llamaindex/liteparse": "^2.15.0",
     "@types/node": "^24.5.2",
-    "typescript": "^5.9.2",
     "livekit-client": "^2.22.3",
-    "livekit-server-sdk": "^2.19.1"
+    "livekit-server-sdk": "^2.19.1",
+    "typescript": "^5.9.2"
   }
 }

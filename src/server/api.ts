@@ -12,19 +12,30 @@ import {
 import { advance, park } from '../spine/stages.ts';
 import { quarantine } from '../spine/quarantine.ts';
 import { assertModule, MODULES, invoice } from '../spine/billing.ts';
-import { AccessToken } from 'livekit-server-sdk';
+import {
+  livekitConfigFromEnv, voiceChain, mintVoiceToken, verifyVoiceWebhook,
+  ingestVoicePayload, VoiceError,
+} from './livekit.ts';
 import { applyRetention, gdprErase, gdprExport } from '../spine/retention.ts';
 import { provisionCandidate } from '../spine/profile.ts';
 import { journeyState } from '../spine/journey.ts';
 import { login, logout, loginRateLimited, recordFailure, clearFailures } from './auth.ts';
 import { randomUUID } from 'node:crypto';
+import { extractDocument, decodeUpload, DocumentError, MAX_DOCUMENT_BYTES } from '../spine/documents.ts';
+import {
+  PROVIDERS, ConnectorError, normalizeUsername, verificationCode, fetchSnapshot, bioHasCode, profileUrl,
+  type Provider, type FetchLike,
+} from '../spine/connectors.ts';
+import { connectorStates, profileInsight } from '../spine/insight.ts';
+import { hashPassword, verifyPassword } from '../spine/seed.ts';
 
 export class ApiError extends Error {
   status: number; code: string;
   constructor(status: number, code: string) { super(code); this.status = status; this.code = code; }
 }
 
-export interface ApiDeps { store: Store; engine: Engine }
+/* `fetch` is injectable so connector tests never touch the network. */
+export interface ApiDeps { store: Store; engine: Engine; fetch?: FetchLike }
 
 interface ReqCtx {
   deps: ApiDeps; user: User; csrf: string; ctx: Ctx;
@@ -35,10 +46,13 @@ interface ReqCtx {
 
 type Handler = (r: ReqCtx) => Promise<void> | void;
 
-const routes: Array<{ method: string; re: RegExp; roles: Role[] | null; handler: Handler }> = [];
-function route(method: string, pattern: string, roles: Role[] | null, handler: Handler): void {
+const routes: Array<{ method: string; re: RegExp; roles: Role[] | null; handler: Handler; maxBody: number }> = [];
+const DEFAULT_MAX_BODY = 2_000_000;
+/* Base64 inflates by a third; document routes get room for one file. */
+const UPLOAD_MAX_BODY = Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 64_000;
+function route(method: string, pattern: string, roles: Role[] | null, handler: Handler, opts: { maxBody?: number } = {}): void {
   const re = new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$');
-  routes.push({ method, re, roles, handler });
+  routes.push({ method, re, roles, handler, maxBody: opts.maxBody ?? DEFAULT_MAX_BODY });
 }
 
 /* ---------- helpers ---------- */
@@ -106,20 +120,103 @@ export async function handleAuth(req: IncomingMessage, res: ServerResponse, deps
 /* No session, so no tenant to scope by: the artifact id in the path is
    itself the capability token (see Store.publicProfilePage). Kept
    entirely separate from the authenticated route table below it. */
-export function handlePublicProfile(deps: ApiDeps, url: URL, send: (s: number, d: unknown) => void): boolean {
+export function handlePublicProfile(deps: ApiDeps, url: URL, send: (s: number, d: unknown) => void,
+  auth: { user: User } | null = null): boolean {
+  if (url.pathname === '/api/public/config') {
+    /* Demo affordances (the demo account list on the login page) are on
+       unless a deployment turns them off with CERTAINTY_DEMO=off. */
+    send(200, { demo: process.env.CERTAINTY_DEMO !== 'off' });
+    return true;
+  }
   const m = /^\/api\/public\/profile\/([^/]+)$/.exec(url.pathname);
   if (!m) return false;
   const page = deps.store.publicProfilePage(m[1]!);
   if (!page) { send(404, { error: 'not_found' }); return true; }
-  const cv = deps.store.artifacts({ tenantId: page.tenantId }, page.candidateId, 'cv').at(-1);
-  send(200, { profile: page.fields, cv: cv ? cv.fields : null });
+  /* A link works only while the candidate's approval stands and has not
+     expired; revoked and expired links answer like missing ones. */
+  const ctx = { tenantId: page.tenantId };
+  /* The candidate (and their agency) can preview a page before approving
+     it; to anyone else an unapproved page does not exist. */
+  const insider = !!auth && auth.user.tenantId === page.tenantId && (
+    auth.user.role !== 'candidate' || deps.store.candidateByUser(ctx, auth.user.id)?.id === page.candidateId);
+  const live = shareIsLive(page.fields);
+  if (!live && !insider) { send(410, { error: 'link_inactive' }); return true; }
+  const cv = deps.store.artifacts(ctx, page.candidateId, 'cv').at(-1);
+  const insight = profileInsight(deps.store, ctx, page.candidateId);
+  const fields = { ...page.fields };
+  delete (fields as Record<string, unknown>).share;
+  send(200, { profile: fields, insight, cv: cv ? cv.fields : null, tenantName: deps.store.tenantName(ctx), preview: !live });
   return true;
 }
 
-function readBody(req: IncomingMessage): Promise<any> {
+interface ShareState { enabled: boolean; approvedAt: string | null; expiresAt: string | null }
+const SHARE_DAYS = 30;
+function shareOf(fields: Record<string, unknown>): ShareState {
+  const s = fields.share as Partial<ShareState> | undefined;
+  return { enabled: !!s?.enabled, approvedAt: s?.approvedAt ?? null, expiresAt: s?.expiresAt ?? null };
+}
+function shareIsLive(fields: Record<string, unknown>): boolean {
+  const s = shareOf(fields);
+  return s.enabled && !!s.expiresAt && Date.parse(s.expiresAt) > Date.now();
+}
+const PASSWORD_GATE_ALLOWED = new Set(['/api/me', '/api/auth/password']);
+
+/* Raw body for signature verification. The webhook never goes through the
+   generic JSON path: the signature covers the exact bytes. */
+function readRawBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', c => { data += c; if (data.length > 2_000_000) reject(new ApiError(413, 'too_large')); });
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > 1_000_000) { reject(new ApiError(413, 'too_large')); req.destroy(); return; }
+      data += chunk;
+    });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+
+async function handleVoiceWebhook(req: IncomingMessage, deps: ApiDeps,
+  send: (status: number, data: unknown) => void): Promise<void> {
+  const cfg = livekitConfigFromEnv();
+  if (!cfg) { send(503, { error: 'livekit_not_configured' }); return; }
+  let raw: string;
+  try {
+    raw = await readRawBody(req);
+  } catch {
+    send(413, { error: 'too_large' });
+    return;
+  }
+  const authHeader = req.headers['authorization'] as string | undefined;
+  const event = await verifyVoiceWebhook(cfg, raw, authHeader);
+  if (!event) { send(401, { error: 'invalid_signature' }); return; }
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    send(400, { error: 'bad_json' });
+    return;
+  }
+  try {
+    const result = ingestVoicePayload(deps.store, body);
+    send(200, { success: true, ingested: result.ingested });
+  } catch (e) {
+    if (e instanceof VoiceError) {
+      const status = e.code === 'missing_candidate_id' ? 400
+        : e.code === 'candidate_not_found' ? 404 : 409;
+      send(status, { error: e.code });
+      return;
+    }
+    console.error('voice webhook error', e);
+    send(500, { error: 'internal' });
+  }
+}
+
+function readBody(req: IncomingMessage, limit = DEFAULT_MAX_BODY): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', c => { data += c; if (data.length > limit) { reject(new ApiError(413, 'too_large')); req.destroy(); } });
     req.on('end', () => {
       if (!data) return resolve({});
       try { resolve(JSON.parse(data)); } catch { reject(new ApiError(400, 'bad_json')); }
@@ -137,12 +234,26 @@ route('GET', '/api/me', null, r => {
   }
   const entitlements = store.entitlements(r.ctx.tenantId).filter(e => e.enabled).map(e => e.module);
   r.send(200, {
-    user: { id: r.user.id, email: r.user.email, role: r.user.role, displayName: r.user.displayName, tenantId: r.user.tenantId },
-    candidateId, entitlements, stages: STAGES,
+    user: { id: r.user.id, email: r.user.email, role: r.user.role, displayName: r.user.displayName, tenantId: r.user.tenantId,
+      mustChangePassword: !!r.user.mustChangePassword },
+    tenantName: store.tenantName(r.ctx), candidateId, entitlements, stages: STAGES,
   });
 });
 
 route('GET', '/api/events', null, () => { /* handled by SSE hub before routing */ });
+
+/* Any signed-in user can change their password; a recruiter-generated one
+   must be changed before anything else works (PASSWORD_GATE_ALLOWED). */
+route('POST', '/api/auth/password', null, r => {
+  const current = String(r.body?.current ?? '');
+  const next = String(r.body?.next ?? '');
+  if (!verifyPassword(current, r.user.passwordHash)) throw new ApiError(403, 'wrong_password');
+  if (next.length < 10) throw new ApiError(400, 'password_too_short');
+  if (next === current) throw new ApiError(400, 'password_unchanged');
+  r.deps.store.setPassword(r.user.id, hashPassword(next), false);
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'password_changed', r.user.id);
+  r.send(200, { ok: true });
+});
 
 /* ---------- recruiter: pipeline and candidates ---------- */
 route('POST', '/api/recruiter/candidates', ['recruiter', 'admin'], r => {
@@ -154,8 +265,14 @@ route('POST', '/api/recruiter/candidates', ['recruiter', 'admin'], r => {
       targetRole: String(r.body?.targetRole ?? ''),
       targetCompany: r.body?.targetCompany ? String(r.body.targetCompany) : null,
     }, r.user.displayName);
+    /* The client's job description belongs to the recruiter, so it is
+       attached here and the candidate is never asked for it. */
+    const jd = String(r.body?.jd ?? '').trim();
+    if (jd) {
+      quarantine(r.deps.store, r.ctx, { candidateId: result.candidate.id, kind: 'jd', title: 'Client job description', raw: jd, createdBy: r.user.id });
+    }
     /* The generated password is returned exactly once, for the recruiter to
-       share with the candidate. It is stored hashed and never shown again. */
+       hand over. It is temporary: the candidate replaces it at first login. */
     r.send(200, { candidateId: result.candidate.id, credentials: result.credentials });
   } catch (e) {
     const code = e instanceof Error ? e.message : 'provision_failed';
@@ -331,7 +448,11 @@ route('POST', '/api/candidate/flows/:flowId/start', ['candidate'], async r => {
     if (!r.body?.roleKey) throw new ApiError(400, 'role_required');
   }
   if (r.params.flowId === 'linkedin_studio' && journey.linkedin === 'locked') throw new ApiError(409, 'linkedin_locked');
-  if (r.params.flowId === 'interview_screener' && journey.interview === 'locked') throw new ApiError(409, 'interview_locked');
+  if (r.params.flowId === 'interview_screener') {
+    const practice = r.body?.mode === 'practice';
+    if (practice && journey.practice === 'locked') throw new ApiError(409, 'practice_locked');
+    if (!practice && journey.interview === 'locked') throw new ApiError(409, 'interview_locked');
+  }
 
   const run = await r.deps.engine.startRun(r.ctx, {
     flowId: r.params.flowId!, candidateId, actorRole: 'candidate', actor: r.user.displayName,
@@ -377,43 +498,94 @@ route('GET', '/api/candidate/journey', ['candidate'], r => {
   r.send(200, { journey: view });
 });
 
+/* ---------- documents: one upload, reused everywhere (ADR-0022) ---------- */
+type DocKind = 'resume' | 'jd';
+const DOC_TITLE: Record<DocKind, string> = { resume: 'CV', jd: 'Job description' };
+
+/* Shared by the candidate and recruiter routes. The file is read to text
+   (LiteParse for PDF, direct XML for Word), the text goes through
+   quarantine like any document, and the artifact records where it came
+   from. A pasted JD (`text`) takes the same path minus the file read. */
+async function ingestDocument(r: ReqCtx, candidateId: string): Promise<void> {
+  const store = r.deps.store;
+  const kind = String(r.body?.kind ?? '') as DocKind;
+  if (kind !== 'resume' && kind !== 'jd') throw new ApiError(400, 'bad_kind');
+  if (!store.candidate(r.ctx, candidateId)) throw new ApiError(404, 'not_found');
+  const filename = String(r.body?.filename ?? '').replace(/[^\w .()-]/g, '').slice(0, 120);
+  let text: string;
+  let source: Record<string, unknown>;
+  if (kind === 'jd' && typeof r.body?.text === 'string' && r.body.text.trim()) {
+    text = r.body.text;
+    source = { pasted: true };
+  } else {
+    try {
+      const doc = await extractDocument(decodeUpload(r.body?.dataBase64));
+      text = doc.text;
+      source = { filename: filename || DOC_TITLE[kind], format: doc.format, parser: doc.parser, pages: doc.pages, bytes: doc.bytes, sha256: doc.sha256 };
+    } catch (e) {
+      if (e instanceof DocumentError) throw new ApiError(e.code === 'document_too_large' ? 413 : 400, e.code);
+      throw e;
+    }
+  }
+  const result = quarantine(store, r.ctx, {
+    candidateId, kind, title: filename ? `${DOC_TITLE[kind]}: ${filename}` : DOC_TITLE[kind], raw: text, createdBy: r.user.id,
+  });
+  const fields = {
+    ...result.artifact.fields,
+    source: { ...source, uploadedBy: r.user.displayName, uploadedByRole: r.user.role, uploadedAt: result.artifact.createdAt },
+  };
+  store.updateArtifactFields(r.ctx, result.artifact.id, fields);
+  store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'document_uploaded', `${kind}:${result.artifact.id}`);
+  const f = fields as { roles?: Array<{ title: string; company: string; start: string; end: string; bullets: string[] }>; mustHave?: string[]; skills?: Array<{ items: string[] }>; education?: string[]; positioning?: string };
+  r.send(200, {
+    artifact: { id: result.artifact.id, kind, quarantine: result.artifact.quarantine, injectionAttempts: result.artifact.injectionAttempts },
+    /* What we read, for the confirmation screen. */
+    read: kind === 'resume'
+      ? {
+        positioning: f.positioning ?? '',
+        roles: (f.roles ?? []).map(x => ({ title: x.title, company: x.company, start: x.start, end: x.end, bullets: x.bullets.length })),
+        skills: (f.skills ?? []).reduce((n, g) => n + g.items.length, 0),
+        education: (f.education ?? []).length,
+      }
+      : { mustHave: f.mustHave ?? [] },
+    events: result.events,
+  });
+}
+
+route('POST', '/api/candidate/documents', ['candidate'], r => ingestDocument(r, candidateIdFor(r)), { maxBody: UPLOAD_MAX_BODY });
+route('POST', '/api/recruiter/candidates/:id/documents', ['recruiter', 'admin'], r => ingestDocument(r, r.params.id!), { maxBody: UPLOAD_MAX_BODY });
+
 route('POST', '/api/candidate/onboarding', ['candidate'], async r => {
   const candidateId = candidateIdFor(r);
   const store = r.deps.store;
-  const company = String(r.body?.targetCompany ?? '').trim();
-  const jd = String(r.body?.jd ?? '');
-  const resume = String(r.body?.resume ?? '');
+  const c = store.candidate(r.ctx, candidateId)!;
+  const has = (kind: string) => store.artifacts(r.ctx, candidateId, kind).some(a => a.quarantine !== 'rejected');
+  /* The target is the recruiter's when they set it; the candidate fills it
+     only when it is empty. */
+  const company = c.targetCompany?.trim() || String(r.body?.targetCompany ?? '').trim();
+  const role = String(r.body?.targetRole ?? '').trim();
   const linkedinUrl = String(r.body?.linkedinUrl ?? '').trim();
   const linkedinText = String(r.body?.linkedinText ?? '').trim();
   if (!company) throw new ApiError(400, 'company_required');
-  if (!resume.trim()) throw new ApiError(400, 'resume_required');
-  if (!jd.trim()) throw new ApiError(400, 'jd_required');
+  /* Documents arrive through /api/candidate/documents, once. Onboarding
+     only confirms they are on file, whoever uploaded them. */
+  if (!has('resume')) throw new ApiError(400, 'resume_required');
+  if (!has('jd')) throw new ApiError(400, 'jd_required');
   if (!linkedinUrl && !linkedinText) throw new ApiError(400, 'linkedin_required');
   if (linkedinUrl && !/^https?:\/\//.test(linkedinUrl)) throw new ApiError(400, 'linkedin_url_invalid');
 
-  store.updateCandidate(r.ctx, candidateId, { targetCompany: company });
-  if (jd.trim()) {
-    quarantine(store, r.ctx, { candidateId, kind: 'jd', title: 'Target job description', raw: jd, createdBy: r.user.id });
-  }
-  quarantine(store, r.ctx, { candidateId, kind: 'resume', title: 'Uploaded resume', raw: resume, createdBy: r.user.id });
+  if (!c.targetCompany) store.updateCandidate(r.ctx, candidateId, { targetCompany: company });
+  if (role && (!c.targetRole || c.targetRole === 'Target role')) store.updateCandidate(r.ctx, candidateId, { targetRole: role });
   if (linkedinText) {
     quarantine(store, r.ctx, { candidateId, kind: 'linkedin_snapshot', title: 'LinkedIn profile', raw: linkedinText, createdBy: r.user.id });
-  } else {
-
-    const existing = store.artifacts(r.ctx, candidateId).find(a => a.kind === 'linkedin_link');
-    if (!existing) {
-      store.insertArtifact({
-        id: randomUUID(), tenantId: r.ctx.tenantId, candidateId, kind: 'linkedin_link',
-        title: 'LinkedIn profile link', quarantine: 'clean', fields: { url: linkedinUrl },
-        sanitizedText: null, content: null, injectionAttempts: 0,
-        createdBy: r.user.id, createdAt: new Date().toISOString(),
-      });
-    }
   }
-
-  const profilePictureBase64 = String(r.body?.profilePictureBase64 ?? '').trim();
-  if (profilePictureBase64) {
-    quarantine(store, r.ctx, { candidateId, kind: 'profile_picture', title: 'Profile picture', raw: profilePictureBase64, createdBy: r.user.id });
+  if (linkedinUrl && !store.artifacts(r.ctx, candidateId).some(a => a.kind === 'linkedin_link')) {
+    store.insertArtifact({
+      id: randomUUID(), tenantId: r.ctx.tenantId, candidateId, kind: 'linkedin_link',
+      title: 'LinkedIn profile link', quarantine: 'clean', fields: { url: linkedinUrl },
+      sanitizedText: null, content: null, injectionAttempts: 0,
+      createdBy: r.user.id, createdAt: new Date().toISOString(),
+    });
   }
   store.audit(r.ctx.tenantId, r.user.displayName, 'candidate', 'onboarding_submitted', candidateId);
 
@@ -422,6 +594,176 @@ route('POST', '/api/candidate/onboarding', ['candidate'], async r => {
     flowId: 'research', candidateId, actorRole: 'candidate', actor: r.user.displayName,
   });
   r.send(200, { run, journey: journeyState(store, r.ctx, candidateId) });
+});
+
+/* ---------- profile page: candidate approval, expiry, revocation ---------- */
+function latestProfilePage(r: ReqCtx, candidateId: string) {
+  return r.deps.store.artifacts(r.ctx, candidateId, 'profile_page').filter(a => a.quarantine !== 'rejected').at(-1) ?? null;
+}
+
+route('GET', '/api/candidate/profile', ['candidate'], r => {
+  const candidateId = candidateIdFor(r);
+  const page = latestProfilePage(r, candidateId);
+  r.send(200, {
+    page: page ? { id: page.id, share: shareOf(page.fields), live: shareIsLive(page.fields) } : null,
+    insight: profileInsight(r.deps.store, r.ctx, candidateId),
+  });
+});
+
+/* Nothing is shared with a company until the candidate approves it. An
+   approval lasts SHARE_DAYS; turning sharing off kills the link at once. */
+route('POST', '/api/candidate/profile/share', ['candidate'], r => {
+  const candidateId = candidateIdFor(r);
+  const page = latestProfilePage(r, candidateId);
+  if (!page) throw new ApiError(409, 'profile_not_ready');
+  const enabled = r.body?.enabled === true;
+  const now = new Date();
+  const share: ShareState = enabled
+    ? { enabled: true, approvedAt: now.toISOString(), expiresAt: new Date(now.getTime() + SHARE_DAYS * 86400_000).toISOString() }
+    : { ...shareOf(page.fields), enabled: false };
+  r.deps.store.updateArtifactFields(r.ctx, page.id, { ...page.fields, share });
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, 'candidate', enabled ? 'profile_share_approved' : 'profile_share_stopped', page.id);
+  r.send(200, { share, live: shareIsLive({ share }) });
+});
+
+route('POST', '/api/recruiter/candidates/:id/profile/revoke', ['recruiter', 'admin'], r => {
+  const page = latestProfilePage(r, r.params.id!);
+  if (!page) throw new ApiError(404, 'not_found');
+  const share = { ...shareOf(page.fields), enabled: false };
+  r.deps.store.updateArtifactFields(r.ctx, page.id, { ...page.fields, share });
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'profile_share_revoked', page.id);
+  r.send(200, { share });
+});
+
+route('GET', '/api/recruiter/candidates/:id/insight', ['recruiter', 'admin'], r => {
+  const page = latestProfilePage(r, r.params.id!);
+  r.send(200, {
+    page: page ? { id: page.id, share: shareOf(page.fields), live: shareIsLive(page.fields) } : null,
+    insight: profileInsight(r.deps.store, r.ctx, r.params.id!),
+  });
+});
+
+/* ---------- portfolio connectors (ADR-0022) ---------- */
+function connectorView(r: ReqCtx, candidateId: string) {
+  const store = r.deps.store;
+  const links = store.artifacts(r.ctx, candidateId, 'connector_link');
+  const states = connectorStates(store, r.ctx, candidateId);
+  return PROVIDERS.map(provider => {
+    const link = links.find(l => (l.fields as { provider?: string }).provider === provider);
+    const state = states.find(s => s.provider === provider);
+    const f = (link?.fields ?? {}) as { username?: string; code?: string; verified?: boolean; verifiedAt?: string | null };
+    return {
+      provider,
+      linked: !!link,
+      username: f.username ?? null,
+      url: f.username ? profileUrl(provider, f.username) : null,
+      verified: !!f.verified,
+      verifiedAt: f.verifiedAt ?? null,
+      /* The code is shown to the candidate only, to place in their bio. */
+      code: r.user.role === 'candidate' && !f.verified ? (f.code ?? null) : null,
+      syncedAt: state?.syncedAt || null,
+      snapshot: state?.snapshot ?? null,
+    };
+  });
+}
+
+async function syncConnector(r: ReqCtx, candidateId: string, provider: Provider): Promise<void> {
+  const store = r.deps.store;
+  const link = store.artifacts(r.ctx, candidateId, 'connector_link').find(l => (l.fields as { provider?: string }).provider === provider);
+  if (!link) throw new ApiError(404, 'not_linked');
+  const f = link.fields as { username: string; code: string; verified?: boolean };
+  let snapshot;
+  try {
+    snapshot = await fetchSnapshot(provider, f.username, r.deps.fetch ?? fetch, process.env.GITHUB_TOKEN || undefined);
+  } catch (e) {
+    if (e instanceof ConnectorError) throw new ApiError(e.code === 'account_not_found' ? 404 : 502, e.code);
+    throw e;
+  }
+  /* Ownership: the one-time code in the public bio. Once proven it stays
+     proven for this link; a new link starts over. */
+  const proven = !!f.verified || bioHasCode(snapshot, f.code);
+  if (proven && !f.verified) {
+    store.updateArtifactFields(r.ctx, link.id, { ...link.fields, verified: true, verifiedAt: new Date().toISOString() });
+    store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'connector_verified', `${provider}:${f.username}`);
+  }
+  for (const old of store.artifacts(r.ctx, candidateId, 'connector_snapshot').filter(a => (a.fields as { provider?: string }).provider === provider)) {
+    store.deleteArtifact(r.ctx, old.id);
+  }
+  store.insertArtifact({
+    id: randomUUID(), tenantId: r.ctx.tenantId, candidateId, kind: 'connector_snapshot',
+    title: `${provider} snapshot`, quarantine: snapshot.injectionAttempts > 0 ? 'sanitized' : 'clean',
+    fields: { provider, username: f.username, fetchedAt: new Date().toISOString(), data: snapshot },
+    sanitizedText: null, content: null, injectionAttempts: snapshot.injectionAttempts,
+    createdBy: `connector:${provider}`, createdAt: new Date().toISOString(),
+  });
+  store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'connector_synced', `${provider}:${f.username}`);
+}
+
+function providerParam(r: ReqCtx): Provider {
+  const p = r.params.provider as Provider;
+  if (!PROVIDERS.includes(p)) throw new ApiError(404, 'unknown_provider');
+  return p;
+}
+
+route('GET', '/api/candidate/connectors', ['candidate'], r => {
+  r.send(200, { connectors: connectorView(r, candidateIdFor(r)) });
+});
+
+/* Linking is a consented act: a ConsentRecord with scope connect:<provider>
+   is created, and disconnecting withdraws it and deletes the data. */
+route('POST', '/api/candidate/connectors/:provider', ['candidate'], async r => {
+  const store = r.deps.store;
+  const candidateId = candidateIdFor(r);
+  const provider = providerParam(r);
+  let username: string;
+  try { username = normalizeUsername(provider, String(r.body?.username ?? '')); }
+  catch { throw new ApiError(400, 'invalid_username'); }
+  if (store.artifacts(r.ctx, candidateId, 'connector_link').some(l => (l.fields as { provider?: string }).provider === provider)) {
+    throw new ApiError(409, 'already_linked');
+  }
+  const now = new Date().toISOString();
+  const consentId = randomUUID();
+  store.insertConsent({
+    id: consentId, tenantId: r.ctx.tenantId, candidateId, sessionId: null, scope: `connect:${provider}`,
+    grantedAt: now, withdrawnAt: null, retentionPolicy: 'until disconnected', createdAt: now,
+  });
+  store.insertArtifact({
+    id: randomUUID(), tenantId: r.ctx.tenantId, candidateId, kind: 'connector_link',
+    title: `${provider} account`, quarantine: 'clean',
+    fields: { provider, username, code: verificationCode(), verified: false, verifiedAt: null, consentId, linkedAt: now },
+    sanitizedText: null, content: null, injectionAttempts: 0, createdBy: r.user.id, createdAt: now,
+  });
+  store.audit(r.ctx.tenantId, r.user.displayName, 'candidate', 'connector_linked', `${provider}:${username}`);
+  /* A first sync right away; a failure leaves the link in place to retry. */
+  let syncError: string | null = null;
+  try { await syncConnector(r, candidateId, provider); }
+  catch (e) { syncError = e instanceof ApiError ? e.code : 'sync_failed'; }
+  r.send(200, { connectors: connectorView(r, candidateId), syncError });
+});
+
+route('POST', '/api/candidate/connectors/:provider/sync', ['candidate'], async r => {
+  const candidateId = candidateIdFor(r);
+  await syncConnector(r, candidateId, providerParam(r));
+  r.send(200, { connectors: connectorView(r, candidateId) });
+});
+
+route('POST', '/api/candidate/connectors/:provider/disconnect', ['candidate'], r => {
+  const store = r.deps.store;
+  const candidateId = candidateIdFor(r);
+  const provider = providerParam(r);
+  const mine = (kind: string) => store.artifacts(r.ctx, candidateId, kind).filter(a => (a.fields as { provider?: string }).provider === provider);
+  const link = mine('connector_link')[0];
+  if (!link) throw new ApiError(404, 'not_linked');
+  const consentId = (link.fields as { consentId?: string }).consentId;
+  if (consentId) store.withdrawConsent(r.ctx, consentId);
+  for (const a of [...mine('connector_link'), ...mine('connector_snapshot')]) store.deleteArtifact(r.ctx, a.id);
+  store.audit(r.ctx.tenantId, r.user.displayName, 'candidate', 'connector_disconnected', provider);
+  r.send(200, { connectors: connectorView(r, candidateId) });
+});
+
+route('GET', '/api/recruiter/candidates/:id/connectors', ['recruiter', 'admin'], r => {
+  if (!r.deps.store.candidate(r.ctx, r.params.id!)) throw new ApiError(404, 'not_found');
+  r.send(200, { connectors: connectorView(r, r.params.id!) });
 });
 
 route('GET', '/api/candidate/me', ['candidate'], r => {
@@ -510,74 +852,31 @@ route('POST', '/api/admin/retention/run', ['admin'], r => {
   r.send(200, { affected });
 });
 
-/* ---------- LiveKit Webhook ---------- */
-route('POST', '/api/webhooks/livekit', null, async r => {
-  const store = r.deps.store;
-  const body = r.body as any;
+/* ---------- LiveKit Webhook ----------
+   Signature-verified and consent-gated; handled in the dispatcher before
+   the generic JSON body path because verification needs the raw body. */
 
-  const candidateId = body.participant?.metadata?.candidateId;
-  if (!candidateId) throw new ApiError(400, 'missing_candidate_id');
-
-  /* Agent-produced structured output, not an untrusted document, so it
-     enters the spine as 'clean' like every other write_artifact call. The
-     previous version hand-built artifacts with quarantine 'pending' (a
-     status that does not exist) under a fake 'system' tenant, which
-     typecheck rejected and tenant isolation (L9) forbids. */
-  const tenantId = store.tenantForCandidate(candidateId);
-  if (!tenantId) throw new ApiError(404, 'candidate_not_found');
-  const ctx: Ctx = { tenantId };
-
-  const bullets = body.data?.resume_bullet ?? [];
-  const note = body.data?.interviewer_note;
-
-  for (const b of bullets) {
-    store.insertArtifact({
-      id: randomUUID(),
-      tenantId: ctx.tenantId,
-      candidateId,
-      kind: 'handoff_block',
-      title: 'Extracted Resume Bullet',
-      quarantine: 'clean',
-      fields: { ownership: b.ownership, action: b.action, outcome: b.outcome },
-      sanitizedText: null, content: null, injectionAttempts: 0,
-      createdBy: 'livekit_agent', createdAt: new Date().toISOString(),
-    });
-  }
-
-  if (note) {
-    store.insertArtifact({
-      id: randomUUID(),
-      tenantId: ctx.tenantId,
-      candidateId,
-      kind: 'debrief',
-      title: 'Interview Evaluation',
-      quarantine: 'clean',
-      fields: { evaluation_summary: note.evaluation_summary },
-      sanitizedText: null, content: null, injectionAttempts: 0,
-      createdBy: 'livekit_agent', createdAt: new Date().toISOString(),
-    });
-  }
-
-  r.send(200, { success: true });
-});
-/* ---------- LiveKit Token ---------- */
+/* ---------- LiveKit Voice token (L4: consent chain required) ---------- */
 route('POST', '/api/candidate/livekit/token', ['candidate'], async r => {
+  const cfg = livekitConfigFromEnv();
+  if (!cfg) throw new ApiError(503, 'livekit_not_configured');
   const candidateId = candidateIdFor(r);
-  
-  const apiKey = process.env.LIVEKIT_API_KEY;
-  const apiSecret = process.env.LIVEKIT_API_SECRET;
-  if (!apiKey || !apiSecret) throw new ApiError(500, 'livekit_not_configured');
-
-  const at = new AccessToken(apiKey, apiSecret, {
-    identity: candidateId,
-    name: r.user.displayName,
-    metadata: JSON.stringify({ candidateId })
-  });
-
-  at.addGrant({ roomJoin: true, room: `interview-${candidateId}` });
-  const token = await at.toJwt();
-  
-  r.send(200, { token, url: process.env.LIVEKIT_URL });
+  const runId = String(r.body?.runId ?? '');
+  /* No run id means no consent chain: refused without minting. */
+  if (!runId) throw new ApiError(409, 'consent_required');
+  let chain;
+  try {
+    chain = voiceChain(r.deps.store, r.ctx, candidateId, runId);
+  } catch (e) {
+    if (e instanceof VoiceError) {
+      throw new ApiError(e.code === 'voice_run_not_found' ? 404 : 409, e.code);
+    }
+    throw e;
+  }
+  const token = await mintVoiceToken(cfg, chain, r.user.displayName);
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, 'candidate', 'voice_token_minted',
+    `${chain.session.id}:${chain.consentId}`);
+  r.send(200, { token, url: cfg.url, sessionId: chain.session.id });
 });
 
 /* ---------- GDPR ---------- */
@@ -604,7 +903,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, deps:
     await handleAuth(req, res, deps, url, send);
     return true;
   }
-  if (req.method === 'GET' && handlePublicProfile(deps, url, send)) return true;
+  if (req.method === 'GET' && handlePublicProfile(deps, url, send, auth)) return true;
+  /* The webhook is public but signature-authenticated: it is verified
+     against the raw body before anything else runs. */
+  if (url.pathname === '/api/webhooks/livekit' && req.method === 'POST') {
+    await handleVoiceWebhook(req, deps, send);
+    return true;
+  }
   if (!auth) { send(401, { error: 'unauthenticated' }); return true; }
   const match = routes.find(rt => rt.method === req.method && rt.re.test(url.pathname));
   if (!match) { send(404, { error: 'no_route' }); return true; }
@@ -612,7 +917,12 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, deps:
   const params = (url.pathname.match(match.re)!.groups ?? {}) as Record<string, string>;
   try {
     if (req.method === 'POST') checkCsrf(req, auth.csrf);
-    const body = req.method === 'POST' ? await readBody(req) : {};
+    /* A password someone else chose (a recruiter-generated one) unlocks
+       nothing but the screen that replaces it. */
+    if (auth.user.mustChangePassword && !PASSWORD_GATE_ALLOWED.has(url.pathname)) {
+      throw new ApiError(403, 'password_change_required');
+    }
+    const body = req.method === 'POST' ? await readBody(req, match.maxBody) : {};
     await match.handler({
       deps, user: auth.user, csrf: auth.csrf,
       ctx: { tenantId: auth.user.tenantId },

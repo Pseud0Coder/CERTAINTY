@@ -1,69 +1,90 @@
 /* ==========================================================================
-   Certainty: shareable candidate profile page.
+   Certainty: the shareable one-page profile insight (ADR-0022).
 
-   Built on top of marketing.css (same Bauhaus tokens, same public-facing
-   register): this file adds only the profile-card components. No inline
-   styles anywhere (strict CSP), no build step.
+   Built on tokens.css, the product's own neutral-certainty system, not the
+   marketing page's: this page is evidence sent to a hiring manager, so it
+   speaks the same claimed-versus-verified language as the app. Styles
+   needed from app.css (avatar, stamp, meter) are restated here so the page
+   loads two stylesheets only. No inline styles (strict CSP).
    ========================================================================== */
 
-.profile-main{max-width:760px;margin:0 auto;padding:56px var(--edge) 96px}
+.pp-body{background:var(--ground)}
+.pp{max-width:880px;margin:0 auto;padding:var(--space-6) var(--space-6) var(--space-16)}
 
-.profile-hero{display:flex;gap:28px;align-items:center;flex-wrap:wrap}
-.profile-avatar{
-  width:84px;height:84px;border-radius:50%;flex:none;
-  background:var(--ochre);color:var(--ink);
-  display:grid;place-items:center;font:700 30px var(--font-display);
+.pp-top{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding-bottom:var(--space-4);border-bottom:var(--hairline) solid var(--rule)}
+.pp-brand{display:inline-flex;align-items:center;gap:8px;font:600 15px/20px var(--font-sans);letter-spacing:-0.01em;color:var(--ink)}
+.pp-brand .brand-mark{color:var(--ink)}
+.pp-preview{margin-top:var(--space-4);padding:var(--space-3) var(--space-4);border:var(--hairline) dashed var(--rule-strong);border-radius:10px;font:var(--type-secondary);color:var(--ink)}
+
+.pp-hero{display:flex;gap:var(--space-5);align-items:flex-start;margin-top:var(--space-8)}
+.pp-id{flex:1;min-width:0}
+.pp-id .t-secondary{margin:6px 0 0}
+.pp-target{margin:var(--space-3) 0 0;font:var(--type-body);font-weight:500;color:var(--ink)}
+.pp-facts{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-3)}
+
+.pp-sec{margin-top:var(--space-8);padding-top:var(--space-6);border-top:var(--hairline) solid var(--rule)}
+.pp-h2{font:var(--type-section);letter-spacing:var(--track-section);margin:0 0 var(--space-4)}
+
+.pp-fit{list-style:none;margin:0;padding:0;background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-sheet);overflow:hidden}
+.pp-fit-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-top:var(--hairline) solid var(--rule)}
+.pp-fit-row:first-child{border-top:0}
+.pp-fit-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pp-fit-req{font:var(--type-secondary);font-weight:500;color:var(--ink)}
+.pp-fit-word{font:var(--type-caption);font-weight:500;white-space:nowrap}
+.pp-fit-row.is-verified .pp-fit-word{color:var(--ink)}
+.pp-fit-row.is-claimed .pp-fit-word{color:var(--severity-positive)}
+.pp-fit-row.is-partial .pp-fit-word,.pp-fit-row.is-gap .pp-fit-word{color:var(--severity-warning)}
+.pp-legend{margin:var(--space-3) 0 0;max-width:var(--measure-prose)}
+
+.pp-ach{margin:0;padding-inline-start:var(--space-5);display:flex;flex-direction:column;gap:var(--space-2);font:var(--type-body)}
+.pp-ach li{padding-inline-start:4px;max-width:var(--measure-prose)}
+
+.pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--space-4)}
+.pp-card{background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-sheet);padding:var(--space-5);display:flex;flex-direction:column;gap:var(--space-2)}
+.pp-card-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);flex-wrap:wrap}
+.pp-card p{margin:0}
+.pp-card a,.pp-list a{color:var(--ink);text-underline-offset:2px}
+.pp-nums{display:flex;gap:var(--space-6);flex-wrap:wrap;margin:var(--space-2) 0}
+.pp-nums > div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pp-nums b{font:var(--type-stat);letter-spacing:-0.01em}
+.pp-list{list-style:none;margin:var(--space-2) 0 0;padding:0;display:flex;flex-direction:column}
+.pp-list li{display:flex;flex-direction:column;gap:1px;padding:6px 0;border-top:var(--hairline) solid var(--rule);font:var(--type-secondary);font-weight:500}
+
+.pp-star{max-width:520px;margin-top:var(--space-4)}
+.pp-bg{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--space-5)}
+.pp-bg h3{margin:0 0 4px;font-weight:500}
+.pp-bg p{margin:0;font:var(--type-secondary);color:var(--ink)}
+
+.pp-foot{margin-top:var(--space-8);padding-top:var(--space-6);border-top:var(--hairline) solid var(--rule);display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap}
+.pp-foot p{margin:0}
+.pp-actions{display:flex;gap:var(--space-2);flex-wrap:wrap}
+
+.pp-notfound{max-width:520px;margin:120px auto;text-align:center}
+.pp-notfound .t-secondary{margin-top:var(--space-2)}
+
+/* Restated from app.css: avatar, meter. */
+.avatar{display:inline-grid;place-items:center;flex:none;border-radius:var(--radius-pill);background:var(--sheet-sunken);border:var(--hairline) solid var(--rule);color:var(--ink);font-weight:600}
+.avatar-lg{width:64px;height:64px;font-size:20px}
+.meter{margin:0 0 var(--space-4)}
+.meter-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.meter-track{position:relative;height:6px;background:var(--rule);border-radius:var(--radius-pill)}
+.meter-fill{height:100%;background:var(--ink);border-radius:var(--radius-pill)}
+.meter-tick{position:absolute;top:-3px;width:2px;height:12px;margin-inline-start:-1px;background:var(--ink);border-radius:1px;box-shadow:0 0 0 2px var(--ground)}
+
+@media (max-width:600px){
+  .pp{padding:var(--space-4) var(--space-4) var(--space-12)}
+  .pp-hero{flex-direction:column;gap:var(--space-3)}
+  .pp-fit-row{align-items:flex-start}
+  .pp-foot{flex-direction:column;align-items:flex-start}
 }
-.profile-id{flex:1;min-width:220px}
-.profile-name{font:700 34px var(--font-display);margin:0 0 4px}
-.profile-headline{font:600 17px var(--font-sans);color:var(--ink-soft);margin:0 0 6px}
-.profile-loc{font:400 14px var(--font-sans);color:var(--ink-soft)}
 
-.verified-badge{
-  display:inline-flex;align-items:center;gap:6px;margin-top:10px;
-  font:700 12px var(--font-sans);text-transform:uppercase;letter-spacing:.06em;
-  color:var(--forest-deep);background:rgba(85,112,63,.14);
-  border-radius:99px;padding:6px 14px;
-}
-.verified-badge svg{flex:none}
-
-.profile-section{margin-top:44px}
-.profile-section h2{
-  font:700 12px var(--font-sans);text-transform:uppercase;letter-spacing:.12em;
-  color:var(--ochre-deep);margin:0 0 16px;
-}
-
-.chip-wrap{display:flex;flex-wrap:wrap;gap:10px}
-.chip{
-  font:600 13.5px var(--font-sans);color:var(--ink);background:var(--paper);
-  border:1px solid var(--paper-line);border-radius:99px;padding:7px 16px;
-}
-
-.highlight-list{display:flex;flex-direction:column;gap:12px}
-.highlight-item{
-  position:relative;padding-inline-start:20px;font:400 15.5px/1.55 var(--font-sans);color:var(--ink);
-}
-.highlight-item::before{content:'';position:absolute;left:0;top:8px;width:8px;height:8px;background:var(--terracotta)}
-
-.skill-group{margin-bottom:10px;font:400 15px/1.6 var(--font-sans)}
-.skill-group b{font-weight:700}
-
-.edu-list{display:flex;flex-direction:column;gap:8px;font:400 15px/1.55 var(--font-sans)}
-
-.profile-dl{
-  margin-top:52px;padding-top:32px;border-top:1px solid var(--paper-line);
-  display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
-}
-.profile-dl p{font:400 14.5px var(--font-sans);color:var(--ink-soft);margin:0}
-.profile-dl-actions{display:flex;gap:10px}
-
-.profile-notfound{max-width:520px;margin:120px auto;text-align:center}
-.profile-notfound h1{font:700 26px var(--font-display);margin:0 0 10px}
-.profile-notfound p{color:var(--ink-soft)}
-
-@media (max-width:560px){
-  .profile-hero{gap:18px}
-  .profile-avatar{width:64px;height:64px;font-size:22px}
-  .profile-name{font-size:26px}
-  .profile-dl{flex-direction:column;align-items:flex-start}
+/* One page on paper: light, no buttons, no preview banner. */
+/* The light theme is applied on beforeprint (main.ts), so no colour is
+   invented here. */
+@media print{
+  .pp{max-width:none;padding:0}
+  .pp-actions,.pp-preview{display:none}
+  .pp-sec{margin-top:var(--space-5);padding-top:var(--space-4);break-inside:avoid}
+  .pp-card,.pp-fit{break-inside:avoid}
+  a{text-decoration:none}
 }

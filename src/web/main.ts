@@ -12,12 +12,13 @@ function render(): void {
   /* The wordmark, the promise, then the build stamp. The stamp is wrapped
      because the panel is a column flexbox: an unwrapped inline element
      stretches to the full column width and reads as an empty input. */
+  const demoStamp = h('span', {});
   const panel = h('div', { class: 'panel' },
     h('div', { class: 'login-head' },
       brandLockup({ large: true }),
       h('p', { class: 't-secondary login-promise' },
         'What a candidate claimed, separated from what is verified.'),
-      h('div', { class: 'login-stamp' }, stamp('Stage 1 production build'))),
+      h('div', { class: 'login-stamp' }, demoStamp)),
     h('div', { class: 'field' },
       h('label', { class: 't-secondary', for: 'email' }, 'Email'),
       h('input', { type: 'email', id: 'email', autocomplete: 'username' })),
@@ -41,7 +42,14 @@ function render(): void {
 
   /* Demo accounts, one per line and clickable: a wall of comma-separated
      addresses is the slowest possible way to hand someone a demo. */
-  const demo = h('div', { class: 'demo' });
+  /* Demo accounts appear only on a demo deployment (CERTAINTY_DEMO is not
+     "off"); a real tenant's sign-in page never lists credentials. */
+  const demo = h('div', { class: 'demo', hidden: 'true' });
+  fetch('/api/public/config').then(r => r.json()).then((cfg: { demo?: boolean }) => {
+    if (!cfg.demo) return;
+    demo.hidden = false;
+    demoStamp.replaceWith(stamp('Demo environment, fictional data'));
+  }).catch(() => { /* config is optional; stay quiet */ });
   demo.append(h('div', { class: 't-caption demo-head' }, 'Demo accounts'));
   for (const [email, role] of [
     ['admin@gennext.demo', 'Admin'],

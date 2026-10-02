@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Store, Ctx } from './db.ts';
 import type { Artifact, ArtifactKind, QuarantineStatus } from './types.ts';
-import { parseResume } from './agents.ts';
+import { structureResume } from './agents.ts';
 
 interface Rule { name: string; re: RegExp; attempt: boolean }
 
@@ -92,7 +92,7 @@ export function quarantine(
     id: randomUUID(), tenantId: ctx.tenantId, candidateId: input.candidateId,
     kind: input.kind, title: input.title, quarantine: status,
     fields: input.kind === 'resume'
-      ? { ...structure(input.kind, clean), ...parseResume(clean) }
+      ? { ...structure(input.kind, clean), ...structureResume(clean) }
       : structure(input.kind, clean),
     sanitizedText: status === 'rejected' ? null : clean,
     content: null, injectionAttempts: attempts, createdBy: input.createdBy,

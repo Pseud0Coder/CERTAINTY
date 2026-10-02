@@ -37,6 +37,9 @@ export function provisionCandidate(store: Store, ctx: Ctx, input: ProvisionInput
 
   const password = generatePassword();
   const user = store.createUser(ctx.tenantId, email, hashPassword(password), 'candidate', input.name.trim());
+  /* The recruiter sees this password once, to hand over. It is temporary:
+     the candidate must choose their own before using the app. */
+  store.setPassword(user.id, user.passwordHash, true);
   const candidate: Candidate = {
     id: randomUUID(), tenantId: ctx.tenantId, userId: user.id,
     name: input.name.trim(), targetRole: input.targetRole.trim() || 'Target role',

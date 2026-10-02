@@ -14,7 +14,9 @@ export type FlagStatus = 'open' | 'actioned' | 'resolved';
 export type ArtifactKind =
   | 'resume' | 'transcript' | 'linkedin_snapshot' | 'linkedin_link' | 'jd'
   | 'submission_doc' | 'client_email' | 'recruiter_notes' | 'handoff_block' | 'debrief'
-  | 'research_report' | 'cv' | 'profile_page' | 'profile_picture';
+  | 'research_report' | 'cv' | 'profile_page' | 'profile_picture'
+  /* Saved LinkedIn Studio output, and connected portfolio accounts (ADR-0022). */
+  | 'linkedin_sections' | 'connector_link' | 'connector_snapshot';
 
 export type FindingKind = 'good' | 'improve' | 'needs_work';
 
@@ -40,6 +42,9 @@ export interface User {
   role: Role;
   displayName: string;
   createdAt: string;
+  /* Set when someone else chose the password (a recruiter adding a
+     candidate). The user must replace it before using the app. */
+  mustChangePassword?: boolean;
 }
 
 export interface Candidate {

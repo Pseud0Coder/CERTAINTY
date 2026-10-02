@@ -85,24 +85,73 @@ prove isolation and single-module subscription.
 The platform walks one gated chain, one source of truth, agents wired into
 the transitions (ADR-0009):
 
-0. **Profile Agent.** Recruiter enters the candidate email; the agent
-   creates the profile and generates a password, shown to the recruiter
-   once and shared with the candidate.
-1. **Onboarding.** Candidate signs in and submits the target company, the
-   job description, the current resume, and a LinkedIn link.
-2. **Research Agent** runs on submit and writes the research report: green
-   (good), blue (improve), red (needs work), every finding evidence-bound.
+0. **Profile Agent.** Recruiter enters the candidate email, optionally the
+   client job description and the CV file; the agent creates the profile and
+   a temporary password, shown to the recruiter once. The candidate must
+   replace it at first sign-in (the server refuses every other route until
+   they do), so the recruiter never knows the real password.
+1. **Onboarding.** The CV is uploaded once, as a PDF or Word file, by
+   whoever has it first; everything later reuses it. The candidate confirms
+   what was read (roles, dates, bullets), adds a LinkedIn URL or profile
+   text, and supplies the target and job description only if the recruiter
+   has not.
+2. **Research Agent** runs on submit and writes the research report: good,
+   improve, needs work, every finding evidence-bound. Private interview
+   practice opens at this point.
 3. **Resume Studio.** One session per role, each role with its own
    interviewer; the role assist probing runs until owned, action, and
    outcome exist per bullet.
 4. **CV assembler.** Fires when a role run completes; the revamped CV is
    written only when every role has a completed handoff.
-5. **LinkedIn Studio** unlocks after all roles; the **interview** unlocks
-   once the CV exists and LinkedIn is complete. Practice is private;
-   verified sessions are shared with the recruiter plus suggested gaps.
+5. **LinkedIn Studio** unlocks after all roles and writes six sections,
+   each saved as it is written. The **verified interview** unlocks once the
+   CV exists and LinkedIn is complete; practice is private and open since
+   step 2. Verified sessions are shared with the recruiter plus suggested
+   gaps.
+6. **Profile page.** A one-page insight for the target company: each JD
+   requirement with its evidence and source (CV, verified interview, GitHub,
+   LeetCode), marked claimed or verified, plus achievements, connected-account
+   work, interview proportions and the CV download. Nothing is shared until
+   the candidate approves; an approval lasts 30 days and either side can
+   stop it.
 
 Every gate is enforced server-side and mirrored in the UI with the unlock
 condition stated.
+
+## Documents and connectors (ADR-0022)
+
+- **CV and JD files.** PDFs are read locally by LiteParse
+  (`@llamaindex/liteparse`, Apache 2.0, prebuilt binaries for macOS, Linux
+  and Windows; no network, no OCR). Sidebar layouts are read column by
+  column. Word files are read directly from their XML, so no LibreOffice is
+  needed. Scans with no text layer are refused with a clear message. Parsed
+  text goes through `quarantine()` like any document, then a structurer that
+  handles real-world headings, date formats and two-line role headers.
+- **Connectors.** GitHub (public REST) and LeetCode (its public GraphQL
+  endpoint). Linking is consented (`connect:<provider>`) and counts as a
+  claim; a one-time code placed in the account's public bio proves
+  ownership. Fetching is allowlisted per host, redirect-free, time and size
+  bounded; fetched text is sanitized. Disconnecting withdraws the consent and
+  deletes the data. Set `GITHUB_TOKEN` to raise GitHub's anonymous rate limit.
+
+## Voice sessions (L4, ADR-0020)
+
+Verified voice runs on LiveKit and is gated by a server-side consent chain:
+
+1. The candidate starts the screener flow, which parks at the consent gate.
+2. Granting consent stores a ConsentRecord and creates the verified session.
+3. Only then can a room token be minted (`POST /api/candidate/livekit/token`
+   with the run id). Every other request is refused with no token.
+4. The webhook (`POST /api/webhooks/livekit`) is verified against the raw
+   body with the SDK WebhookReceiver; unsigned requests are 401 and never
+   parsed. Ingestion requires an active consented session, and every artifact
+   carries its sessionId and consentId.
+5. Withdrawal, mode switches, navigation and unload all run one cleanup:
+   the microphone stops, the room disconnects, and the recording indicator
+   clears. Ingest after withdrawal is refused.
+
+The fix was verified by a pre-registered experiment with raw probe outputs:
+`experiments/2026-09-28-p0-voice-consent-webhook-auth/`.
 
 ## Demo scenario (permanent smoke test)
 

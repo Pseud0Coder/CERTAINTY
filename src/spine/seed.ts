@@ -238,7 +238,12 @@ export function seedDemo(store: Store): SeedIds {
   store.insertArtifact({
     id: randomUUID(), tenantId: tenant.id, candidateId: candidate.id,
     kind: 'profile_page', title: 'Candidate profile page', quarantine: 'clean',
-    fields: profileFields as unknown as Record<string, unknown>, sanitizedText: null, content: profileContent,
+    /* Seeded as already approved by Nadia, so the demo link works; real
+       pages start unshared until the candidate approves (ADR-0022). */
+    fields: {
+      ...(profileFields as unknown as Record<string, unknown>),
+      share: { enabled: true, approvedAt: now(), expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString() },
+    }, sanitizedText: null, content: profileContent,
     injectionAttempts: 0, createdBy: 'system', createdAt: now(),
   });
 

@@ -39,6 +39,7 @@ test('profile agent provisions a candidate with a one-time credential', () => {
   assert.equal(tryLogin!.user.role, 'candidate');
   const stored = store.userByEmail('new.person@example.test')!;
   assert.ok(!stored.passwordHash.includes(result.credentials.password), 'never stored in clear');
+  assert.equal(stored.mustChangePassword, true, 'the recruiter-generated password is temporary');
   assert.throws(() => provisionCandidate(store, ctx, {
     email: 'new.person@example.test', name: 'Dup', targetRole: 'x',
   }, 'R. Osei'), /email_exists/);

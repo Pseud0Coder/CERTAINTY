@@ -3,6 +3,8 @@
 Fills section 9 of the Stage 1 technical spec. No visual value is left undecided.
 House rules honoured throughout: no emoji, no em dashes in any string, no all-caps labels, WCAG AA floor, keyboard path for everything.
 
+> Status note (2026-10-01): ADR-0015 and ADR-0016 moved away from this document's palette and flat surfaces; ADR-0021 returns to them. Current values live in tokens.css and the ADR log; where they differ from this document (type sizes, radius, the icon set), the ADR log wins.
+
 ---
 
 ## 1. The thesis

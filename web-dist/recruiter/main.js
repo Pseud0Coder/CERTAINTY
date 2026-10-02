@@ -1,14 +1,14 @@
 /* Recruiter app. Dashboards render state; agents never touch the UI (A0). */
 import { api, subscribe } from '../shared/api.js';
-import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, themeToggle, setWidthPct, brandLockup } from '../shared/dom.js';
+import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, setWidthPct, setLeftPct, icon, avatar, railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
 let me;
 let view = 'pipeline';
 let detailId = null;
 const root = document.getElementById('root');
 const NAV = [
-    { id: 'pipeline', label: 'Pipeline', module: 'pipeline' },
-    { id: 'builder', label: 'Submission builder', module: 'builder' },
-    { id: 'notes', label: 'Notes', module: 'notes' },
+    { id: 'pipeline', label: 'Pipeline', module: 'pipeline', icon: 'pipeline' },
+    { id: 'builder', label: 'Submission builder', module: 'builder', icon: 'builder' },
+    { id: 'notes', label: 'Notes', module: 'notes', icon: 'notes' },
 ];
 function entitled(m) { return me.entitlements.includes(m); }
 async function boot() {
@@ -18,6 +18,7 @@ async function boot() {
             location.href = '/app/candidate';
             return;
         }
+        setCrumbRoot(me.tenantName);
     }
     catch {
         location.href = '/login';
@@ -30,18 +31,19 @@ async function boot() {
 function renderShell() {
     clear(root);
     const app = h('div', { class: 'app' });
-    const rail = h('aside', { class: 'rail' }, h('div', { class: 'rail-head' }, brandLockup(), h('div', { class: 't-caption sub' }, 'Recruiter')));
-    const nav = h('nav', { class: 'nav' });
+    const rail = h('aside', { class: 'rail' }, railHead('Recruiter'));
+    const nav = h('nav', { class: 'nav', 'aria-label': 'Recruiter' });
+    const current = view === 'detail' ? 'pipeline' : view;
     for (const item of NAV) {
-        const b = h('button', { class: 'nav-item', 'aria-current': view === item.id ? 'page' : 'false' }, h('span', { class: 'lbl' }, item.label));
+        const b = h('button', { class: 'nav-item', 'aria-current': current === item.id ? 'page' : 'false', title: item.label }, icon(item.icon), h('span', { class: 'lbl' }, item.label));
         if (!entitled(item.module))
             b.setAttribute('aria-disabled', 'true');
         else
             b.addEventListener('click', () => { view = item.id; renderShell(); renderView(); });
         nav.append(b);
     }
-    rail.append(nav);
-    const main = h('main', {}, h('header', { class: 'topbar' }, stamp('Recruiter'), h('span', { class: 't-secondary' }, me.user.displayName), h('span', { class: 'grow' }), themeToggle(), (() => { const b = h('button', { class: 'btn btn-sm' }, 'Log out'); b.addEventListener('click', async () => { await api.post('/api/auth/logout'); location.href = '/login'; }); return b; })()), h('div', { class: 'content', id: 'content' }));
+    rail.append(nav, railFoot(me.user.displayName, 'Recruiter'));
+    const main = h('main', {}, topbar(), h('div', { class: 'content', id: 'content' }));
     app.append(rail, main);
     root.append(app);
 }
@@ -50,6 +52,9 @@ async function renderView() {
     if (!content)
         return;
     clear(content);
+    const label = NAV.find(n => n.id === view)?.label;
+    if (label)
+        setCrumbs([{ label }]);
     try {
         if (view === 'pipeline')
             await renderPipeline(content);
@@ -68,25 +73,22 @@ async function renderView() {
 /* ---------- pipeline ---------- */
 async function renderPipeline(content) {
     const data = await api.get('/api/recruiter/pipeline');
-    const header = h('div', { class: 'viewhead' }, h('div', { class: 'viewhead-text' }, h('h1', { class: 't-view' }, 'Pipeline'), h('p', { class: 't-secondary' }, 'One stage per advance. Stage suggestions come from the stage advisor; humans advance.')));
-    const addBtn = h('button', { class: 'btn btn-primary' }, 'Add candidate');
+    const addBtn = h('button', { class: 'btn btn-primary' }, icon('plus'), 'Add candidate');
     addBtn.addEventListener('click', () => showAddCandidate(() => renderView()));
-    header.append(addBtn);
-    content.append(header);
+    content.append(viewHeader('Pipeline', 'One stage per advance. Stage suggestions come from the stage advisor; humans advance.', [addBtn]));
     const board = h('div', { class: 'board mt-6' });
     for (const stage of data.stages) {
         const cards = data.candidates.filter(c => c.stage === stage);
         /* The count belongs in the header: a recruiter reads pipeline shape
            before reading any single card. */
-        const col = h('section', { class: 'bcol', 'aria-label': `${stage}, ${cards.length} candidates` }, h('div', { class: 'colhead' }, h('span', { class: 't-section' }, stage), h('span', { class: 'colcount' }, String(cards.length))));
+        const col = h('section', { class: cards.length ? 'bcol' : 'bcol is-empty', 'aria-label': `${stage}, ${cards.length} candidates` }, h('div', { class: 'colhead' }, h('span', { class: 't-section' }, stage), h('span', { class: 'colcount' }, String(cards.length))));
         const stack = h('div', { class: 'bstack' });
         col.append(stack);
         if (!cards.length)
-            stack.append(h('p', { class: 'bempty' }, 'Empty'));
+            stack.append(h('p', { class: 'bempty' }, 'No candidates'));
         for (const c of cards) {
-            const card = h('div', { class: 'pcard reveal-host', tabindex: '0', role: 'button', 'aria-label': `${c.name}, open detail` });
-            card.append(h('div', { class: 'nm' }, c.name));
-            card.append(h('div', { class: 't-caption' }, c.targetRole));
+            const card = h('div', { class: `pcard reveal-host${c.parked ? ' is-parked' : ''}`, tabindex: '0', role: 'button', 'aria-label': `${c.name}, open detail` });
+            card.append(h('div', { class: 'pcard-top' }, avatar(c.name), h('div', {}, h('div', { class: 'nm' }, c.name), h('div', { class: 't-caption' }, c.targetRole))));
             const badges = h('div', { class: 'badges' });
             if (c.openFlags > 0)
                 badges.append(badge(`${c.openFlags} flags`, 'gap'));
@@ -94,11 +96,11 @@ async function renderPipeline(content) {
                 badges.append(badge('verify', 'conflict'));
             if (c.openFlags === 0 && c.verifyFlags === 0)
                 badges.append(stamp('synced'));
-            card.append(badges);
-            const acts = h('div', { class: 'card-acts' });
-            const reveal = h('span', { class: 'reveal iflex gap-2' });
-            if (!c.parked) {
-                const adv = h('button', { class: 'btn btn-sm' }, 'Advance');
+            const reveal = h('span', { class: 'reveal card-acts' });
+            /* Say where Advance goes; a bare verb on a card is a guess. */
+            const nextStage = data.stages[data.stages.indexOf(stage) + 1];
+            if (!c.parked && nextStage) {
+                const adv = h('button', { class: 'btn btn-sm', title: `Advance ${c.name} to ${nextStage}` }, `To ${nextStage}`);
                 adv.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     try {
@@ -129,8 +131,7 @@ async function renderPipeline(content) {
                 });
                 reveal.append(res);
             }
-            acts.append(reveal);
-            card.append(acts);
+            card.append(h('div', { class: 'pcard-foot' }, badges, reveal));
             card.addEventListener('click', () => { detailId = c.id; view = 'detail'; renderShell(); renderView(); });
             card.addEventListener('keydown', e => { if (e.key === 'Enter')
                 card.click(); });
@@ -141,52 +142,83 @@ async function renderPipeline(content) {
     content.append(board);
 }
 /* ---------- candidate detail ---------- */
+function word(state) {
+    return state ? state.charAt(0).toUpperCase() + state.slice(1) : 'Pending';
+}
+function stat(label, value, opts = {}) {
+    const v = h('div', { class: `stat-value${opts.word ? ' is-word' : ''}` });
+    if (opts.mark)
+        v.append(mark(opts.mark));
+    v.append(document.createTextNode(value));
+    return h('div', { class: 'stat' }, h('span', { class: 'stat-label' }, label), v);
+}
 async function renderDetail(content, id) {
     const d = await api.get(`/api/recruiter/candidates/${id}`);
-    const back = h('button', { class: 'btn btn-sm' }, 'Pipeline');
-    back.addEventListener('click', () => { view = 'pipeline'; renderShell(); renderView(); });
-    content.append(back);
-    const head = h('div', { class: 'panel mt-3' });
-    const line = h('div', { class: 'row-baseline gap-4' }, h('h1', { class: 't-view' }, d.candidate.name), stamp(d.candidate.stage));
-    head.append(line);
-    head.append(h('p', { class: 't-secondary' }, `${d.candidate.targetRole} · ${d.candidate.employer} · ${d.candidate.tenure}`));
-    head.append(h('p', { class: 't-caption' }, 'One source conflict flagged. Conservative dates in use.'));
-    content.append(head);
-    /* Journey progress from the shared spine (research, roles, CV, LinkedIn). */
-    try {
-        const j = await api.get(`/api/recruiter/candidates/${id}/journey`);
-        const jr = j.journey;
-        const line = h('div', { class: 'chip-row mt-3' });
-        line.append(h('span', { class: 't-caption' }, `Setup ${jr.onboarding} · Research ${jr.research}`), h('span', { class: 't-caption' }, `Roles ${jr.roles.filter(r => r.done).length}/${jr.roles.length} · CV ${jr.cv} · LinkedIn ${jr.linkedin} · Interview ${jr.interview}`));
-        content.append(line);
+    setCrumbs([
+        { label: 'Pipeline', onClick: () => { view = 'pipeline'; renderShell(); renderView(); } },
+        { label: d.candidate.name },
+    ]);
+    const openFlags = d.flags.filter(f => f.status === 'open');
+    const conflicts = openFlags.filter(f => f.type === 'source_conflict').length;
+    /* Identity, stage, and the two profile actions on one line. */
+    const id_ = h('div', { class: 'dhead-id' }, h('div', { class: 'dhead-title' }, h('h1', { class: 't-view' }, d.candidate.name), stamp(d.candidate.stage)), h('p', { class: 't-secondary' }, `${d.candidate.targetRole} · ${d.candidate.employer} · ${d.candidate.tenure}`));
+    if (conflicts > 0) {
+        id_.append(h('p', { class: 't-caption' }, `${conflicts === 1 ? 'One source conflict' : `${conflicts} source conflicts`} flagged. Conservative dates in use.`));
     }
-    catch { /* progress line is best effort */ }
-    content.append(renderProfileShare(d));
+    content.append(h('div', { class: 'dhead' }, avatar(d.candidate.name, 'lg'), id_, renderProfileShare(d)));
+    /* The numbers a recruiter reads before anything else. Journey stages
+       come from the shared spine; the strip degrades to what is known. */
+    const strip = h('div', { class: 'statstrip', role: 'group', 'aria-label': 'Candidate summary' });
+    strip.append(stat('Open flags', String(openFlags.length), openFlags.length ? { mark: 'gap' } : {}), stat('Verified sessions', String(d.sessions.filter(s => s.mode === 'verified').length)));
+    try {
+        const jr = (await api.get(`/api/recruiter/candidates/${id}/journey`)).journey;
+        const roles = jr.roles;
+        strip.append(stat('Roles revamped', `${roles.filter(r => r.done).length}/${roles.length}`), stat('CV', word(jr.cv), { word: true }), stat('LinkedIn', word(jr.linkedin), { word: true }), stat('Interview', word(jr.interview), { word: true }));
+    }
+    catch { /* journey figures are best effort */ }
+    content.append(strip);
     if (d.suggestion) {
-        const chip = h('div', { class: 'chip-row mt-3' }, mark('claimed'), h('span', { class: 't-caption' }, `Stage advisor suggests: ${d.suggestion}. Humans advance.`));
-        const apply = h('button', { class: 'btn btn-sm ml-2' }, 'Advance to ' + d.suggestion);
+        const apply = h('button', { class: 'btn btn-sm' }, 'Advance to ' + d.suggestion);
         apply.addEventListener('click', async () => {
             await api.post(`/api/recruiter/candidates/${id}/advance`);
             toast('Stage advanced');
             await renderView();
         });
-        chip.append(apply);
-        content.append(chip);
+        content.append(h('div', { class: 'callout mt-4' }, mark('claimed'), h('span', { class: 't-secondary' }, `Stage advisor suggests ${d.suggestion}. Humans advance.`), apply));
     }
-    const tabs = h('div', { class: 'tabs', role: 'tablist' });
+    const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Candidate evidence' });
     const panels = {};
     const tabDefs = [
-        ['ins', 'Insights'], ['tr', 'Transcript'], ['fl', 'Gap flags'], ['nt', 'Notes'],
+        ['ins', 'Insights'], ['tr', 'Transcript'], ['fl', 'Gap flags', openFlags.length], ['nt', 'Notes'],
     ];
-    for (const [key, label] of tabDefs) {
-        const t = h('button', { class: 'tab', role: 'tab', 'aria-selected': key === 'ins' ? 'true' : 'false' }, label);
-        t.addEventListener('click', () => {
-            for (const [k] of tabDefs) {
-                panels[k].hidden = k !== key;
-                t.parentElement.children[tabDefs.findIndex(x => x[0] === k)]
-                    .setAttribute('aria-selected', k === key ? 'true' : 'false');
+    const tabEls = [];
+    const select = (key, focus = false) => {
+        tabDefs.forEach(([k], i) => {
+            const on = k === key;
+            panels[k].hidden = !on;
+            tabEls[i].setAttribute('aria-selected', on ? 'true' : 'false');
+            tabEls[i].setAttribute('tabindex', on ? '0' : '-1');
+            if (on && focus)
+                tabEls[i].focus();
+        });
+    };
+    for (const [key, label, count] of tabDefs) {
+        const t = h('button', { class: 'tab', role: 'tab', id: `tab-${key}`, 'aria-controls': `panel-${key}` }, label);
+        if (count)
+            t.append(h('span', { class: 'tab-count' }, String(count)));
+        t.addEventListener('click', () => select(key));
+        /* Roving tabindex: arrows move between tabs, Home and End jump. */
+        t.addEventListener('keydown', e => {
+            const k = e.key;
+            const i = tabDefs.findIndex(x => x[0] === key);
+            const next = k === 'ArrowRight' ? (i + 1) % tabDefs.length : k === 'ArrowLeft' ? (i - 1 + tabDefs.length) % tabDefs.length
+                : k === 'Home' ? 0 : k === 'End' ? tabDefs.length - 1 : -1;
+            if (next >= 0) {
+                e.preventDefault();
+                select(tabDefs[next][0], true);
             }
         });
+        tabEls.push(t);
         tabs.append(t);
     }
     content.append(tabs);
@@ -194,61 +226,102 @@ async function renderDetail(content, id) {
     panels['tr'] = renderTranscript(d);
     panels['fl'] = renderFlags(d, id);
     panels['nt'] = renderNotesPanel(d);
-    for (const [i, [k]] of tabDefs.entries()) {
-        panels[k].hidden = i !== 0;
+    for (const [k] of tabDefs) {
+        panels[k].setAttribute('role', 'tabpanel');
+        panels[k].id = `panel-${k}`;
+        panels[k].setAttribute('aria-labelledby', `tab-${k}`);
         content.append(panels[k]);
     }
-    /* Builder inside detail: sources, ingest, run. */
-    content.append(await renderBuilderPanel(d, id));
+    select('ins');
 }
 /* Shareable candidate profile: generated by the same agent block that
    assembles the CV, once every role has been revamped. One link, no
-   login, the end customer sees a brief overview and can pull the CV. */
+   login. It is an action on the candidate, so it lives in the header. */
 function renderProfileShare(d) {
-    const panel = h('div', { class: 'panel mt-3' });
-    panel.append(h('h2', { class: 't-section' }, 'Shareable profile'));
+    const acts = h('div', { class: 'dhead-acts' });
+    /* One place for the submission builder: the detail page links to it
+       rather than repeating it under every tab. */
+    const builder = h('button', { class: 'btn' }, icon('builder'), 'Submission builder');
+    builder.addEventListener('click', () => { builderId = d.candidate.id; view = 'builder'; renderShell(); renderView(); });
+    acts.append(builder);
     const page = d.artifacts.filter(a => a.kind === 'profile_page').at(-1);
     if (!page) {
-        panel.append(empty('Generated once every role in My Resume is complete.'));
-        return panel;
+        acts.append(h('span', { class: 't-caption' }, 'Profile page generates once every role is complete.'));
+        return acts;
     }
+    /* The link works only while the candidate's approval stands. */
+    const share = (page.fields.share ?? {});
+    const live = !!share.enabled && !!share.expiresAt && Date.parse(share.expiresAt) > Date.now();
     const url = `${location.origin}/p/${page.id}`;
-    const row = h('div', { class: 'row gap-2' }, h('input', { class: 'share-link', type: 'text', value: url, readonly: 'true', 'aria-label': 'Shareable profile link' }));
-    const copy = h('button', { class: 'btn btn-sm' }, 'Copy link');
+    const open = h('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, icon('external'), live ? 'Open profile' : 'Preview profile');
+    if (!live) {
+        acts.append(h('span', { class: 't-caption' }, share.enabled ? 'Link expired. The candidate can renew it.' : 'Waiting for the candidate to approve sharing.'), open);
+        return acts;
+    }
+    const copy = h('button', { class: 'btn btn-primary', title: url }, icon('link'), 'Copy profile link');
     copy.addEventListener('click', async () => {
         try {
             await navigator.clipboard.writeText(url);
-            toast('Link copied');
+            toast(`Link copied. It works until ${share.expiresAt.slice(0, 10)}.`);
         }
         catch {
-            toast('Select and copy manually');
+            toast(`Copy manually: ${url}`);
         }
     });
-    const open = h('a', { class: 'btn btn-sm', href: url, target: '_blank', rel: 'noopener' }, 'Open');
-    row.append(copy, open);
-    panel.append(row);
-    return panel;
+    const revoke = h('button', { class: 'btn btn-ghost' }, 'Revoke link');
+    revoke.addEventListener('click', async () => {
+        if (!confirm('Revoke the profile link? Anyone holding it loses access at once.'))
+            return;
+        await api.post(`/api/recruiter/candidates/${d.candidate.id}/profile/revoke`);
+        toast('Link revoked');
+        await renderView();
+    });
+    acts.append(copy, open, revoke);
+    return acts;
+}
+/* Portfolio evidence: connected accounts, marked claimed or verified. */
+async function renderPortfolioEvidence(id) {
+    const { connectors } = await api.get(`/api/recruiter/candidates/${id}/connectors`).catch(() => ({ connectors: [] }));
+    const linked = connectors.filter(c => c.linked);
+    if (!linked.length)
+        return null;
+    const box = h('div', { class: 'mt-6 hair-t pt-6' }, h('h2', { class: 't-section mb-4' }, 'Portfolio evidence'));
+    for (const c of linked) {
+        const s = c.snapshot;
+        const figures = !s ? 'Not synced yet'
+            : c.provider === 'github'
+                ? `${s.repos.length} own repositories · ${s.mergedPrs.length} merged PRs to other projects · active ${s.activeMonths} of the last 12 months${s.languages.length ? ` · ${s.languages.slice(0, 4).map((l) => l.name).join(', ')}` : ''}`
+                : `${s.solved.all} problems solved (${s.solved.easy} easy, ${s.solved.medium} medium, ${s.solved.hard} hard)${s.contest ? ` · contest rating ${s.contest.rating}` : ''}`;
+        box.append(h('div', { class: 'srow' }, h('div', {}, h('div', { class: 't-body row gap-2' }, mark(c.verified ? 'confirmed' : 'claimed'), `${c.provider === 'github' ? 'GitHub' : 'LeetCode'} · `, h('a', { href: c.url, target: '_blank', rel: 'noopener' }, `@${c.username}`)), h('div', { class: 't-caption' }, figures)), stamp(c.verified ? 'Ownership verified' : 'Claimed, not verified', c.verified ? 'confirmed' : 'claimed')));
+    }
+    return box;
 }
 function renderInsights(d) {
     const panel = h('div', { class: 'panel' });
     const s = d.sessions[0];
     if (!s) {
         panel.append(empty('No verified sessions yet. Practice sessions stay private to the candidate.', { label: 'Run the screener', fn: () => startScreener(d.candidate.id) }));
+        void renderPortfolioEvidence(d.candidate.id).then(box => { if (box)
+            panel.append(box); });
         return panel;
     }
-    panel.append(h('div', { class: 't-caption mb-4' }, 'Session: ', stamp(`Verified · ${s.date}`), stamp(s.duration), ' · practice sessions are not visible to recruiters'));
+    panel.append(h('div', { class: 'row wrap gap-2 t-caption mb-6' }, stamp(`Verified session, ${s.date}`, 'confirmed'), stamp(s.duration), h('span', {}, 'Practice sessions are not visible to recruiters.')));
     const grid = h('div', { class: 'grid2' });
-    const left = h('div', {}, h('h2', { class: 't-section' }, 'STAR proportions'));
+    const left = h('div', {}, h('h2', { class: 't-section mb-4' }, 'STAR proportions'));
     for (const [key, label] of [['S', 'Situation'], ['T', 'Task'], ['A', 'Action'], ['R', 'Result']]) {
         const v = s.star?.[key] ?? 0;
         const target = s.targets[key] ?? 0;
         const out = Math.abs(v - target) > 5;
-        const meter = h('div', { class: 'meter' + (out ? ' out' : '') }, h('div', { class: 'meter-head' }, h('span', { class: 't-secondary' }, label), h('span', { class: 't-caption figures' }, `${v}% · target ${target}%`)), h('div', { class: 'meter-track' }, setWidthPct(h('div', { class: 'meter-fill' }), v * 2)));
+        const meter = h('div', { class: 'meter' + (out ? ' out' : '') }, h('div', { class: 'meter-head' }, h('span', { class: 't-secondary' }, label), h('span', { class: 't-caption figures' }, `${v}% · target ${target}%`)), 
+        /* The track spans 0 to 50%, so the widest target (Action, 50) fills it. */
+        h('div', { class: 'meter-track' }, setWidthPct(h('div', { class: 'meter-fill' }), v * 2), setLeftPct(h('span', { class: 'meter-tick', title: `Target ${target}%` }), target * 2)));
         left.append(meter);
     }
-    const right = h('div', {}, h('h2', { class: 't-section' }, 'Ownership'), h('div', { class: 'split' }, setWidthPct(h('span', { class: 'a' }), s.ownership ?? 0), h('span', { class: 'b' })), h('p', { class: 't-caption figures' }, `${s.ownership ?? 0}% first person · team voice the rest · trailing ends: ${d.sessions.reduce((a, x) => a + 0, 0)}`));
+    const right = h('div', {}, h('h2', { class: 't-section mb-4' }, 'Ownership'), h('div', { class: 'split' }, setWidthPct(h('span', { class: 'a' }), s.ownership ?? 0), h('span', { class: 'b' })), h('p', { class: 't-caption figures' }, `${s.ownership ?? 0}% first person · team voice the rest · trailing ends: ${s.trailing ?? 'not scored'}`));
     grid.append(left, right);
     panel.append(grid);
+    void renderPortfolioEvidence(d.candidate.id).then(box => { if (box)
+        panel.append(box); });
     return panel;
 }
 function renderTranscript(d) {
@@ -275,7 +348,7 @@ const FLAG_META = {
     metric_confirmed: { m: 'confirmed', spine: 'spine-conf', word: 'Confirmed' },
 };
 function renderFlags(d, id) {
-    const panel = h('div', { class: 'panel' });
+    const panel = h('div', {});
     if (!d.flags.length) {
         panel.append(empty('Nothing to fix. The transcript, the CV and the JD line up.'));
         return panel;
@@ -305,7 +378,15 @@ function renderFlags(d, id) {
             acts.append(approve, discard);
         }
         else {
-            acts.append(stamp(f.status === 'actioned' ? 'Approved' : 'Discarded'));
+            /* An approved flag became a candidate task; show where it stands.
+               "Fixed" is the candidate's word, so the recruiter is told to check. */
+            const task = d.tasks.find(t => t.flagId === f.id);
+            if (f.status !== 'actioned')
+                acts.append(stamp('Discarded'));
+            else if (task?.done)
+                acts.append(stamp('Candidate says fixed. Check the CV', 'claimed'));
+            else
+                acts.append(stamp('Approved. Waiting on the candidate'));
         }
         card.append(acts);
         panel.append(card);
@@ -313,7 +394,7 @@ function renderFlags(d, id) {
     return panel;
 }
 function renderNotesPanel(d) {
-    const box = h('section', { class: 'stage p-6' });
+    const box = h('div', { class: 'stage p-6' });
     box.append(h('p', { class: 't-caption' }, 'Internal only. Never shown to the candidate.'));
     const rows = [
         ['Current compensation', d.candidate.currentCompensation ?? 'not captured'],
@@ -330,13 +411,12 @@ function renderNotesPanel(d) {
 /* ---------- builder ---------- */
 let builderId = null;
 async function renderBuilder(content) {
-    content.append(h('h1', { class: 't-view' }, 'Submission builder'));
-    content.append(h('p', { class: 't-secondary' }, 'Gated on four of four sources. Generation is recruiter-initiated.'));
+    content.append(viewHeader('Submission builder', 'Gated on four of four sources. Generation is recruiter-initiated.'));
     const data = await api.get('/api/recruiter/pipeline');
     const panel = h('div', { class: 'panel mt-6 w-520' });
     for (const c of data.candidates) {
         const row = h('div', { class: 'srow' }, h('span', { class: 't-body' }, `${c.name} · ${c.targetRole}`));
-        const btn = h('button', { class: 'btn btn-sm' }, 'Open');
+        const btn = h('button', { class: 'btn btn-sm', 'aria-pressed': builderId === c.id ? 'true' : 'false' }, builderId === c.id ? 'Open now' : 'Open');
         btn.addEventListener('click', () => { builderId = c.id; renderShell(); renderView(); });
         row.append(btn);
         panel.append(row);
@@ -347,23 +427,52 @@ async function renderBuilder(content) {
         content.append(await renderBuilderPanel(d, builderId));
     }
     else {
-        content.append(empty('Pick a candidate to see their sources and run the builder.'));
+        content.append(h('div', { class: 'mt-6' }, empty('Pick a candidate to see their sources and run the builder.')));
     }
 }
 const SOURCE_KINDS = ['resume', 'transcript', 'linkedin_snapshot', 'jd'];
+const SOURCE_LABEL = {
+    resume: 'Resume', transcript: 'Transcript', linkedin_snapshot: 'LinkedIn snapshot', jd: 'Job description',
+};
 async function renderBuilderPanel(d, id) {
     const panel = h('div', { class: 'panel mt-6' });
     panel.append(h('h2', { class: 't-section' }, 'Ingested sources'));
     for (const kind of SOURCE_KINDS) {
         const art = d.artifacts.filter(a => a.kind === kind).at(-1);
-        const row = h('div', { class: 'srcrow' }, h('span', { class: 't-body' }, kind.replace('_', ' ')));
+        const src = (art?.fields.source ?? {});
+        const row = h('div', { class: 'srcrow' }, h('div', { class: 'srcrow-main' }, h('span', { class: 't-body' }, SOURCE_LABEL[kind] ?? kind), src.filename ? h('span', { class: 't-caption' }, `${src.filename}${src.uploadedBy ? ` · added by ${src.uploadedBy}` : ''}`) : ''));
+        const recorded = kind === 'transcript' && d.sessions.some(s => s.mode === 'verified' && s.status !== 'stopped' && s.transcript.length > 0);
+        const linkOnly = kind === 'linkedin_snapshot' && !art && d.artifacts.some(a => a.kind === 'linkedin_link');
         if (art) {
             row.append(stamp(art.quarantine === 'sanitized' ? 'Sanitized' : art.quarantine === 'rejected' ? 'Rejected' : 'Clean'));
             if (art.injectionAttempts > 0)
                 row.append(badge(`${art.injectionAttempts} blocked`, 'conflict'));
         }
+        else if (recorded) {
+            /* The platform's own verified interview counts; nothing to paste. */
+            row.append(stamp('Recorded verified interview', 'confirmed'));
+        }
+        else if (kind === 'resume' || kind === 'jd') {
+            row.append(filePicker(kind === 'resume' ? 'Upload CV' : 'Upload file', async (f) => {
+                try {
+                    await uploadDocument(`/api/recruiter/candidates/${id}/documents`, kind, f);
+                    toast(`${SOURCE_LABEL[kind]} added`);
+                    await renderView();
+                }
+                catch (e) {
+                    toast(DOCUMENT_ERRORS[String(e.message)] ?? 'Upload failed. Try again.');
+                }
+            }));
+            if (kind === 'jd') {
+                const paste = h('button', { class: 'btn btn-sm' }, 'Paste text');
+                paste.addEventListener('click', () => showIngest(id, kind, () => renderView()));
+                row.append(paste);
+            }
+        }
         else {
-            const btn = h('button', { class: 'btn btn-sm' }, 'Ingest');
+            if (linkOnly)
+                row.append(h('span', { class: 't-caption' }, 'Only the profile URL is on file. Paste the profile text to run the date cross-check.'));
+            const btn = h('button', { class: 'btn btn-sm' }, 'Paste text');
             btn.addEventListener('click', () => showIngest(id, kind, () => renderView()));
             row.append(btn);
         }
@@ -411,7 +520,7 @@ async function renderBuilderPanel(d, id) {
 }
 function showIngest(candidateId, kind, done) {
     const scrim = h('div', { class: 'scrim' });
-    const modal = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' }, h('h2', { class: 't-view' }, `Ingest ${kind.replace('_', ' ')}`), h('p', { class: 't-secondary' }, 'Paste the document text. It passes the quarantine pipeline before anything sees it.'));
+    const modal = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' }, h('h2', { class: 't-view' }, `Ingest source: ${SOURCE_LABEL[kind] ?? kind}`), h('p', { class: 't-secondary' }, 'Paste the document text. It passes the quarantine pipeline before anything sees it.'));
     const ta = h('textarea', { rows: '8', class: 'mb-3' });
     const ingest = h('button', { class: 'btn btn-primary' }, 'Ingest');
     ingest.addEventListener('click', async () => {
@@ -444,8 +553,7 @@ async function startScreener(candidateId) {
 }
 /* ---------- notes ---------- */
 async function renderNotes(content) {
-    content.append(h('h1', { class: 't-view' }, 'Notes'));
-    content.append(h('p', { class: 't-secondary' }, 'Internal only. Role-gated. Never client-facing.'));
+    content.append(viewHeader('Notes', 'Internal only. Role-gated. Never client-facing.'));
     const data = await api.get('/api/recruiter/pipeline');
     for (const c of data.candidates) {
         const d = await api.get(`/api/recruiter/candidates/${c.id}`);
@@ -470,13 +578,25 @@ function showAddCandidate(done) {
     const name = h('input', { type: 'text', placeholder: 'Full name' });
     const role = h('input', { type: 'text', placeholder: 'Target role' });
     const company = h('input', { type: 'text', placeholder: 'Target company (optional)' });
-    modal.append(h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Email'), email), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Name'), name), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Target role'), role), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Target company'), company));
+    const jd = h('textarea', { rows: '4', placeholder: 'Paste the client job description (optional, recommended)' });
+    let cvFile = null;
+    const cvName = h('span', { class: 't-caption' }, 'No file chosen');
+    const cvPick = filePicker('Choose CV', f => { cvFile = f; cvName.textContent = f.name; });
+    modal.append(h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Email'), email), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Name'), name), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Target role'), role), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Target company'), company), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'Job description'), h('span', { class: 't-caption' }, 'Attached here, the candidate is never asked for it.'), jd), h('div', { class: 'field' }, h('label', { class: 't-secondary' }, 'CV (optional)'), h('span', { class: 't-caption' }, 'PDF or Word. Uploaded once; the candidate sees it is on file.'), h('div', { class: 'row gap-2' }, cvPick, cvName)));
     const create = h('button', { class: 'btn btn-primary' }, 'Create profile');
     create.addEventListener('click', async () => {
         try {
             const resp = await api.post('/api/recruiter/candidates', {
-                email: email.value, name: name.value, targetRole: role.value, targetCompany: company.value || null,
+                email: email.value, name: name.value, targetRole: role.value, targetCompany: company.value || null, jd: jd.value,
             });
+            if (cvFile) {
+                try {
+                    await uploadDocument(`/api/recruiter/candidates/${resp.candidateId}/documents`, 'resume', cvFile);
+                }
+                catch (e) {
+                    toast(DOCUMENT_ERRORS[String(e.message)] ?? 'The profile was created, but the CV upload failed. Add it from the builder.');
+                }
+            }
             scrim.remove();
             showCredentials(resp.credentials, done);
         }
@@ -493,7 +613,7 @@ function showAddCandidate(done) {
 }
 function showCredentials(creds, done) {
     const scrim = h('div', { class: 'scrim' });
-    const modal = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' }, h('h2', { class: 't-view' }, 'Candidate created'), h('p', { class: 't-secondary' }, 'Share these credentials with the candidate. The password is shown once and stored hashed.'));
+    const modal = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' }, h('h2', { class: 't-view' }, 'Candidate created'), h('p', { class: 't-secondary' }, 'Send these to the candidate. The password is temporary and shown only once: the candidate replaces it with their own at first sign-in, so you will not know it.'));
     const block = h('div', { class: 'handoff' }, `Email: ${creds.email}\nPassword: ${creds.password}`);
     const copy = h('button', { class: 'btn btn-primary' }, 'Copy credentials');
     copy.addEventListener('click', async () => {

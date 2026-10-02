@@ -18,7 +18,7 @@ import { runContract, type ContractContext } from '../contracts.ts';
 import {
   agentConflictDetector, agentStageAdvisor, agentSessionEvaluator,
   gatherResearchEvidence, writeResearchReport,
-  composeSubmission, resumeStudioTurn, screenerTurn, linkedinTurn,
+  composeSubmission, resumeStudioTurn, screenerTurn, linkedinTurn, LINKEDIN_SECTIONS,
   type SessionState, type ResumeFields,
 } from '../agents.ts';
 import {
@@ -199,9 +199,12 @@ export class Engine {
       reply = r.reply; nextState = r.state; declaration = r.declareComplete;
       this.lastProducer = r.producer;
     } else if (step.agent === 'linkedin_writer') {
+      const before = state.sectionsLeft ?? [...LINKEDIN_SECTIONS];
       const r = await intelligentLinkedinTurn(this.llm, state, resume, text);
       reply = r.reply; nextState = r.state; declaration = r.declareComplete;
       this.lastProducer = r.producer;
+      const delivered = before.find(k => !(nextState.sectionsLeft ?? []).includes(k));
+      if (delivered) this.saveLinkedinSection(ctx, run, delivered, reply);
     } else throw new FlowError('no_session_agent');
 
     const sessionId = run.stepStates['_session'];
@@ -225,6 +228,27 @@ export class Engine {
     }
     this.store.updateFlowRun(ctx, run.id, { stepStates: run.stepStates });
     return { run: this.store.flowRun(ctx, run.id)!, reply };
+  }
+
+  /* LinkedIn Studio output is a deliverable, not a chat log: each section
+     is saved to one linkedin_sections artifact the moment it is written,
+     so leaving the page loses nothing and the finished set stays readable.
+     The reply's trailing prompt ("What would you like...") is not saved. */
+  private saveLinkedinSection(ctx: Ctx, run: FlowRun, key: string, reply: string): void {
+    const text = reply.split(/\n\n(?:What would you like to work on next\?|That is all six sections\.)/)[0]!.trim();
+    const existing = this.store.artifacts(ctx, run.candidateId, 'linkedin_sections')
+      .find(a => (a.fields as { runId?: string }).runId === run.id);
+    const sections = { ...((existing?.fields as { sections?: Record<string, string> })?.sections ?? {}), [key]: text };
+    const fields = { runId: run.id, order: [...LINKEDIN_SECTIONS], sections };
+    if (existing) this.store.updateArtifactFields(ctx, existing.id, fields);
+    else {
+      this.store.insertArtifact({
+        id: randomUUID(), tenantId: ctx.tenantId, candidateId: run.candidateId,
+        kind: 'linkedin_sections', title: 'LinkedIn sections', quarantine: 'clean', fields,
+        sanitizedText: null, content: null, injectionAttempts: 0,
+        createdBy: 'agent:linkedin_writer', createdAt: new Date().toISOString(),
+      });
+    }
   }
 
   private async finishSessionStep(ctx: Ctx, run: FlowRun, step: FlowStepDef, declaration: unknown, state: SessionState): Promise<void> {
@@ -280,9 +304,13 @@ export class Engine {
       /* Submission Builder intake check: resume required, 4 of 4 gates compose. */
       const arts = this.store.artifacts(ctx, run.candidateId)
         .filter(a => a.quarantine !== 'rejected');
+      /* A verified interview run on the platform is a transcript source in
+         its own right; nobody should paste back what the platform recorded. */
+      const recorded = this.store.sessions(ctx, run.candidateId)
+        .some(s => s.mode === 'verified' && s.status !== 'stopped' && s.transcript.length > 0);
       const have = {
         resume: arts.some(a => a.kind === 'resume'),
-        transcript: arts.some(a => a.kind === 'transcript'),
+        transcript: recorded || arts.some(a => a.kind === 'transcript'),
         linkedin_snapshot: arts.some(a => a.kind === 'linkedin_snapshot'),
         jd: arts.some(a => a.kind === 'jd'),
       };

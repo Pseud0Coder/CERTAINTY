@@ -1,55 +1,57 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..500&display=swap');
 
 /* ==========================================================================
    Certainty. Design tokens.
    Theme system: light and dark selected by [data-theme] on <html>.
-   A dark-academia palette: aged parchment and library oak in light mode,
-   candlelit study in dark mode. Warm oxblood, brass and hunter-green
-   stand in for the old cool-blue accent set, on warm ink-brown neutrals
-   in place of cool grays. Serif carries the display and page-title type;
-   every other role stays sans for density, since this is still a working
-   evidence tool, not a manuscript.
+
+   Neutral certainty (ADR-0021). The interface is achromatic: neutral
+   ground, white sheets, near-black ink, and near-black primary actions.
+   Hue is spent only on evidence (positive, warning, blocking), on
+   recording, and on focus. A screen with nothing at stake has no colour
+   in it at all, so the moment colour appears it means something.
    Accents are tokens only. No component invents a color value.
    ========================================================================== */
 
 :root, [data-theme="light"] {
   color-scheme: light;
 
-  /* --- base neutrals (aged parchment, oak rail, ink-brown text) -------- */
-  --ground:            #F7F1E3;
-  --rail-bg:           #EDE3CC;
-  --sheet:             #FBF7EC;
-  --sheet-sunken:      #F0E8D4;
-  --rule:              #DCD0AE;
-  --rule-strong:       #C7B888;
-  --ink:               #2E2419;
-  --ink-quiet:         #756945;
-  --ink-disabled:      #ADA079;
-  --ink-inverse:       #FBF7EC;
-  --hover-wash:        rgba(46, 36, 25, 0.06);
+  /* --- base neutrals ---------------------------------------------------- */
+  --ground:            #F7F7F8;
+  --rail-bg:           #F2F2F3;
+  --sheet:             #FFFFFF;
+  --sheet-sunken:      #F4F4F5;
+  --rule:              #E4E4E7;
+  --rule-strong:       #D4D4D8;
+  --ink:               #09090B;
+  --ink-quiet:         #5F5F67;
+  --ink-disabled:      #A1A1AA;
+  --ink-inverse:       #FFFFFF;
+  --hover-wash:        rgba(9, 9, 11, 0.045);
 
   /* --- internal only: always the inverse of ground ---------------------- */
-  --stage:             #2E2419;
-  --stage-rule:        #4A3B24;
-  --stage-ink:         #FBF7EC;
-  --stage-ink-quiet:   #C7B888;
+  --stage:             #18181B;
+  --stage-rule:        #2F2F35;
+  --stage-ink:         #FAFAFA;
+  --stage-ink-quiet:   #A1A1AA;
 
-  /* --- accent: antique brass, the one brand hue ------------------------- */
-  --accent:            #8A6A1E;
-  --accent-hover:      #6E5416;
-  --accent-soft:       #EBDFB6;
-  --accent-ink:        #6E5416;
+  /* --- accent: ink. The primary action is black, never a brand hue. ----- */
+  --accent:            #09090B;
+  --accent-hover:      #27272A;
+  --accent-soft:       #EAEAEC;
+  --accent-ink:        #09090B;
 
-  /* --- pastel set: library wax-seal and ink hues ------------------------ */
-  --pastel-blue:       #D7DEE7;   --pastel-blue-ink:    #3E5578;
-  --pastel-green:      #DCE3C9;   --pastel-green-ink:   #3F5D2E;
-  --pastel-yellow:     #EDE0B3;   --pastel-yellow-ink:  #715A16;
-  --pastel-orange:     #E7CFAE;   --pastel-orange-ink:  #93501F;
-  --pastel-red:        #E7CAC1;   --pastel-red-ink:     #8A3B2E;
-  --pastel-purple:     #DED0DD;   --pastel-purple-ink:  #63426A;
-  --pastel-pink:       #E7D2D6;   --pastel-pink-ink:    #85465A;
+  /* --- evidence hues, each a quiet tint plus a strong ink ---------------- */
+  --pastel-green:      #E6F4EC;   --pastel-green-ink:   #14664A;
+  --pastel-orange:     #FBF0E1;   --pastel-orange-ink:  #8A4B0A;
+  --pastel-red:        #FBE8E6;   --pastel-red-ink:     #B0231A;
+  /* Retained names, now neutral: nothing in the product may carry meaning
+     through blue, yellow, purple or pink any more. */
+  --pastel-blue:       var(--sheet-sunken);   --pastel-blue-ink:    var(--ink-quiet);
+  --pastel-yellow:     var(--sheet-sunken);   --pastel-yellow-ink:  var(--ink-quiet);
+  --pastel-purple:     var(--sheet-sunken);   --pastel-purple-ink:  var(--ink-quiet);
+  --pastel-pink:       var(--sheet-sunken);   --pastel-pink-ink:    var(--ink-quiet);
 
-  /* --- semantic roles (map onto the pastel set) -------------------------- */
+  /* --- semantic roles ---------------------------------------------------- */
   --severity-positive: var(--pastel-green-ink);
   --severity-positive-bg: var(--pastel-green);
   --severity-warning:  var(--pastel-orange-ink);
@@ -57,30 +59,30 @@
   --severity-blocking: var(--pastel-red-ink);
   --severity-blocking-bg: var(--pastel-red);
   --severity-confirmed: var(--ink);
-  --recording-active:  #9C3B2A;
-  --recording-halo:    rgba(156, 59, 42, 0.14);
-  --focus-ring:        #8A6A1E;
+  --recording-active:  #E01B0F;
+  --recording-halo:    rgba(224, 27, 15, 0.08);
+  --focus-ring:        #1A5FD0;
 
   /* --- type ------------------------------------------------------------ */
   --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                "Helvetica Neue", Arial, sans-serif;
-  --font-serif: 'Geist', Cambria, Georgia, "Iowan Old Style", "Palatino Linotype",
-               "Book Antiqua", Palatino, "Times New Roman", serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* No serif any more; the name survives so older rules resolve to sans. */
+  --font-serif: var(--font-sans);
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Sized up from the original Notion-density scale: readability over
-     information density, so body copy in particular gets real room. */
-  --type-display:        700 33px/40px var(--font-serif);
-  --type-view-title:     700 25px/32px var(--font-serif);
-  --type-section:        600 15px/21px var(--font-sans);
+  --type-display:        600 32px/38px var(--font-sans);
+  --type-view-title:     600 26px/32px var(--font-sans);
+  --type-section:        600 15px/22px var(--font-sans);
   --type-body:           400 16px/24px var(--font-sans);
   --type-secondary:      400 14px/21px var(--font-sans);
   --type-caption:        400 13px/18px var(--font-sans);
   --type-numeral:        500 14px/19px var(--font-sans);
-  --type-mono:           400 14px/21px var(--font-mono);
+  --type-mono:           400 13px/20px var(--font-mono);
+  --type-stat:           600 22px/28px var(--font-sans);
 
-  --track-display:      -0.005em;
-  --track-view-title:   -0.005em;
+  --track-display:      -0.025em;
+  --track-view-title:   -0.02em;
+  --track-section:      -0.005em;
   --measure-prose:      68ch;
 
   /* --- space, 4px base ------------------------------------------------- */
@@ -94,19 +96,21 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* --- radius by role. A touch more square than the old Notion-soft
-     values: carved-oak furniture, not a rounded SaaS bubble. ------------ */
+  /* --- radius by role -------------------------------------------------- */
   --radius-none:    0;
-  --radius-control: 7px;
+  --radius-control: 8px;
   --radius-sheet:   12px;
   --radius-pill:    999px;
 
-  /* --- elevation. Warm brown shadow, not neutral black. ----------------- */
+  /* --- elevation. Structure comes from hairlines; shadow is reserved for
+     what genuinely floats (popover, toast, modal). A sheet gets at most a
+     one-pixel lift so white reads crisp on the neutral ground. ---------- */
   --elev-0: none;
-  --elev-1: 0 1px 2px rgba(38,26,14,.08), 0 4px 16px rgba(38,26,14,.10);
-  --elev-2: 0 8px 40px rgba(38,26,14,.22);
-  --inset-field: inset 0 1px 2px rgba(38,26,14,.07);
-  --scrim:  rgba(38,26,14,.34);
+  --elev-sheet: 0 1px 2px rgba(9, 9, 11, 0.04);
+  --elev-1: 0 1px 2px rgba(9, 9, 11, 0.05), 0 8px 24px rgba(9, 9, 11, 0.08);
+  --elev-2: 0 24px 64px rgba(9, 9, 11, 0.20);
+  --inset-field: none;
+  --scrim:  rgba(9, 9, 11, 0.40);
 
   /* --- motion ----------------------------------------------------------- */
   --dur-micro:    120ms;
@@ -116,46 +120,40 @@
 
   /* --- structure -------------------------------------------------------- */
   --hairline:   1px;
-  --rail-w:     232px;
-  --rail-w-sm:  56px;
-  --timecode-w: 56px;
+  --rail-w:     240px;
+  --rail-w-sm:  64px;
+  --timecode-w: 64px;
   --spine-w:    2px;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Candlelit study: warm near-black oak and espresso, not cool charcoal. */
-  --ground:            #1A1510;
-  --rail-bg:           #201911;
-  --sheet:             #211A12;
-  --sheet-sunken:      #2A2116;
-  --rule:              #3A3021;
-  --rule-strong:       #4C3F2A;
-  --ink:               #ECE1C4;
-  --ink-quiet:         #A99C7B;
-  --ink-disabled:      #6B6047;
-  --ink-inverse:       #1A1510;
-  --hover-wash:        rgba(236, 225, 196, 0.06);
+  --ground:            #0B0B0C;
+  --rail-bg:           #0F0F11;
+  --sheet:             #141416;
+  --sheet-sunken:      #1C1C1F;
+  --rule:              #26262A;
+  --rule-strong:       #36363C;
+  --ink:               #FAFAFA;
+  --ink-quiet:         #A1A1AA;
+  --ink-disabled:      #5B5B63;
+  --ink-inverse:       #0B0B0C;
+  --hover-wash:        rgba(255, 255, 255, 0.05);
 
-  --stage:             #ECE1C4;
-  --stage-rule:        #C9BC9C;
-  --stage-ink:         #1A1510;
-  --stage-ink-quiet:   #6B6047;
+  --stage:             #F4F4F5;
+  --stage-rule:        #D4D4D8;
+  --stage-ink:         #09090B;
+  --stage-ink-quiet:   #52525B;
 
-  /* Brass and gold-leaf, brightened to hold up against the dark ground. */
-  --accent:            #C9A227;
-  --accent-hover:      #DCBA4E;
-  --accent-soft:       rgba(201, 162, 39, 0.16);
-  --accent-ink:        #D8B65A;
+  --accent:            #FAFAFA;
+  --accent-hover:      #E4E4E7;
+  --accent-soft:       rgba(255, 255, 255, 0.08);
+  --accent-ink:        #FAFAFA;
 
-  --pastel-blue:       rgba(94, 120, 158, 0.26);  --pastel-blue-ink:    #9FB3D2;
-  --pastel-green:      rgba(90, 130, 80, 0.28);   --pastel-green-ink:   #9CC08F;
-  --pastel-yellow:     rgba(196, 150, 40, 0.26);  --pastel-yellow-ink:  #DDC077;
-  --pastel-orange:     rgba(180, 100, 50, 0.28);  --pastel-orange-ink:  #DFA478;
-  --pastel-red:        rgba(160, 66, 52, 0.28);   --pastel-red-ink:     #DE9484;
-  --pastel-purple:     rgba(120, 85, 120, 0.28);  --pastel-purple-ink:  #C4A4C6;
-  --pastel-pink:       rgba(150, 80, 95, 0.26);   --pastel-pink-ink:    #DBA5B0;
+  --pastel-green:      rgba(79, 190, 146, 0.13);   --pastel-green-ink:   #4FBE92;
+  --pastel-orange:     rgba(217, 154, 61, 0.14);   --pastel-orange-ink:  #D99A3D;
+  --pastel-red:        rgba(240, 131, 122, 0.14);  --pastel-red-ink:     #F0837A;
 
   --severity-positive: var(--pastel-green-ink);
   --severity-positive-bg: var(--pastel-green);
@@ -163,14 +161,14 @@
   --severity-warning-bg: var(--pastel-orange);
   --severity-blocking: var(--pastel-red-ink);
   --severity-blocking-bg: var(--pastel-red);
-  --recording-active:  #E0665A;
-  --recording-halo:    rgba(224, 102, 90, 0.16);
-  --focus-ring:        #C9A227;
+  --recording-active:  #FF5247;
+  --recording-halo:    rgba(255, 82, 71, 0.12);
+  --focus-ring:        #5C9BFF;
 
-  --elev-1: 0 1px 2px rgba(0,0,0,.42), 0 4px 16px rgba(0,0,0,.34);
-  --elev-2: 0 8px 40px rgba(0,0,0,.55);
-  --inset-field: inset 0 1px 3px rgba(0,0,0,.3);
-  --scrim:  rgba(10,7,3,.6);
+  --elev-sheet: none;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --elev-2: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --scrim:  rgba(0, 0, 0, 0.6);
 }
 
 /* ==========================================================================
@@ -185,8 +183,11 @@ body {
   color: var(--ink);
   font: var(--type-body);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
   transition: background var(--dur-standard) var(--ease), color var(--dur-standard) var(--ease);
 }
+
+h1, h2, h3 { margin: 0; }
 
 /* Every numeral in a data region. */
 .figures {
@@ -194,7 +195,7 @@ body {
   font-variant-numeric: tabular-nums slashed-zero;
 }
 
-/* One focus treatment, everywhere. */
+/* One focus treatment, everywhere. This hue means nothing else. */
 :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -207,23 +208,12 @@ body {
 
 .t-display   { font: var(--type-display);    letter-spacing: var(--track-display); }
 .t-view      { font: var(--type-view-title); letter-spacing: var(--track-view-title); }
-.t-section   { font: var(--type-section); }
+.t-section   { font: var(--type-section);    letter-spacing: var(--track-section); }
 .t-body      { font: var(--type-body); }
 .t-secondary { font: var(--type-secondary); color: var(--ink-quiet); }
 .t-caption   { font: var(--type-caption);    color: var(--ink-quiet); }
 .t-mono      { font: var(--type-mono); }
 .prose       { max-width: var(--measure-prose); }
-
-/* View titles carry a small accent mark: quiet flair, one device. */
-.t-view::before {
-  content: "";
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  margin-inline-end: var(--space-3);
-  vertical-align: 6%;
-}
 
 /* ==========================================================================
    Certainty mark. Four states, currentColor.
@@ -250,7 +240,7 @@ body {
   background: var(--stage);
   color: var(--stage-ink);
   border: var(--hairline) solid var(--stage-rule);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-sheet);
 }
 .stage .t-caption, .stage .t-secondary { color: var(--stage-ink-quiet); }
 
@@ -263,7 +253,7 @@ body {
 .spine-parked { border-inline-start-style: dotted; }
 
 /* ==========================================================================
-   Reveal on approach. The only hover reveal in the system.
+   Reveal on approach
    ========================================================================== */
 
 .reveal {
@@ -283,30 +273,42 @@ body {
    ========================================================================== */
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   font: var(--type-secondary);
-  padding: 6px 12px;
+  font-weight: 500;
+  padding: 7px 14px;
   border-radius: var(--radius-control);
-  border: var(--hairline) solid var(--rule);
-  background: transparent;
+  border: var(--hairline) solid var(--rule-strong);
+  background: var(--sheet);
   color: var(--ink);
   cursor: pointer;
-  transition: background var(--dur-micro) var(--ease), border-color var(--dur-micro) var(--ease);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--dur-micro) var(--ease), border-color var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease);
 }
-.btn:hover { background: var(--hover-wash); }
+.btn:hover { background: var(--sheet-sunken); border-color: var(--rule-strong); }
+.btn:active { background: var(--rule); }
 
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--ink-inverse);
-  font-weight: 600;
 }
 .btn-primary:hover  { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn-primary:active { background: var(--accent-hover); }
 
+/* A borderless button for tertiary actions and icon buttons. */
+.btn-ghost { background: transparent; border-color: transparent; color: var(--ink-quiet); }
+.btn-ghost:hover { background: var(--hover-wash); border-color: transparent; color: var(--ink); }
+.btn-icon { padding: 0; width: 32px; height: 32px; }
+
 .btn[aria-disabled="true"] {
   color: var(--ink-disabled);
   border-color: var(--rule);
-  background: transparent;
+  background: var(--sheet);
   cursor: not-allowed;
 }
 
@@ -314,14 +316,14 @@ body {
 .stamp {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 6px;
   font: var(--type-caption);
   font-weight: 500;
   color: var(--ink);
   padding: 2px 8px;
-  background: var(--sheet-sunken);
+  background: var(--sheet);
   border: var(--hairline) solid var(--rule);
-  border-radius: var(--radius-control);
+  border-radius: 6px;
   white-space: nowrap;
 }
 
@@ -329,35 +331,35 @@ body {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 22px;
   height: 22px;
-  padding: 0 6px;
-  background: var(--sheet-sunken);
+  padding: 0 7px;
+  background: var(--sheet);
   border: var(--hairline) solid var(--rule);
-  border-radius: var(--radius-control);
+  border-radius: 6px;
   font: var(--type-caption);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   justify-content: center;
 }
 
-/* Pastel chip: the colorful voice of the system. */
+/* Evidence chip: a quiet tint with a strong ink, evidence roles only. */
 .chip-pastel {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 2px 10px;
-  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  border-radius: 6px;
   font: var(--type-caption);
   font-weight: 500;
+  white-space: nowrap;
 }
-.chip-pastel.blue   { background: var(--pastel-blue);   color: var(--pastel-blue-ink); }
 .chip-pastel.green  { background: var(--pastel-green);  color: var(--pastel-green-ink); }
-.chip-pastel.yellow { background: var(--pastel-yellow); color: var(--pastel-yellow-ink); }
 .chip-pastel.orange { background: var(--pastel-orange); color: var(--pastel-orange-ink); }
 .chip-pastel.red    { background: var(--pastel-red);    color: var(--pastel-red-ink); }
-.chip-pastel.purple { background: var(--pastel-purple); color: var(--pastel-purple-ink); }
-.chip-pastel.pink   { background: var(--pastel-pink);   color: var(--pastel-pink-ink); }
+.chip-pastel.blue, .chip-pastel.yellow, .chip-pastel.purple, .chip-pastel.pink
+                    { background: var(--sheet-sunken);  color: var(--ink-quiet); }
 
 /* ==========================================================================
    Recording. The one saturated, animated element.
@@ -367,8 +369,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 4px 12px 4px 10px;
-  border: var(--spine-w) solid var(--recording-active);
+  padding: 3px 12px 3px 10px;
+  border: var(--hairline) solid var(--recording-active);
   border-radius: var(--radius-pill);
   background: var(--recording-halo);
   color: var(--recording-active);
@@ -394,6 +396,7 @@ body {
 }
 .modal {
   background: var(--sheet);
+  border: var(--hairline) solid var(--rule);
   border-radius: var(--radius-sheet);
   box-shadow: var(--elev-2);
   padding: var(--space-8);
@@ -417,4 +420,5 @@ body {
 @media (max-width: 719px) {
   :root, [data-theme="light"] { --timecode-w: auto; }
   .btn { min-height: 44px; padding: 10px 14px; }
+  .btn-icon { min-height: 0; width: 40px; height: 40px; }
 }

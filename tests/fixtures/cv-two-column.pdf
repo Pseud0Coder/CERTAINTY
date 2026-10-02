@@ -1,0 +1,56 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 1190 >>
+stream
+BT /F2 18 Tf 40 740 Td (Ravi Menon) Tj ET
+BT /F1 10 Tf 40 720 Td (Backend Engineer) Tj ET
+BT /F2 11 Tf 40 690 Td (Contact) Tj ET
+BT /F1 9 Tf 40 674 Td (Bristol, UK) Tj ET
+BT /F1 9 Tf 40 662 Td (ravi.menon@example.com) Tj ET
+BT /F1 9 Tf 40 650 Td (+44 7700 900456) Tj ET
+BT /F2 11 Tf 40 620 Td (Skills) Tj ET
+BT /F1 9 Tf 40 604 Td (Go, PostgreSQL, Kafka) Tj ET
+BT /F1 9 Tf 40 592 Td (Kubernetes, Terraform) Tj ET
+BT /F2 11 Tf 40 562 Td (Education) Tj ET
+BT /F1 9 Tf 40 546 Td (BEng Software Engineering) Tj ET
+BT /F1 9 Tf 40 534 Td (University of Bath, 2016) Tj ET
+BT /F2 12 Tf 230 740 Td (Experience) Tj ET
+BT /F2 10 Tf 230 718 Td (Senior Backend Engineer, Harbourline) Tj ET
+BT /F1 9 Tf 230 704 Td (Mar 2020 - Present) Tj ET
+BT /F1 9 Tf 230 690 Td (- Moved payments onto Kafka, cutting settlement lag from 6h to 20 minutes.) Tj ET
+BT /F1 9 Tf 230 678 Td (- Ran the on-call rotation for 9 services.) Tj ET
+BT /F2 10 Tf 230 652 Td (Backend Engineer, Copperleaf) Tj ET
+BT /F1 9 Tf 230 638 Td (Sep 2016 - Feb 2020) Tj ET
+BT /F1 9 Tf 230 624 Td (- Built the Go billing service handling 40k invoices a month.) Tj ET
+BT /F1 9 Tf 230 612 Td (- Introduced Terraform for staging environments.) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000321 00000 n 
+0000000396 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1638
+%%EOF
