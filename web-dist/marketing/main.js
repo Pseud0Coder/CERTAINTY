@@ -1,10 +1,22 @@
-"use strict";
 /* Certainty marketing page: scroll-driven reveals, a pinned-visual
-   "scrollytelling" sequence for the platform section, and a count-up on
-   the stats strip. No framework, no external script: IntersectionObserver
-   only, and every animation is skipped outright under
-   prefers-reduced-motion. */
+   "scrollytelling" sequence for the platform section, a count-up on the
+   stats strip, and the light/dark toggle the app uses. No framework, no
+   external script: IntersectionObserver only, and every animation is
+   skipped outright under prefers-reduced-motion. */
+import { currentTheme, initTheme, toggleTheme } from '../shared/theme.js';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* ---------- light/dark, shared with the app ---------- */
+function initThemeToggle() {
+    initTheme();
+    const btn = document.getElementById('themeToggle');
+    if (!btn)
+        return;
+    const paint = () => {
+        btn.setAttribute('aria-label', currentTheme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+    };
+    paint();
+    btn.addEventListener('click', () => { toggleTheme(); paint(); });
+}
 /* ---------- generic reveal-on-scroll ---------- */
 function initReveals() {
     /* .beat is excluded: it has its own scroll-driven dim/highlight opacity
@@ -26,6 +38,19 @@ function initReveals() {
         }
     }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
     targets.forEach(el => io.observe(el));
+    /* Jumping to an anchor (the nav links) can carry an element clean past the
+       observer without it ever crossing the threshold, leaving it stuck at
+       opacity 0. Reveal anything that has scrolled above the fold. */
+    const sweep = () => {
+        document.querySelectorAll('.reveal:not(.in)').forEach(el => {
+            if (el.getBoundingClientRect().top < 0) {
+                el.classList.add('in');
+                io.unobserve(el);
+            }
+        });
+    };
+    addEventListener('scroll', sweep, { passive: true });
+    addEventListener('hashchange', () => requestAnimationFrame(sweep));
 }
 /* ---------- platform scrollytelling: pinned visual keyed to whichever
    beat is nearest the viewport center ---------- */
@@ -123,6 +148,7 @@ function initLightbox() {
             close();
     });
 }
+initThemeToggle();
 initReveals();
 initScrollytelling();
 initStats();

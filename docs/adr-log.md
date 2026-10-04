@@ -1130,3 +1130,35 @@ only in that user's tenant.
 (ranked pipeline, overrides, offers) and Reports (HR and admin only). The
 candidate app gains Offers (accept or decline). A public apply page at
 `/apply/:id` renders only open requisitions and only their public fields.
+
+## ADR-0026: The landing page returns to the product's design system
+
+Date: 2026-10-02. Status: accepted. Supersedes the "deliberately separate
+design system" decision of ADR-0017 for the visual design, and leaves the
+scrollytelling, screenshots and lightbox mechanics of ADR-0017 intact.
+
+**Why.** The marketing page had drifted into its own register: bold sans
+display, Bauhaus colour blocks, ochre/terracotta/forest accents, its own
+type scale and button shapes. Read next to the app it was plainly a
+different product. The Notary language (ADR-0023) is the company now, so
+the public page should be the same product seen from the street.
+
+**What changed.** `marketing.html` links `tokens.css` and is composed on the
+app's tokens. The top bar mirrors the app rail: brand lockup left, the
+navigation a centred pill, the theme toggle and `Sign in` on the right. The
+hero is the display serif in navy with the mark-stamp legend and a framed
+product screenshot carrying the guilloche band and the seal; the decorative
+Bauhaus shapes are gone. The feature grid is hairline sheets with brand-ink
+icons, the compare table is ruled like the app's evidence table, the stats
+and interview bands are the inverse stage, and the pricing cards and CTA use
+the app's buttons and border language. Buttons, marks, stamps and type roles
+come straight from `tokens.css`; `marketing.css` is reduced to layout and a
+few page-specific classes.
+
+**Shared mechanics.** The page now uses `shared/theme.ts`, so the light/dark
+choice is the same `certainty_theme` key and the same `[data-theme]` switch
+as the app. The reveal-on-scroll gained a small sweep so that jumping to an
+anchor (the nav links) never leaves a heading stuck at opacity 0.
+
+**No build or CSP change.** Still same-origin, no inline styles or scripts,
+the same font import through `tokens.css`.

@@ -22,9 +22,10 @@ npm run typecheck   # server, spine and browser projects
 
 `/` is the public marketing page (scrollytelling, real screenshots of the
 demo, pricing); `/login` is the sign-in form for the three apps below
-(ADR-0017). It runs its own small design system (`src/web/marketing.css`),
-a bold poster register sharing the product's own hue family rather than a
-copy of the app's dark-academia UI.
+(ADR-0017, superseded on the design by ADR-0026). The landing page is
+composed on the product's own tokens (`tokens.css`) and mirrors the app
+shell: navy ink on paper, the Instrument Serif display, hairline sheets, a
+centred pill navigation, and the same light/dark toggle (ADR-0026).
 
 ## Intelligence
 
