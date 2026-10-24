@@ -1,0 +1,15 @@
+name,city,generic_email,phone,named_person,person_title,contact_page,source_note,confidence
+Savanna HR,Gurugram,hello@savannahr.com,,Swati Sinha,Founder & CEO,https://savannahr.com/contact,Listed on firm site (title from a case study),high
+Corascent,New Delhi,info@corascent.com; contact@corascent.com,+91 85272 04777,,,https://corascent.com/,Listed on firm site; no leadership named,high (generic)
+HawkHire,Gurugram,hello@hawkhire.in,+91 88042 22224,,,https://www.hawkhire.in/contact-us/,Listed on firm site; no leadership named,high (generic)
+Access Global,Bengaluru,info@accessglobal.in,9620006666,,,https://www.accessglobal.in/contact,Listed on firm site; no leadership named,high (generic)
+3G HR Services,Hyderabad,Client@3ghrservices.com (employers); hr@3ghrservices.com,+91 40 4121 9999,,,https://3ghrservices.com/staffing-agency-in-hyderabad.html,Employer address listed on firm site,high (generic)
+V3 Staffing,Hyderabad,info@v3staffing.in,,,,https://www.v3staffing.in/contact,Listed in site structured data; site also shows placeholder values so verify,medium
+Anzy Global,Bengaluru,reachus@anzyglobal.com,,Deepak (surname not given),Founder (per a testimonial),https://anzyglobal.com/contact-us/,Listed on firm site,high (generic)
+CIEL HR,Bengaluru,info@cielhr.com (companies),+91 7816000111,Aditya Narayan Mishra,MD & CEO,https://www.cielhr.com/about-us,Per search results; founders K. Pandiarajan (Chairman) and Hemalatha Rajan,medium
+Purple Quarter,Bengaluru,interact@purplequarter.com,,Deepak Singh Ahlawat; Roopa Kumar,Co-founders,https://purplequarter.com/,Email from a 2021 press release so confirm it still works,low-medium
+The Chief Circle,Bengaluru,,,Rubinder Kaur,Co-Founder & CEO,https://www.thechiefcircle.com,No email found; reach via website form or LinkedIn,low
+Multi Recruit,Bengaluru,,,,,https://multirecruit.com/,Site did not load for the fetch tool; check manually,none
+MacroHire,Gurugram,,,,,https://macrohire.in/contact-us/,No email on homepage; use contact form,none
+Pipal Tree Services,,,,,,https://www.pipaltreeservices.com/,Site blocked the fetch tool; check manually,none
+SutraHR,Bengaluru/Hyderabad,,WhatsApp +91 92222 99365,,,https://www.sutrahr.com/contact-us/,No email visible on homepage; check contact page,none
