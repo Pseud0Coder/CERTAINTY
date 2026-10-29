@@ -72,7 +72,7 @@ export function journeyState(store: Store, ctx: Ctx, candidateId: string): Journ
   if (linkedin === 'locked') {
     unlockNotes['linkedin'] = rolesDone
       ? 'Complete the research step first'
-      : `Finish every role in My Resume first (${roles.filter(r => !r.done).length} left)`;
+      : `Finish every role in CV Station first (${roles.filter(r => !r.done).length} left)`;
   }
   if (interview === 'locked') {
     unlockNotes['interview'] = cv !== 'complete'

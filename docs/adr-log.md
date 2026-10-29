@@ -1162,3 +1162,61 @@ anchor (the nav links) never leaves a heading stuck at opacity 0.
 
 **No build or CSP change.** Still same-origin, no inline styles or scripts,
 the same font import through `tokens.css`.
+
+## ADR-0027: Core screening engine, Profile Lab, DeepSeek, production bootstrap
+
+Date: 2026-10-29. Status: accepted. Extends ADR-0012 (what a model may do) and
+ADR-0022 (connectors); the scorecard design comes from the separate Likert
+screener prototype and keeps its three decisions: a hybrid 3+3 criteria model,
+evidence-grounded scoring, and a glance-first scorecard.
+
+**Screening.** One CV against one JD (`spine/screening.ts`, `/api/screenings`,
+the Screening view in the recruiter and candidate apps). The scorecard is the
+three universal axes (Skills Fit, Experience Level, Quantified Impact) plus up
+to three role axes read from the JD, each must (weight 2) or nice (weight 1).
+Requirements beyond the three tiles are not dropped: each is checked and
+listed, and a must-have with no evidence counts toward the cap.
+
+**Who computes what (decision 1, "first approach").** The model proposes a
+grade and a verbatim quote per criterion. Code verifies the quote against the
+CV and discards any it cannot find, then falls back to the deterministic
+reading for that criterion. Code alone computes years of experience (union of
+role intervals), the share of JD skills the CV names, the count of quantified
+bullets, the weighted overall, the recommendation thresholds, the caps and the
+next steps. The model cannot raise Skills Fit above coverage plus one, cannot
+raise Quantified Impact above what the bullet count allows, and cannot set
+Experience Level when dates were read. This departs from the prototype, where
+the model scored everything, because an audited number that moves between
+identical runs is not a measurement (ADR-0024).
+
+**Strict JD (decision 2).** Must counts double. One must-have with no evidence
+caps the recommendation at Moderate, two or more at Weak, however high the
+average. A missing nice-to-have never caps.
+
+**Two audiences (decision 3).** The result carries next steps for the
+recruiter and for the candidate, computed from the same gaps. The recruiter's
+list leads for staff, the candidate's for a candidate.
+
+**Evidence from GitHub.** `spine/github-evidence.ts` finds, per requirement,
+the repositories and merged pull requests that bear on it (deterministic term
+match, optional model re-rank that may only pick repos in the snapshot and may
+not state ungrounded numbers). Public metadata only; the account is unverified
+in a screening, so GitHub evidence cannot lift a grade above 3 or fully cover
+a requirement.
+
+**Providers.** `DEEPSEEK_API_KEY` selects the DeepSeek platform (`deepseek-flash`,
+JSON mode with the schema stated in the prompt, because the endpoint does not
+enforce a JSON schema; every caller still validates). OpenRouter
+(`deepseek/deepseek-v4.1-flash-1017`) is the fallback, and with both keys the
+two chain. The legacy `deepseek-v4-flash` is a retired alias and is not used.
+
+**Profile Lab.** Resume Studio and LinkedIn Studio are renamed CV Station and
+LinkedIN Lab and grouped under Profile Lab with Portfolio. Flow ids are kept
+(`resume_studio`, `linkedin_studio`); only titles changed. Connector
+placeholders (HackerRank, Codeforces, Kaggle, GitLab and Bitbucket) are shown
+as "Coming soon" and read nothing.
+
+**Production.** `CERTAINTY_DEMO=off` skips the demo seed. The owner variables
+create the first account (a recruiter, who lands on Screening); an existing
+account is never overwritten. Screenings are private to the user who ran
+them, rate-limited per user, deletable, and DELETE is CSRF-protected like POST.

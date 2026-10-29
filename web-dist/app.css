@@ -672,3 +672,45 @@ main.apply{display:block;flex:none;height:auto;overflow:visible;max-width:820px;
 .w-720{max-width:720px}
 .pin-tr{position:fixed;top:var(--space-6);right:var(--space-6);z-index:21}
 .sr-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---------- Screening (ADR-0027) ---------- */
+.sc-inputs{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)}
+.sc-part textarea{margin-top:var(--space-2);min-height:200px}
+.sc-extras{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}
+.sc-eyebrow{font:var(--type-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase;color:var(--ink-quiet);margin-bottom:var(--space-3)}
+.sc-hero{display:grid;grid-template-columns:auto 1fr;gap:var(--space-8);align-items:center}
+.sc-score{display:flex;flex-direction:column;align-items:center;min-width:96px}
+.sc-score-n{font:var(--type-display);letter-spacing:var(--track-display);color:var(--ink);line-height:1}
+.sc-bar{height:6px;background:var(--rule);border-radius:var(--radius-pill);margin-top:var(--space-3);overflow:hidden}
+.sc-bar-fill{height:100%;background:var(--accent);border-radius:var(--radius-pill)}
+.sc-cap{color:var(--severity-blocking);padding:var(--space-2) var(--space-3);background:var(--severity-blocking-bg);border-radius:var(--radius-control)}
+.sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--space-4);align-items:start}
+.sc-tile{border:var(--hairline) solid var(--rule);border-radius:var(--radius-sheet);background:var(--sheet);box-shadow:var(--elev-sheet)}
+.sc-tile > summary{display:flex;gap:var(--space-3);align-items:center;padding:var(--space-3) var(--space-4);cursor:pointer;list-style:none}
+.sc-tile > summary::-webkit-details-marker{display:none}
+.sc-tile > summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+.sc-tile-grade{flex:none;width:40px;height:40px;display:grid;place-items:center;border-radius:var(--radius-control);font:var(--type-figure);font-size:24px;background:var(--sheet-sunken);color:var(--ink-quiet)}
+.sc-tile[data-grade="1"] .sc-tile-grade{background:var(--pastel-red);color:var(--pastel-red-ink)}
+.sc-tile[data-grade="2"] .sc-tile-grade{background:var(--pastel-orange);color:var(--pastel-orange-ink)}
+.sc-tile[data-grade="3"] .sc-tile-grade{background:var(--sheet-sunken);color:var(--ink)}
+.sc-tile[data-grade="4"] .sc-tile-grade{background:var(--accent-soft);color:var(--accent-ink)}
+.sc-tile[data-grade="5"] .sc-tile-grade{background:var(--accent);color:var(--ink-inverse)}
+.sc-tile-main{display:flex;flex-direction:column;min-width:0}
+.sc-tile-title{font:var(--type-section)}
+.sc-tile-body{padding:0 var(--space-4) var(--space-4)}
+.sc-quote{margin:0;padding:var(--space-3);background:var(--sheet-sunken);border-inline-start:2px solid var(--rule-strong);border-radius:var(--radius-control)}
+.sc-quote p{margin:var(--space-1) 0 0;font:var(--type-secondary);font-style:italic}
+.sc-noev{color:var(--severity-blocking)}
+.sc-tabs{margin-top:var(--space-2)}
+.sc-step-list{margin:0;padding-inline-start:var(--space-6);display:flex;flex-direction:column;gap:var(--space-3);font:var(--type-body);max-width:var(--measure-prose)}
+.sc-step-tag{display:inline-block;margin-inline-end:var(--space-2);padding:0 8px;border:var(--hairline) solid var(--rule);border-radius:var(--radius-pill);font:var(--type-caption);color:var(--ink-quiet)}
+.sc-history{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.sc-hist-item{display:flex;gap:var(--space-4);align-items:center;width:100%;text-align:start;padding:var(--space-3) 0;background:none;border:0;border-top:var(--hairline) solid var(--rule);cursor:pointer;color:var(--ink)}
+.sc-history li:first-child .sc-hist-item{border-top:0}
+.sc-hist-item:hover{background:var(--hover-wash)}
+.sc-hist-score{font:var(--type-figure);font-size:24px;min-width:48px}
+.sc-hist-main{display:flex;flex-direction:column}
+@media (max-width:760px){
+  .sc-inputs,.sc-extras{grid-template-columns:1fr}
+  .sc-hero{grid-template-columns:1fr;gap:var(--space-4);justify-items:start}
+}

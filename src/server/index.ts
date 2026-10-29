@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Store } from '../spine/db.ts';
 import { Engine } from '../spine/flows/engine.ts';
 import { seedDemo } from '../spine/seed.ts';
+import { ensureOwner } from '../spine/bootstrap.ts';
 import { pipelineHandler } from '../spine/pipeline.ts';
 import { applyRetention } from '../spine/retention.ts';
 import { providerFromEnv } from '../spine/providers/llm.ts';
@@ -46,9 +47,21 @@ const engine = new Engine(store, llm);
 console.log(`model provider: ${llm.name}`);
 
 const userCount = (store.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n;
-if (userCount === 0) {
+const demoOn = process.env.CERTAINTY_DEMO !== 'off';
+if (userCount === 0 && demoOn) {
   const ids = seedDemo(store);
   console.log('seeded demo scenario, tenant', ids.tenantId);
+}
+/* Real deployments (ADR-0027): the first account comes from the environment. */
+try {
+  const boot = ensureOwner(store);
+  if (boot.created.length) console.log('created accounts from the environment:', boot.created.join(', '));
+} catch (err) {
+  console.error('owner bootstrap failed:', err instanceof Error ? err.message : err);
+}
+if (demoOn) console.warn('CERTAINTY_DEMO is on: the public demo accounts exist. Set CERTAINTY_DEMO=off for real use.');
+else if ((store.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n === 0) {
+  console.warn('no accounts exist: set CERTAINTY_OWNER_EMAIL and CERTAINTY_OWNER_PASSWORD to create the first one');
 }
 applyRetention(store);
 

@@ -11,7 +11,7 @@ async function request(method: string, path: string, body?: unknown): Promise<an
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(method === 'POST' ? { 'x-csrf': csrf() } : {}),
+      ...(method !== 'GET' ? { 'x-csrf': csrf() } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -23,6 +23,7 @@ async function request(method: string, path: string, body?: unknown): Promise<an
 export const api = {
   get: (path: string) => request('GET', path),
   post: (path: string, body?: unknown) => request('POST', path, body ?? {}),
+  del: (path: string) => request('DELETE', path),
 };
 
 export function subscribe(topics: string[], onChange: () => void): void {

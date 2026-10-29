@@ -33,13 +33,15 @@ Agents call a real model when one is configured, and run their
 deterministic scripted implementation when one is not (ADR-0005, ADR-0012).
 
 ```bash
-cp .env.example .env      # then paste an OpenRouter key into OPENROUTER_API_KEY
+cp .env.example .env      # then paste a DeepSeek and/or OpenRouter key
 npm start                 # logs the selected provider on boot
 ```
 
-The default model is `z-ai/glm-5.3-flash` via OpenRouter. With no key, a
-blank key, or `CERTAINTY_LLM=off`, the scripted provider is selected and the
-demo behaves exactly as before. The test suite constructs the Engine without
+The default model is DeepSeek Flash: `deepseek-flash` on the DeepSeek
+platform when `DEEPSEEK_API_KEY` is set, `deepseek/deepseek-v4.1-flash-1017`
+on OpenRouter when `OPENROUTER_API_KEY` is set, and the two chain (DeepSeek
+first) when both are. With no key, a blank key, or `CERTAINTY_LLM=off`, the
+scripted provider is selected and the demo behaves exactly as before. The test suite constructs the Engine without
 a provider, so it stays deterministic and never reaches the network.
 
 What the model is allowed to do is a deliberate split (ADR-0012):
@@ -67,8 +69,8 @@ a dark-academia palette, aged parchment and oak in light mode, a
 candlelit study in dark mode, brass as the one accent hue (ADR-0006,
 ADR-0015).
 The reference prompts’ persona branding is proprietary to another party and
-appears nowhere in the project; the flows are named Resume Studio and
-LinkedIn Studio, and the interviewer is simply the Interviewer (ADR-0007).
+appears nowhere in the project; the flows are named CV Station and
+LinkedIN Lab (Profile Lab; formerly Resume Studio and LinkedIn Studio), and the interviewer is simply the Interviewer (ADR-0007).
 
 Demo accounts (password `certainty-demo`), all data fictional:
 
@@ -80,6 +82,41 @@ Demo accounts (password `certainty-demo`), all data fictional:
 
 A second tenant (`recruiter@northgate.demo`, pipeline module only) exists to
 prove isolation and single-module subscription.
+
+## Screening (ADR-0027)
+
+Sign in and open **Screening** (the first item for a recruiter; also in the
+candidate app). Upload or paste a CV and a job description and get a
+scorecard with next steps for both sides.
+
+- **Hybrid 3+3.** Skills Fit, Experience Level and Quantified Impact for every
+  role, plus three role axes lifted from the JD, each marked must or nice
+  (a must counts double). Every other requirement in the JD is still checked
+  and listed as an "other requirement".
+- **A quote behind every grade.** The model proposes a grade and a quote;
+  code checks the quote is verbatim in the CV and discards it otherwise.
+  Years of experience, the share of JD skills the CV names, the count of
+  quantified bullets, the weighted score, the caps and the next steps are all
+  computed in code, so the model can never raise a grade above what those
+  facts allow, and with no model the same inputs give the same scorecard.
+- **Strict JD.** A must-have with no evidence caps the result: one gap, at
+  most Moderate; two or more, at most Weak.
+- **GitHub (optional).** Add a username and an analyst reads the public
+  repositories and merged PRs for projects that bear on each requirement.
+  Unverified, so it can never lift a grade above 3.
+
+### Running it for real
+
+```bash
+CERTAINTY_DEMO=off \
+CERTAINTY_OWNER_EMAIL=you@example.com CERTAINTY_OWNER_PASSWORD='a long password' \
+DEEPSEEK_API_KEY=... npm start
+```
+
+Set the same variables in the Render dashboard. `CERTAINTY_DEMO=off` removes
+the public demo accounts, and the owner variables create the first account
+(never overwriting one that exists). SQLite lives in `data/`: attach a
+persistent disk on Render, or screenings reset on every deploy.
 
 ## The candidate journey
 
@@ -99,12 +136,12 @@ the transitions (ADR-0009):
 2. **Research Agent** runs on submit and writes the research report: good,
    improve, needs work, every finding evidence-bound. Private interview
    practice opens at this point.
-3. **Resume Studio.** One session per role, each role with its own
+3. **CV Station** (Profile Lab). One session per role, each role with its own
    interviewer; the role assist probing runs until owned, action, and
    outcome exist per bullet.
 4. **CV assembler.** Fires when a role run completes; the revamped CV is
    written only when every role has a completed handoff.
-5. **LinkedIn Studio** unlocks after all roles and writes six sections,
+5. **LinkedIN Lab** (Profile Lab) unlocks after all roles and writes six sections,
    each saved as it is written. The **verified interview** unlocks once the
    CV exists and LinkedIn is complete; practice is private and open since
    step 2. Verified sessions are shared with the recruiter plus suggested

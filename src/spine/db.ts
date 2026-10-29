@@ -162,6 +162,12 @@ export class Store {
       CREATE INDEX IF NOT EXISTS ix_assessments_tenant ON assessments(tenant_id);
       CREATE INDEX IF NOT EXISTS ix_attempts_assessment ON assessment_attempts(tenant_id, assessment_id);
       CREATE INDEX IF NOT EXISTS ix_attempts_cand ON assessment_attempts(tenant_id, candidate_id);
+      CREATE TABLE IF NOT EXISTS screenings (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+        job_title TEXT, overall REAL NOT NULL, recommendation TEXT NOT NULL,
+        result TEXT NOT NULL, cv_text TEXT NOT NULL, jd_text TEXT NOT NULL,
+        meta TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS ix_screenings_user ON screenings(tenant_id, user_id, created_at);
       CREATE INDEX IF NOT EXISTS ix_candidates_tenant ON candidates(tenant_id);
       CREATE INDEX IF NOT EXISTS ix_audit_tenant ON audit_events(tenant_id, ts);
       CREATE INDEX IF NOT EXISTS ix_flags_tenant ON flags(tenant_id, candidate_id);
@@ -188,6 +194,36 @@ export class Store {
     return this.db.prepare(
       'SELECT * FROM audit_events WHERE tenant_id = ? ORDER BY ts DESC, rowid DESC LIMIT ?')
       .all(ctx.tenantId, limit) as unknown as AuditEvent[];
+  }
+
+  /* ---- screenings (ADR-0027): scoped to the tenant and the user who ran them ---- */
+  insertScreening(ctx: Ctx, userId: string, row: {
+    id: string; jobTitle: string | null; overall: number; recommendation: string;
+    result: unknown; cvText: string; jdText: string; meta: unknown; createdAt: string;
+  }): void {
+    this.db.prepare(`INSERT INTO screenings (id, tenant_id, user_id, job_title, overall, recommendation,
+      result, cv_text, jd_text, meta, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(row.id, ctx.tenantId, userId, row.jobTitle, row.overall, row.recommendation,
+        JSON.stringify(row.result), row.cvText, row.jdText, JSON.stringify(row.meta), row.createdAt);
+  }
+  screening(ctx: Ctx, userId: string, id: string): { id: string; result: unknown; cvText: string; jdText: string; meta: unknown; createdAt: string } | null {
+    const r = this.db.prepare('SELECT * FROM screenings WHERE tenant_id = ? AND user_id = ? AND id = ?')
+      .get(ctx.tenantId, userId, id) as any;
+    return r ? { id: r.id, result: JSON.parse(r.result), cvText: r.cv_text, jdText: r.jd_text, meta: JSON.parse(r.meta), createdAt: r.created_at } : null;
+  }
+  listScreenings(ctx: Ctx, userId: string, limit = 50): Array<{ id: string; jobTitle: string | null; overall: number; recommendation: string; createdAt: string; label: string }> {
+    return (this.db.prepare(
+      'SELECT id, job_title, overall, recommendation, created_at, meta FROM screenings WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?')
+      .all(ctx.tenantId, userId, limit) as any[])
+      .map(r => ({ id: r.id, jobTitle: r.job_title, overall: r.overall, recommendation: r.recommendation, createdAt: r.created_at, label: String(JSON.parse(r.meta).label ?? '') }));
+  }
+  deleteScreening(ctx: Ctx, userId: string, id: string): boolean {
+    return this.db.prepare('DELETE FROM screenings WHERE tenant_id = ? AND user_id = ? AND id = ?')
+      .run(ctx.tenantId, userId, id).changes > 0;
+  }
+  countScreeningsSince(ctx: Ctx, userId: string, sinceIso: string): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM screenings WHERE tenant_id = ? AND user_id = ? AND created_at >= ?')
+      .get(ctx.tenantId, userId, sinceIso) as { n: number }).n;
   }
 
   /* ---- tenants and users ---- */

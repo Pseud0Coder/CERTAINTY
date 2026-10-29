@@ -4,6 +4,7 @@ import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, setWidthPct, set
   railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, sealGauge,
   uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
 import type { MarkState, IconName } from '../shared/dom.js';
+import { renderScreening } from '../shared/screening.js';
 import { renderRequisitions, renderRequisitionDetail, renderReports, renderApprovals, type HiringCtx } from './hiring.js';
 
 interface Me {
@@ -23,7 +24,7 @@ interface Detail {
 }
 
 let me: Me;
-let view = 'pipeline';
+let view = 'screening';
 let detailId: string | null = null;
 let requisitionId: string | null = null;
 const root = document.getElementById('root')!;
@@ -31,6 +32,7 @@ const root = document.getElementById('root')!;
 /* Navigation by role and hiring model (ADR-0024): the submission builder is
    an agency workflow; approvals and reports belong to HR and admin. */
 const NAV: Array<{ id: string; label: string; module: string; icon: IconName; roles?: string[]; models?: string[] }> = [
+  { id: 'screening', label: 'Screening', module: 'pipeline', icon: 'audit' },
   { id: 'requisitions', label: 'Requisitions', module: 'pipeline', icon: 'resume' },
   { id: 'pipeline', label: 'Pipeline', module: 'pipeline', icon: 'pipeline' },
   { id: 'approvals', label: 'Approvals', module: 'pipeline', icon: 'audit', roles: ['hr', 'admin'] },
@@ -96,7 +98,8 @@ async function renderView(): Promise<void> {
     onNav: (next: string) => { view = next; renderShell(); renderView(); },
   };
   try {
-    if (view === 'pipeline') await renderPipeline(content);
+    if (view === 'screening') await renderScreening(content, 'recruiter');
+    else if (view === 'pipeline') await renderPipeline(content);
     else if (view === 'requisitions') await renderRequisitions(content, hiring);
     else if (view === 'requisition' && requisitionId) await renderRequisitionDetail(content, requisitionId, hiring);
     else if (view === 'reports') await renderReports(content);
