@@ -321,7 +321,7 @@ test('provider selection fails closed and can be forced off', () => {
     'a blank key is not a key');
   assert.equal(providerFromEnv({ OPENROUTER_API_KEY: 'k', CERTAINTY_LLM: 'off' }).name, 'scripted',
     'the kill switch wins over a present key');
-  assert.match(providerFromEnv({ OPENROUTER_API_KEY: 'k' }).name, /^openrouter:z-ai\/glm-5\.3-flash$/);
+  assert.match(providerFromEnv({ OPENROUTER_API_KEY: 'k' }).name, /^openrouter:deepseek\/deepseek-v4\.1-flash-1017$/);
   assert.match(providerFromEnv({ OPENROUTER_API_KEY: 'k', CERTAINTY_MODEL: 'other/model' }).name,
     /^openrouter:other\/model$/);
 });

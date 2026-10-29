@@ -76,8 +76,14 @@ const TIMEOUT_MS: Record<ModelTier, number> = { cheap: 45_000, strong: 90_000 };
 const TRANSPORT_ATTEMPTS = 2;
 const RETRY_STATUS = new Set([408, 409, 429, 500, 502, 503, 504]);
 
-export const OPENROUTER_MODEL = 'z-ai/glm-5.3-flash';
+export const OPENROUTER_MODEL = 'deepseek/deepseek-v4.1-flash-1017';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+/* The DeepSeek platform (OpenAI-compatible). `deepseek-flash` is the
+   official current name; the legacy `deepseek-v4-flash` is an alias the
+   platform has retired. */
+export const DEEPSEEK_MODEL = 'deepseek-flash';
+const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
 interface OpenRouterChoice {
   finish_reason?: string;
@@ -97,6 +103,13 @@ interface OpenRouterBody {
 export interface OpenRouterOptions {
   apiKey: string;
   model?: string;
+  /* Endpoint, provider label and structured-output mode. OpenRouter takes a
+     strict JSON schema; the DeepSeek platform takes JSON mode only, so the
+     schema is stated in the system prompt and every caller validates the
+     result against its own shape (a mismatch is discarded, never trusted). */
+  url?: string;
+  label?: string;
+  jsonMode?: 'json_schema' | 'json_object';
   /* Attribution headers OpenRouter uses for its dashboards. Optional. */
   referer?: string;
   title?: string;
@@ -108,6 +121,8 @@ export interface OpenRouterOptions {
 
 export function openRouterProvider(opts: OpenRouterOptions): LlmProvider {
   const model = opts.model ?? OPENROUTER_MODEL;
+  const url = opts.url ?? OPENROUTER_URL;
+  const jsonMode = opts.jsonMode ?? 'json_schema';
   const doFetch = opts.fetchImpl ?? fetch;
   const note = opts.onDiagnostic ?? ((): void => {});
 
@@ -123,25 +138,27 @@ export function openRouterProvider(opts: OpenRouterOptions): LlmProvider {
       if (opts.referer) headers['HTTP-Referer'] = opts.referer;
       if (opts.title) headers['X-Title'] = opts.title;
 
-      const res = await doFetch(OPENROUTER_URL, {
+      const system = jsonMode === 'json_object'
+        ? `${req.system}\n\nReturn one JSON object only, no prose and no code fences, matching this JSON schema:\n${JSON.stringify(req.schema)}`
+        : req.system;
+      const res = await doFetch(url, {
         method: 'POST',
         headers,
         signal: controller.signal,
         body: JSON.stringify({
           model,
-          /* Temperature 0 plus a seed is the closest this endpoint offers to
-             a repeatable decode, which the golden transcript evals want. */
+          /* Temperature 0 (plus a seed where the endpoint honours one) is the
+             closest these endpoints offer to a repeatable decode. */
           temperature: 0,
-          seed: req.seed ?? 7,
+          ...(jsonMode === 'json_schema' ? { seed: req.seed ?? 7 } : {}),
           max_tokens: req.maxTokens ?? MAX_TOKENS[req.tier],
           messages: [
-            { role: 'system', content: req.system },
+            { role: 'system', content: system },
             { role: 'user', content: req.user },
           ],
-          response_format: {
-            type: 'json_schema',
-            json_schema: { name: req.schemaName, strict: true, schema: req.schema },
-          },
+          response_format: jsonMode === 'json_schema'
+            ? { type: 'json_schema', json_schema: { name: req.schemaName, strict: true, schema: req.schema } }
+            : { type: 'json_object' },
         }),
       });
 
@@ -173,7 +190,7 @@ export function openRouterProvider(opts: OpenRouterOptions): LlmProvider {
 
       let value: T;
       try {
-        value = JSON.parse(content) as T;
+        value = JSON.parse(content.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/, '$1')) as T;
       } catch {
         note('unparseable', req.schemaName);
         return { result: null, retry: false };
@@ -204,7 +221,7 @@ export function openRouterProvider(opts: OpenRouterOptions): LlmProvider {
   }
 
   return {
-    name: `openrouter:${model}`,
+    name: `${opts.label ?? 'openrouter'}:${model}`,
     async complete<T>(req: LlmRequest): Promise<LlmResult<T> | null> {
       for (let i = 0; i < TRANSPORT_ATTEMPTS; i++) {
         const { result, retry } = await attempt<T>(req);
@@ -223,21 +240,40 @@ export const nullProvider: LlmProvider = {
   async complete(): Promise<null> { return null; },
 };
 
+/* Tries the first provider, then the second when the first yields nothing.
+   Each provider already fails closed, so the chain does too. */
+export function providerChain(first: LlmProvider, second: LlmProvider): LlmProvider {
+  return {
+    name: `${first.name}>${second.name}`,
+    async complete<T>(req: LlmRequest): Promise<LlmResult<T> | null> {
+      return (await first.complete<T>(req)) ?? (await second.complete<T>(req));
+    },
+  };
+}
+
 /* Environment selection. `CERTAINTY_LLM=off` forces the scripted path even
    when a key is present, which is how the test suite and the deterministic
-   demo stay repeatable. */
+   demo stay repeatable. DeepSeek (platform) is preferred when its key is
+   set, OpenRouter is the fallback, and both together form a chain. */
 export function providerFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   onDiagnostic?: (event: string, detail: string) => void,
 ): LlmProvider {
   if (env.CERTAINTY_LLM === 'off') return nullProvider;
-  const apiKey = env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey) return nullProvider;
-  return openRouterProvider({
-    apiKey,
-    model: env.CERTAINTY_MODEL?.trim() || OPENROUTER_MODEL,
-    referer: 'https://certainty.local',
-    title: 'Certainty',
-    onDiagnostic,
-  });
+  const deepseekKey = env.DEEPSEEK_API_KEY?.trim();
+  const openrouterKey = env.OPENROUTER_API_KEY?.trim();
+  const deepseek = deepseekKey
+    ? openRouterProvider({
+      apiKey: deepseekKey, model: env.DEEPSEEK_MODEL?.trim() || DEEPSEEK_MODEL,
+      url: DEEPSEEK_URL, label: 'deepseek', jsonMode: 'json_object', onDiagnostic,
+    })
+    : null;
+  const openrouter = openrouterKey
+    ? openRouterProvider({
+      apiKey: openrouterKey, model: env.CERTAINTY_MODEL?.trim() || OPENROUTER_MODEL,
+      referer: 'https://certainty.local', title: 'Certainty', onDiagnostic,
+    })
+    : null;
+  if (deepseek && openrouter) return providerChain(deepseek, openrouter);
+  return deepseek ?? openrouter ?? nullProvider;
 }

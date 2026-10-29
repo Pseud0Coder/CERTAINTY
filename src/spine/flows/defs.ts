@@ -29,7 +29,7 @@ export const FLOW_DEFS: FlowDef[] = [
     ],
   },
   {
-    id: 'resume_studio', version: 1, title: 'Resume Studio', enabled: true,
+    id: 'resume_studio', version: 1, title: 'CV Station', enabled: true,
     steps: [
       { id: 'open_session', kind: 'auto', description: 'One role per session, fresh session, practice mode' },
       { id: 'interview', kind: 'agent', agent: 'resume_interviewer', tools: ['read_spine', 'append_transcript'], modelTier: 'cheap', interactive: true, description: 'Era-based depth probing until owned, action, outcome exist', completeWhen: 'era_bullet_count' },
@@ -37,7 +37,7 @@ export const FLOW_DEFS: FlowDef[] = [
     ],
   },
   {
-    id: 'linkedin_studio', version: 1, title: 'LinkedIn Studio', enabled: true,
+    id: 'linkedin_studio', version: 1, title: 'LinkedIN Lab', enabled: true,
     steps: [
       { id: 'generate', kind: 'agent', agent: 'linkedin_writer', tools: ['read_spine'], modelTier: 'cheap', interactive: true, description: 'Six sections, one at a time, resume is the source of truth', completeWhen: 'six_sections' },
     ],

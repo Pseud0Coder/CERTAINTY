@@ -1,5 +1,6 @@
 /* Candidate app. The accelerator journey, gated server-side:
    onboarding -> research -> role-by-role resume -> CV -> LinkedIn -> interview. */
+import { renderScreening } from '../shared/screening.js';
 import { api, subscribe } from '../shared/api.js';
 import { h, mark, stamp, toast, empty, clear, checkGlyph, lockGlyph, setWidthPct, icon,
   railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, brandMark,
@@ -87,7 +88,7 @@ function openTasks(): number {
 let lastSelf: Self | null = null;
 
 const VIEW_LABEL: Record<string, string> = {
-  dashboard: 'Dashboard', resume: 'My Resume', linkedin: 'LinkedIn', portfolios: 'Portfolio',
+  dashboard: 'Dashboard', screening: 'Screening', resume: 'CV Station', linkedin: 'LinkedIN Lab', portfolios: 'Portfolio',
   interview: 'Interview', todo: 'To-Do', offers: 'Offers',
 };
 
@@ -127,13 +128,15 @@ function renderShell(): void {
   const onboardingPending = !j || j.onboarding !== 'complete';
   nav.append(navItem(onboardingPending ? 'Get started' : 'Dashboard', 'dashboard', 'dashboard', { module: 'journey' }));
 
-  /* Target role group with its document sections. */
+  nav.append(navItem('Screening', 'screening', 'audit'));
+
+  /* Profile Lab: CV Station, LinkedIN Lab and connected portfolios. */
   const group = h('button', { class: 'nav-group', 'aria-expanded': roleExpanded ? 'true' : 'false' });
   const chev = h('svg', { class: 'chev', viewBox: '0 0 16 16' });
   const chevPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   chevPath.setAttribute('d', 'M4 6l4 4 4-4');
   chev.append(chevPath);
-  group.append(chev, h('span', { class: 'lbl' }, lastSelf?.targetRole || 'Target role'));
+  group.append(chev, h('span', { class: 'lbl' }, 'Profile Lab'));
   group.addEventListener('click', () => {
     roleExpanded = !roleExpanded;
     group.setAttribute('aria-expanded', roleExpanded ? 'true' : 'false');
@@ -142,11 +145,11 @@ function renderShell(): void {
   const children = h('div', { class: 'nav-children' });
   const resumeLocked = onboardingPending || (j ? j.research !== 'complete' : true);
   children.append(
-    navItem('My Resume', 'resume', 'resume', {
+    navItem('CV Station', 'resume', 'resume', {
       module: 'resume_studio',
       locked: resumeLocked ? 'Complete your setup and the research step first' : undefined,
     }),
-    navItem('LinkedIn', 'linkedin', 'linkedin', {
+    navItem('LinkedIN Lab', 'linkedin', 'linkedin', {
       module: 'linkedin_studio',
       locked: j?.linkedin === 'locked' ? (j.unlockNotes['linkedin'] ?? 'Locked') : undefined,
     }),
@@ -200,12 +203,17 @@ async function renderView(): Promise<void> {
   clear(content);
   lastSelf = await api.get('/api/candidate/me').catch(() => lastSelf);
   const onboarding = !journey || journey.onboarding !== 'complete';
-  setCrumbs([{ label: onboarding ? 'Get started' : (VIEW_LABEL[view] ?? 'Dashboard') }]);
+  const crumb = onboarding ? 'Get started' : (VIEW_LABEL[view] ?? 'Dashboard');
+  /* CV Station, LinkedIN Lab and Portfolio live in Profile Lab. */
+  setCrumbs(!onboarding && ['resume', 'linkedin', 'portfolios'].includes(view)
+    ? [{ label: 'Profile Lab' }, { label: crumb }]
+    : [{ label: crumb }]);
 
   try {
     if (!journey || journey.onboarding !== 'complete') { await renderOnboarding(content); return; }
     if (view === 'dashboard') await renderDashboard(content);
     else if (view === 'todo') await renderTodo(content);
+    else if (view === 'screening') await renderScreening(content, 'candidate');
     else if (view === 'resume') await renderResume(content);
     else if (view === 'linkedin') await renderLinkedin(content);
     else if (view === 'portfolios') await renderPortfolio(content);
@@ -434,9 +442,9 @@ function findingCard(f: Finding): HTMLElement {
    stepper, so the two can never disagree. */
 function nextStep(j: Journey, nowIndex: number): { title: string; text: string; view?: string; label?: string } {
   if (nowIndex === 1) return { title: 'Research is pending', text: 'Your report appears here as soon as the research step runs.' };
-  if (nowIndex === 2) return { title: 'Revamp your roles', text: `${j.roles.filter(r => r.done).length} of ${j.roles.length} roles done. Each role gets its own session.`, view: 'resume', label: 'Open My Resume' };
-  if (nowIndex === 3) return { title: 'Your CV is assembling', text: 'It is built from your completed roles.', view: 'resume', label: 'Open My Resume' };
-  if (nowIndex === 4) return { title: 'Your LinkedIn studio is ready', text: 'Generate each section from your finished resume. Titles and dates always match.', view: 'linkedin', label: 'Open LinkedIn studio' };
+  if (nowIndex === 2) return { title: 'Revamp your roles', text: `${j.roles.filter(r => r.done).length} of ${j.roles.length} roles done. Each role gets its own session.`, view: 'resume', label: 'Open CV Station' };
+  if (nowIndex === 3) return { title: 'Your CV is assembling', text: 'It is built from your completed roles.', view: 'resume', label: 'Open CV Station' };
+  if (nowIndex === 4) return { title: 'Your LinkedIN Lab is ready', text: 'Generate each section from your finished resume. Titles and dates always match.', view: 'linkedin', label: 'Open LinkedIN Lab' };
   if (nowIndex === 5) return { title: 'The verified interview is next', text: `${j.unlockNotes['interview'] ?? 'It unlocks once your CV and LinkedIn are complete.'} Private practice is open now.`, view: 'interview', label: 'Practice now' };
   return { title: 'Every stage is complete', text: 'Practice privately, or run a verified session for your recruiter.', view: 'interview', label: 'Open Interview' };
 }
@@ -510,7 +518,7 @@ async function renderDashboard(content: HTMLElement): Promise<void> {
     del.append(h('p', { class: 't-body' }, 'Your revamped CV is ready.'));
     del.append(cvDownloads(self.name, cv));
   } else {
-    del.append(empty('Your CV is assembled once every role in My Resume is complete.'));
+    del.append(empty('Your CV is assembled once every role in CV Station is complete.'));
   }
   right.append(del);
 
@@ -532,13 +540,13 @@ async function renderDashboard(content: HTMLElement): Promise<void> {
   content.append(grid);
 }
 
-/* ---------- resume studio: role list and per-role session ---------- */
+/* ---------- CV Station: role list and per-role session ---------- */
 
 async function renderResume(content: HTMLElement): Promise<void> {
   const j = journey!;
-  content.append(viewHeader('My Resume', 'One role per session, in depth. Each role gets its own interviewer.'));
+  content.append(viewHeader('CV Station', 'One role per session, in depth. Each role gets its own interviewer.'));
   if (j.research !== 'complete') {
-    content.append(lockedNote(j.unlockNotes['resume'] ?? 'My Resume opens once your research report is ready.', 'dashboard', 'Go to dashboard'));
+    content.append(lockedNote(j.unlockNotes['resume'] ?? 'CV Station opens once your research report is ready.', 'dashboard', 'Go to dashboard'));
     return;
   }
 
@@ -685,9 +693,9 @@ function fillLiCard(entry: LiEntry, label: string, text: string): void {
 
 async function renderLinkedin(content: HTMLElement): Promise<void> {
   const j = journey!;
-  content.append(viewHeader('LinkedIn', 'Six sections written from your finished resume. Titles and dates always match it.'));
+  content.append(viewHeader('LinkedIN Lab', 'Six sections written from your finished resume. Titles and dates always match it.'));
   if (j.linkedin === 'locked') {
-    content.append(lockedNote(j.unlockNotes['linkedin'] ?? 'LinkedIn opens once your resume is complete.', 'resume', 'Open My Resume'));
+    content.append(lockedNote(j.unlockNotes['linkedin'] ?? 'LinkedIN Lab opens once your CV is complete.', 'resume', 'Open CV Station'));
     return;
   }
   const { sections } = liSections();
@@ -867,6 +875,21 @@ async function renderPortfolio(content: HTMLElement): Promise<void> {
     grid.append(card);
   }
   content.append(grid);
+
+  /* Placeholders (F1): providers that are planned and not built. Nothing
+     here reads, stores or links an account yet. */
+  const soon = h('div', { class: 'cardgrid cardgrid-2 mt-6' });
+  for (const [name, reads] of [
+    ['HackerRank', 'certificates, skill badges and contest ranks.'],
+    ['Codeforces', 'contest rating and solved problems.'],
+    ['Kaggle', 'competitions, notebooks and datasets.'],
+    ['GitLab and Bitbucket', 'public repositories and merge requests.'],
+  ] as const) {
+    soon.append(h('section', { class: 'panel conn-card', 'aria-label': `${name}, coming soon` },
+      h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, name), stamp('Coming soon', 'claimed')),
+      h('p', { class: 't-secondary' }, `Planned. We will read: ${reads}`)));
+  }
+  content.append(h('h2', { class: 'sc-eyebrow mt-6' }, 'More connectors'), soon);
 }
 
 /* ---------- profile page card (dashboard) ---------- */

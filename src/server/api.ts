@@ -53,6 +53,8 @@ import {
 import { completeVoiceSession, liveAssist, completionNotes } from '../spine/interview-assist.ts';
 import { attachDocument, applyWithCv, IntakeError } from '../spine/intake.ts';
 import type { LlmProvider } from '../spine/providers/llm.ts';
+import { screen, ScreeningError, MAX_CV_CHARS, MAX_JD_CHARS, cleanText } from '../spine/screening.ts';
+import { analyseGithub } from '../spine/github-evidence.ts';
 
 export class ApiError extends Error {
   status: number; code: string;
@@ -789,6 +791,98 @@ route('GET', '/api/recruiter/candidates/:id/connectors', ['recruiter', 'hr', 'ad
   r.send(200, { connectors: connectorView(r, r.params.id!) });
 });
 
+/* ---------- screening (ADR-0027): a CV against a JD, any signed-in role ---------- */
+
+const SCREEN_ROLES: Role[] = ['recruiter', 'hr', 'admin', 'candidate'];
+const SCREEN_DAILY_LIMIT = Math.max(1, Number(process.env.CERTAINTY_SCREEN_DAILY_LIMIT ?? 40) || 40);
+
+/* A document part is either pasted text or an uploaded PDF or Word file. */
+async function screeningDoc(part: any, label: 'cv' | 'jd'): Promise<{ text: string; filename: string | null }> {
+  if (part && typeof part.text === 'string' && part.text.trim()) return { text: part.text, filename: null };
+  if (part && typeof part.dataBase64 === 'string' && part.dataBase64) {
+    try {
+      const doc = await extractDocument(decodeUpload(part.dataBase64));
+      return { text: doc.text, filename: String(part.filename ?? '').replace(/[^\w .()-]/g, '').slice(0, 120) || null };
+    } catch (e) {
+      if (e instanceof DocumentError) throw new ApiError(e.code === 'document_too_large' ? 413 : 400, `${label}_${e.code}`);
+      throw e;
+    }
+  }
+  throw new ApiError(400, `${label}_required`);
+}
+
+function screeningView(rec: { id: string; result: unknown; meta: unknown; createdAt: string }, role: Role) {
+  return { id: rec.id, createdAt: rec.createdAt, result: rec.result, meta: rec.meta, audience: role === 'candidate' ? 'candidate' : 'recruiter' };
+}
+
+route('POST', '/api/screenings', SCREEN_ROLES, async r => {
+  const store = r.deps.store;
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  if (store.countScreeningsSince(r.ctx, r.user.id, since) >= SCREEN_DAILY_LIMIT) throw new ApiError(429, 'daily_limit_reached');
+  const cv = await screeningDoc(r.body?.cv, 'cv');
+  const jd = await screeningDoc(r.body?.jd, 'jd');
+  const cvClean = cleanText(cv.text, MAX_CV_CHARS);
+  const jdClean = cleanText(jd.text, MAX_JD_CHARS);
+
+  /* Optional GitHub account. It is public data and counts as a claim (not
+     verified): a failure to fetch never blocks the screening. */
+  let github: { snapshot: Awaited<ReturnType<typeof fetchSnapshot>> & { provider: 'github' }; verified: false } | null = null;
+  let githubError: string | null = null;
+  const ghRaw = String(r.body?.githubUsername ?? '').trim();
+  if (ghRaw) {
+    try {
+      const username = normalizeUsername('github', ghRaw);
+      const snap = await fetchSnapshot('github', username, r.deps.fetch ?? fetch, process.env.GITHUB_TOKEN || undefined);
+      if (snap.provider === 'github') github = { snapshot: snap, verified: false };
+    } catch (e) {
+      githubError = e instanceof ConnectorError ? e.code : 'github_failed';
+    }
+  }
+
+  let result;
+  try {
+    result = await screen({
+      cvText: cvClean.text, jdText: jdClean.text, github, llm: r.deps.llm,
+      analyseGithub: async rubric => github
+        ? analyseGithub(github.snapshot, false,
+          rubric.axes.filter(a => a.id !== 'experience' && a.id !== 'impact').map(a => ({ id: a.id, title: a.title, requirement: a.requirement })),
+          r.deps.llm)
+        : null,
+    });
+  } catch (e) {
+    if (e instanceof ScreeningError) throw new ApiError(400, e.code);
+    throw e;
+  }
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+  const meta = {
+    label: String(r.body?.label ?? '').trim().slice(0, 80) || result.jobTitle || 'Screening',
+    cvFile: cv.filename, jdFile: jd.filename, cvChars: cvClean.text.length, jdChars: jdClean.text.length,
+    injectionAttempts: cvClean.injectionAttempts + jdClean.injectionAttempts,
+    githubUsername: github?.snapshot.username ?? null, githubError,
+    runBy: r.user.role,
+  };
+  store.insertScreening(r.ctx, r.user.id, { id, jobTitle: result.jobTitle, overall: result.overall, recommendation: result.recommendation, result, cvText: cvClean.text, jdText: jdClean.text, meta, createdAt });
+  store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'screening_run', `${id}:${result.recommendation}:${result.producer}`);
+  r.send(200, { screening: screeningView({ id, result, meta, createdAt }, r.user.role) });
+}, { maxBody: UPLOAD_MAX_BODY * 2 + 200_000 });
+
+route('GET', '/api/screenings', SCREEN_ROLES, r => {
+  r.send(200, { items: r.deps.store.listScreenings(r.ctx, r.user.id) });
+});
+
+route('GET', '/api/screenings/:id', SCREEN_ROLES, r => {
+  const rec = r.deps.store.screening(r.ctx, r.user.id, r.params.id!);
+  if (!rec) throw new ApiError(404, 'not_found');
+  r.send(200, { screening: screeningView(rec, r.user.role) });
+});
+
+route('DELETE', '/api/screenings/:id', SCREEN_ROLES, r => {
+  if (!r.deps.store.deleteScreening(r.ctx, r.user.id, r.params.id!)) throw new ApiError(404, 'not_found');
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'screening_deleted', r.params.id!);
+  r.send(200, { ok: true });
+});
+
 route('GET', '/api/candidate/me', ['candidate'], r => {
   const view = candidateSelfView(r.ctx, r.deps.store, candidateIdFor(r));
   if (!view) throw new ApiError(404, 'no_candidate_record');
@@ -1361,7 +1455,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, deps:
   if (match.roles && !match.roles.includes(auth.user.role)) { send(403, { error: 'forbidden' }); return true; }
   const params = (url.pathname.match(match.re)!.groups ?? {}) as Record<string, string>;
   try {
-    if (req.method === 'POST') checkCsrf(req, auth.csrf);
+    if (req.method !== 'GET') checkCsrf(req, auth.csrf);
     /* A password someone else chose (a recruiter-generated one) unlocks
        nothing but the screen that replaces it. */
     if (auth.user.mustChangePassword && !PASSWORD_GATE_ALLOWED.has(url.pathname)) {

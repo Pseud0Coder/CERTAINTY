@@ -1,15 +1,17 @@
 /* Recruiter app. Dashboards render state; agents never touch the UI (A0). */
 import { api, subscribe } from '../shared/api.js';
 import { h, mark, stamp, badge, toast, empty, clear, MARK_WORD, setWidthPct, setLeftPct, icon, avatar, railHead, railFoot, topbar, setCrumbs, setCrumbRoot, viewHeader, sealGauge, uploadDocument, filePicker, DOCUMENT_ERRORS } from '../shared/dom.js';
+import { renderScreening } from '../shared/screening.js';
 import { renderRequisitions, renderRequisitionDetail, renderReports, renderApprovals } from './hiring.js';
 let me;
-let view = 'pipeline';
+let view = 'screening';
 let detailId = null;
 let requisitionId = null;
 const root = document.getElementById('root');
 /* Navigation by role and hiring model (ADR-0024): the submission builder is
    an agency workflow; approvals and reports belong to HR and admin. */
 const NAV = [
+    { id: 'screening', label: 'Screening', module: 'pipeline', icon: 'audit' },
     { id: 'requisitions', label: 'Requisitions', module: 'pipeline', icon: 'resume' },
     { id: 'pipeline', label: 'Pipeline', module: 'pipeline', icon: 'pipeline' },
     { id: 'approvals', label: 'Approvals', module: 'pipeline', icon: 'audit', roles: ['hr', 'admin'] },
@@ -81,7 +83,9 @@ async function renderView() {
         onNav: (next) => { view = next; renderShell(); renderView(); },
     };
     try {
-        if (view === 'pipeline')
+        if (view === 'screening')
+            await renderScreening(content, 'recruiter');
+        else if (view === 'pipeline')
             await renderPipeline(content);
         else if (view === 'requisitions')
             await renderRequisitions(content, hiring);

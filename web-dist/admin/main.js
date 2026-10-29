@@ -15,7 +15,7 @@ let displayName = 'Admin';
 /* Module ids are machine names; the admin reads product names. */
 const MODULE_LABEL = {
     pipeline: 'Pipeline', screener: 'Interview screener', builder: 'Submission builder', notes: 'Recruiter notes',
-    journey: 'Candidate journey', resume_studio: 'Resume studio', linkedin_studio: 'LinkedIn studio',
+    journey: 'Candidate journey', resume_studio: 'CV Station', linkedin_studio: 'LinkedIN Lab',
     practice: 'Interview practice', billing: 'Usage and billing', admin: 'Administration',
 };
 async function boot() {

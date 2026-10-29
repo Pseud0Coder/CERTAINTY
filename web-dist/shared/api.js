@@ -9,7 +9,7 @@ async function request(method, path, body) {
         method,
         headers: {
             'Content-Type': 'application/json',
-            ...(method === 'POST' ? { 'x-csrf': csrf() } : {}),
+            ...(method !== 'GET' ? { 'x-csrf': csrf() } : {}),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -21,6 +21,7 @@ async function request(method, path, body) {
 export const api = {
     get: (path) => request('GET', path),
     post: (path, body) => request('POST', path, body ?? {}),
+    del: (path) => request('DELETE', path),
 };
 export function subscribe(topics, onChange) {
     const es = new EventSource('/api/events');
