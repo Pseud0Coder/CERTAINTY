@@ -203,7 +203,11 @@ async function renderView(): Promise<void> {
   clear(content);
   lastSelf = await api.get('/api/candidate/me').catch(() => lastSelf);
   const onboarding = !journey || journey.onboarding !== 'complete';
-  setCrumbs([{ label: onboarding ? 'Get started' : (VIEW_LABEL[view] ?? 'Dashboard') }]);
+  const crumb = onboarding ? 'Get started' : (VIEW_LABEL[view] ?? 'Dashboard');
+  /* CV Station, LinkedIN Lab and Portfolio live in Profile Lab. */
+  setCrumbs(!onboarding && ['resume', 'linkedin', 'portfolios'].includes(view)
+    ? [{ label: 'Profile Lab' }, { label: crumb }]
+    : [{ label: crumb }]);
 
   try {
     if (!journey || journey.onboarding !== 'complete') { await renderOnboarding(content); return; }

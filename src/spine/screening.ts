@@ -675,7 +675,7 @@ const RANK: Record<Recommendation, number> = { 'No Match': 0, 'Weak Match': 1, '
 export function applyCaps(criteria: Criterion[], base: Recommendation, others: OtherRequirement[] = []): { recommendation: Recommendation; capReason: string | null } {
   const missing: Array<{ title: string }> = [
     ...criteria.filter(c => c.priority === 'must' && c.grade === 1),
-    ...others.filter(o => o.priority === 'must' && o.status === 'missing').map(o => ({ title: o.requirement.length > 60 ? `${o.requirement.slice(0, 57)}...` : o.requirement })),
+    ...others.filter(o => o.priority === 'must' && o.status === 'missing').map(o => ({ title: trimTo(o.requirement, 90) })),
   ];
   let cap: Recommendation = 'Strong Match';
   if (missing.length === 1) cap = 'Moderate Match';
@@ -687,15 +687,21 @@ export function applyCaps(criteria: Criterion[], base: Recommendation, others: O
   };
 }
 
-function buildSummary(criteria: Criterion[], overall: number, rec: Recommendation, jobTitle: string | null): string {
-  const sorted = [...criteria].sort((a, b) => b.grade - a.grade || b.weight - a.weight);
-  const top = sorted[0]!;
+function trimTo(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max).replace(/\s+\S*$/, '');
+  return `${cut}...`;
+}
+
+function buildSummary(criteria: Criterion[], overall: number, rec: Recommendation, jobTitle: string | null, others: OtherRequirement[]): string {
+  const top = [...criteria].sort((a, b) => b.grade - a.grade || b.weight - a.weight)[0]!;
   const gap = [...criteria].sort((a, b) => a.grade - b.grade || b.weight - a.weight)[0]!;
   const head = `${overall.toFixed(1)} out of 5, ${rec.toLowerCase()}${jobTitle ? ` for ${jobTitle}` : ''}.`;
-  const tail = top.id === gap.id
-    ? ` ${top.title} is graded ${top.label.toLowerCase()}.`
-    : ` Strongest: ${top.title} (${top.label.toLowerCase()}). Biggest gap: ${gap.title} (${gap.label.toLowerCase()}).`;
-  return (head + tail).slice(0, 280);
+  const unmet = others.filter(o => o.priority === 'must' && o.status === 'missing').length;
+  const parts = [`Strongest: ${top.title} (${top.label.toLowerCase()}).`];
+  if (gap.grade <= 3 && gap.id !== top.id) parts.push(`Biggest gap: ${gap.title} (${gap.label.toLowerCase()}).`);
+  if (unmet) parts.push(`${unmet} required ${unmet === 1 ? 'item has' : 'items have'} no evidence.`);
+  return `${head} ${parts.join(' ')}`.slice(0, 280);
 }
 
 export function buildNextSteps(
@@ -790,7 +796,7 @@ export async function screen(input: ScreenInput): Promise<ScreeningResult> {
 
   return {
     jobTitle: rubric.jobTitle, criteria: graded.criteria, overall, recommendation, capReason, otherRequirements,
-    summary: buildSummary(graded.criteria, overall, recommendation, rubric.jobTitle),
+    summary: buildSummary(graded.criteria, overall, recommendation, rubric.jobTitle, otherRequirements),
     nextSteps: buildNextSteps(graded.criteria, resultFacts, recommendation, capReason, !!input.github, otherRequirements),
     facts: resultFacts, producer, github,
   };
