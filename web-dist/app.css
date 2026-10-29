@@ -430,6 +430,14 @@ table.audit td .t-body{font:var(--type-secondary);color:var(--ink)}
   .rail-who{display:none}
 }
 
+/* A crowded bar (seven or more items, as the candidate's has): the
+   workspace label would sit under the pill, so tighten the pill and let the
+   label go. The role is still named beside the account. */
+@media (max-width:1499px){
+  .rail:has(.nav-item:nth-child(7)) .nav-item{padding:7px 12px}
+  .rail:has(.nav-item:nth-child(7)) .rail-head .sub{display:none}
+}
+
 /* 720 to 1099: icon navigation, scrollable pipeline, single-column grids. */
 @media (max-width:1099px){
   :root{--gutter:var(--space-6)}
