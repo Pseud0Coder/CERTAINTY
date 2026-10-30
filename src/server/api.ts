@@ -53,9 +53,9 @@ import {
 import { completeVoiceSession, liveAssist, completionNotes } from '../spine/interview-assist.ts';
 import { attachDocument, applyWithCv, IntakeError } from '../spine/intake.ts';
 import type { LlmProvider } from '../spine/providers/llm.ts';
-import { screen, ScreeningError, MAX_CV_CHARS, MAX_JD_CHARS, cleanText } from '../spine/screening.ts';
+import { screen, ScreeningError, MAX_CV_CHARS, MAX_JD_CHARS, cleanText, extractRubric, candidateName, type Rubric } from '../spine/screening.ts';
 import { analyseGithub } from '../spine/github-evidence.ts';
-import { JobRegistry, JobBusyError } from '../spine/jobs.ts';
+import { JobRegistry, JobBusyError, BatchQueue, QueueFullError } from '../spine/jobs.ts';
 
 export class ApiError extends Error {
   status: number; code: string;
@@ -798,8 +798,8 @@ const SCREEN_ROLES: Role[] = ['recruiter', 'hr', 'admin', 'candidate'];
 /* Read at request time so a deployment can change them without a rebuild. A
    per-user cap stops one account running away; the instance cap stops a public
    demo from spending the model key (ADR-0028). */
-const screenUserLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_DAILY_LIMIT ?? 40) || 40);
-const screenInstanceLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT ?? 300) || 300);
+const screenUserLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_DAILY_LIMIT ?? 150) || 150);
+const screenInstanceLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT ?? 600) || 600);
 
 /* A document part is either pasted text or an uploaded PDF or Word file. */
 async function screeningDoc(part: any, label: 'cv' | 'jd'): Promise<{ text: string; filename: string | null }> {
@@ -913,6 +913,126 @@ route('GET', '/api/screenings/:id', SCREEN_ROLES, r => {
 route('DELETE', '/api/screenings/:id', SCREEN_ROLES, r => {
   if (!r.deps.store.deleteScreening(r.ctx, r.user.id, r.params.id!)) throw new ApiError(404, 'not_found');
   r.deps.store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'screening_deleted', r.params.id!);
+  r.send(200, { ok: true });
+});
+
+/* ---------- batches (ADR-0030): one JD, many CVs, shared by the tenant's staff ---------- */
+
+const BATCH_ROLES: Role[] = ['recruiter', 'hr', 'admin'];
+const batchQueue = new BatchQueue({ concurrency: Number(process.env.CERTAINTY_BATCH_CONCURRENCY ?? 2) || 2 });
+
+/* Rank by score; percentile is the share of the OTHER CVs in the batch that
+   score lower (ties count half), so it means nothing for a batch of one. */
+function leaderboard(items: ReturnType<Store['batchItems']>) {
+  const n = items.length;
+  return items.map((it, i) => {
+    const below = items.filter(o => o.overall < it.overall).length;
+    const equal = items.filter(o => o.overall === it.overall).length;
+    const res = it.result as {
+      criteria: Array<{ priority: string; grade: number }>; capReason: string | null; producer: string;
+      otherRequirements: Array<{ priority: string; status: string }>;
+      facts: { years: number | null; statedYears: number | null; skillsFound: string[]; skillsRequired: string[] };
+    };
+    return {
+      id: it.id, rank: i + 1, name: it.candidateName ?? 'Candidate', file: (it.meta?.cvFile as string | null) ?? null,
+      overall: it.overall, recommendation: it.recommendation, decision: it.decision,
+      percentile: n > 1 ? Math.round((100 * (below + 0.5 * (equal - 1))) / (n - 1)) : null,
+      capped: !!res.capReason,
+      mustMissing: res.criteria.filter(c => c.priority === 'must' && c.grade === 1).length
+        + res.otherRequirements.filter(o => o.priority === 'must' && o.status === 'missing').length,
+      years: res.facts.years ?? res.facts.statedYears, yearsStated: res.facts.years === null && res.facts.statedYears !== null,
+      skills: { found: res.facts.skillsFound.length, required: res.facts.skillsRequired.length },
+      producer: res.producer,
+    };
+  });
+}
+
+function tallies(items: Array<{ decision: string | null }>) {
+  const t = { shortlist: 0, maybe: 0, pass: 0, undecided: 0 };
+  for (const it of items) {
+    if (it.decision === 'shortlist') t.shortlist++; else if (it.decision === 'maybe') t.maybe++; else if (it.decision === 'pass') t.pass++; else t.undecided++;
+  }
+  return t;
+}
+
+route('POST', '/api/batches', BATCH_ROLES, async r => {
+  const jd = await screeningDoc(r.body?.jd, 'jd');
+  const jdClean = cleanText(jd.text, MAX_JD_CHARS);
+  if (jdClean.text.length < 60) throw new ApiError(400, 'jd_too_short');
+  /* The JD is read once: every CV in the batch is judged on the same axes. */
+  const rubric = await extractRubric(jdClean.text, r.deps.llm);
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+  const label = String(r.body?.label ?? '').trim().slice(0, 80) || rubric.jobTitle || 'Batch';
+  r.deps.store.insertBatch(r.ctx, r.user.id, { id, label, jdText: jdClean.text, rubric, createdAt });
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'batch_created', `${id}:${label}`);
+  r.send(200, { batch: { id, label, createdAt }, axes: rubric.axes.map(a => ({ title: a.title, priority: a.priority, category: a.category })), producer: rubric.producer });
+}, { maxBody: UPLOAD_MAX_BODY + 100_000 });
+
+route('POST', '/api/batches/:id/cvs', BATCH_ROLES, async r => {
+  const store = r.deps.store;
+  const batch = store.batch(r.ctx, r.params.id!);
+  if (!batch) throw new ApiError(404, 'not_found');
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  if (store.countScreeningsSince(r.ctx, r.user.id, since) + screeningJobs.runningFor(r.user.id) + batchQueue.inFlightFor(r.user.id) >= screenUserLimit()) throw new ApiError(429, 'daily_limit_reached');
+  if (store.countAllScreeningsSince(since) + screeningJobs.running() + batchQueue.inFlight() >= screenInstanceLimit()) throw new ApiError(429, 'instance_limit_reached');
+  const cv = await screeningDoc(r.body?.cv, 'cv');
+  const cvClean = cleanText(cv.text, MAX_CV_CHARS);
+  if (cvClean.text.length < 80) throw new ApiError(400, 'cv_too_short');
+  const name = candidateName(cvClean.text, cv.filename);
+  const { user, ctx, deps } = r;
+  let item;
+  try {
+    item = batchQueue.enqueue({ tenantId: ctx.tenantId, userId: user.id, batchId: batch.id, name }, async () => {
+      let result;
+      try {
+        result = await screen({ cvText: cvClean.text, jdText: batch.jdText, rubric: batch.rubric as Rubric, llm: deps.llm });
+      } catch (e) {
+        if (e instanceof ScreeningError) { const err = new Error(e.code) as Error & { code: string }; err.code = e.code; throw err; }
+        throw e;
+      }
+      const id = randomUUID();
+      const meta = { label: name, cvFile: cv.filename, jdFile: null, cvChars: cvClean.text.length, jdChars: batch.jdText.length, injectionAttempts: cvClean.injectionAttempts, githubUsername: null, githubError: null, runBy: user.role, batchId: batch.id };
+      deps.store.insertScreening(ctx, user.id, { id, jobTitle: result.jobTitle, overall: result.overall, recommendation: result.recommendation, result, cvText: cvClean.text, jdText: batch.jdText, meta, createdAt: new Date().toISOString(), batchId: batch.id, candidateName: name });
+      deps.store.audit(ctx.tenantId, user.displayName, user.role, 'screening_run', `${id}:${result.recommendation}:${result.producer}:batch`);
+      return id;
+    });
+  } catch (e) {
+    if (e instanceof QueueFullError) throw new ApiError(429, 'busy');
+    throw e;
+  }
+  r.send(202, { item: { id: item.id, name, status: item.status } });
+}, { maxBody: UPLOAD_MAX_BODY });
+
+route('GET', '/api/batches', BATCH_ROLES, r => {
+  r.send(200, { items: r.deps.store.listBatches(r.ctx) });
+});
+
+route('GET', '/api/batches/:id', BATCH_ROLES, r => {
+  const store = r.deps.store;
+  const batch = store.batch(r.ctx, r.params.id!);
+  if (!batch) throw new ApiError(404, 'not_found');
+  const items = store.batchItems(r.ctx, batch.id);
+  const rubric = batch.rubric as Rubric;
+  r.send(200, {
+    batch: { id: batch.id, label: batch.label, createdAt: batch.createdAt, mine: batch.userId === r.user.id, jobTitle: rubric.jobTitle },
+    axes: rubric.axes.map(a => ({ title: a.title, priority: a.priority, category: a.category })),
+    leaderboard: leaderboard(items), tallies: tallies(items),
+    queue: batchQueue.view(r.ctx.tenantId, batch.id),
+  });
+});
+
+route('GET', '/api/batches/:id/items/:sid', BATCH_ROLES, r => {
+  const rec = r.deps.store.batchScreening(r.ctx, r.params.id!, r.params.sid!);
+  if (!rec) throw new ApiError(404, 'not_found');
+  r.send(200, { screening: { ...screeningView(rec, r.user.role), decision: rec.decision } });
+});
+
+route('DELETE', '/api/batches/:id', BATCH_ROLES, r => {
+  const batch = r.deps.store.batch(r.ctx, r.params.id!);
+  if (!batch) throw new ApiError(404, 'not_found');
+  r.deps.store.deleteBatch(r.ctx, batch.id);
+  r.deps.store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'batch_deleted', batch.id);
   r.send(200, { ok: true });
 });
 
