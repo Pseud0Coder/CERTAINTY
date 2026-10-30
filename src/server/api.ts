@@ -55,6 +55,7 @@ import { attachDocument, applyWithCv, IntakeError } from '../spine/intake.ts';
 import type { LlmProvider } from '../spine/providers/llm.ts';
 import { screen, ScreeningError, MAX_CV_CHARS, MAX_JD_CHARS, cleanText } from '../spine/screening.ts';
 import { analyseGithub } from '../spine/github-evidence.ts';
+import { JobRegistry, JobBusyError } from '../spine/jobs.ts';
 
 export class ApiError extends Error {
   status: number; code: string;
@@ -794,7 +795,11 @@ route('GET', '/api/recruiter/candidates/:id/connectors', ['recruiter', 'hr', 'ad
 /* ---------- screening (ADR-0027): a CV against a JD, any signed-in role ---------- */
 
 const SCREEN_ROLES: Role[] = ['recruiter', 'hr', 'admin', 'candidate'];
-const SCREEN_DAILY_LIMIT = Math.max(1, Number(process.env.CERTAINTY_SCREEN_DAILY_LIMIT ?? 40) || 40);
+/* Read at request time so a deployment can change them without a rebuild. A
+   per-user cap stops one account running away; the instance cap stops a public
+   demo from spending the model key (ADR-0028). */
+const screenUserLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_DAILY_LIMIT ?? 40) || 40);
+const screenInstanceLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT ?? 300) || 300);
 
 /* A document part is either pasted text or an uploaded PDF or Word file. */
 async function screeningDoc(part: any, label: 'cv' | 'jd'): Promise<{ text: string; filename: string | null }> {
@@ -815,57 +820,85 @@ function screeningView(rec: { id: string; result: unknown; meta: unknown; create
   return { id: rec.id, createdAt: rec.createdAt, result: rec.result, meta: rec.meta, audience: role === 'candidate' ? 'candidate' : 'recruiter' };
 }
 
+/* Stage labels the page shows while a screening runs (ADR-0028). */
+const SCREEN_STEPS = ['Reading documents', 'Fetching GitHub', 'Reading the job description', 'Grading the CV', 'Writing next steps'];
+const screeningJobs = new JobRegistry({ concurrency: Number(process.env.CERTAINTY_SCREEN_CONCURRENCY ?? 3) || 3 });
+
 route('POST', '/api/screenings', SCREEN_ROLES, async r => {
   const store = r.deps.store;
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  if (store.countScreeningsSince(r.ctx, r.user.id, since) >= SCREEN_DAILY_LIMIT) throw new ApiError(429, 'daily_limit_reached');
+  /* Running jobs count too, so parallel requests cannot slip past the cap. */
+  if (store.countScreeningsSince(r.ctx, r.user.id, since) + screeningJobs.runningFor(r.user.id) >= screenUserLimit()) throw new ApiError(429, 'daily_limit_reached');
+  if (store.countAllScreeningsSince(since) + screeningJobs.running() >= screenInstanceLimit()) throw new ApiError(429, 'instance_limit_reached');
   const cv = await screeningDoc(r.body?.cv, 'cv');
   const jd = await screeningDoc(r.body?.jd, 'jd');
   const cvClean = cleanText(cv.text, MAX_CV_CHARS);
   const jdClean = cleanText(jd.text, MAX_JD_CHARS);
-
-  /* Optional GitHub account. It is public data and counts as a claim (not
-     verified): a failure to fetch never blocks the screening. */
-  let github: { snapshot: Awaited<ReturnType<typeof fetchSnapshot>> & { provider: 'github' }; verified: false } | null = null;
-  let githubError: string | null = null;
+  if (cvClean.text.length < 80) throw new ApiError(400, 'cv_too_short');
+  if (jdClean.text.length < 60) throw new ApiError(400, 'jd_too_short');
   const ghRaw = String(r.body?.githubUsername ?? '').trim();
-  if (ghRaw) {
-    try {
-      const username = normalizeUsername('github', ghRaw);
-      const snap = await fetchSnapshot('github', username, r.deps.fetch ?? fetch, process.env.GITHUB_TOKEN || undefined);
-      if (snap.provider === 'github') github = { snapshot: snap, verified: false };
-    } catch (e) {
-      githubError = e instanceof ConnectorError ? e.code : 'github_failed';
-    }
-  }
+  const labelRaw = String(r.body?.label ?? '').trim().slice(0, 80);
+  const { user, ctx, deps } = r;
+  /* The GitHub stage is listed only when an account was given. */
+  const steps = ghRaw ? SCREEN_STEPS : SCREEN_STEPS.filter(x => x !== 'Fetching GitHub');
 
-  let result;
+  let job;
   try {
-    result = await screen({
-      cvText: cvClean.text, jdText: jdClean.text, github, llm: r.deps.llm,
-      analyseGithub: async rubric => github
-        ? analyseGithub(github.snapshot, false,
-          rubric.axes.filter(a => a.id !== 'experience' && a.id !== 'impact').map(a => ({ id: a.id, title: a.title, requirement: a.requirement })),
-          r.deps.llm)
-        : null,
+    job = screeningJobs.start({ tenantId: ctx.tenantId, userId: user.id, kind: 'screening', steps }, async advance => {
+      /* Optional GitHub account. It is public data and counts as a claim (not
+         verified): a failure to fetch never blocks the screening. */
+      let github: { snapshot: Awaited<ReturnType<typeof fetchSnapshot>> & { provider: 'github' }; verified: false } | null = null;
+      let githubError: string | null = null;
+      if (ghRaw) {
+        advance('Fetching GitHub');
+        try {
+          const username = normalizeUsername('github', ghRaw);
+          const snap = await fetchSnapshot('github', username, deps.fetch ?? fetch, process.env.GITHUB_TOKEN || undefined);
+          if (snap.provider === 'github') github = { snapshot: snap, verified: false };
+        } catch (e) {
+          githubError = e instanceof ConnectorError ? e.code : 'github_failed';
+        }
+      }
+      let result;
+      try {
+        result = await screen({
+          cvText: cvClean.text, jdText: jdClean.text, github, llm: deps.llm,
+          onStep: step => advance(step === 'rubric' ? 'Reading the job description' : step === 'grading' ? 'Grading the CV' : 'Writing next steps'),
+          analyseGithub: async rubric => github
+            ? analyseGithub(github.snapshot, false,
+              rubric.axes.filter(a => a.id !== 'experience' && a.id !== 'impact').map(a => ({ id: a.id, title: a.title, requirement: a.requirement })),
+              deps.llm)
+            : null,
+        });
+      } catch (e) {
+        if (e instanceof ScreeningError) { const err = new Error(e.code) as Error & { code: string }; err.code = e.code; throw err; }
+        throw e;
+      }
+      const id = randomUUID();
+      const createdAt = new Date().toISOString();
+      const meta = {
+        label: labelRaw || result.jobTitle || 'Screening',
+        cvFile: cv.filename, jdFile: jd.filename, cvChars: cvClean.text.length, jdChars: jdClean.text.length,
+        injectionAttempts: cvClean.injectionAttempts + jdClean.injectionAttempts,
+        githubUsername: github?.snapshot.username ?? null, githubError,
+        runBy: user.role,
+      };
+      deps.store.insertScreening(ctx, user.id, { id, jobTitle: result.jobTitle, overall: result.overall, recommendation: result.recommendation, result, cvText: cvClean.text, jdText: jdClean.text, meta, createdAt });
+      deps.store.audit(ctx.tenantId, user.displayName, user.role, 'screening_run', `${id}:${result.recommendation}:${result.producer}`);
+      return id;
     });
   } catch (e) {
-    if (e instanceof ScreeningError) throw new ApiError(400, e.code);
+    if (e instanceof JobBusyError) throw new ApiError(429, 'busy');
     throw e;
   }
-  const id = randomUUID();
-  const createdAt = new Date().toISOString();
-  const meta = {
-    label: String(r.body?.label ?? '').trim().slice(0, 80) || result.jobTitle || 'Screening',
-    cvFile: cv.filename, jdFile: jd.filename, cvChars: cvClean.text.length, jdChars: jdClean.text.length,
-    injectionAttempts: cvClean.injectionAttempts + jdClean.injectionAttempts,
-    githubUsername: github?.snapshot.username ?? null, githubError,
-    runBy: r.user.role,
-  };
-  store.insertScreening(r.ctx, r.user.id, { id, jobTitle: result.jobTitle, overall: result.overall, recommendation: result.recommendation, result, cvText: cvClean.text, jdText: jdClean.text, meta, createdAt });
-  store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'screening_run', `${id}:${result.recommendation}:${result.producer}`);
-  r.send(200, { screening: screeningView({ id, result, meta, createdAt }, r.user.role) });
+  r.send(202, { jobId: job.id, steps });
 }, { maxBody: UPLOAD_MAX_BODY * 2 + 200_000 });
+
+route('GET', '/api/screenings/jobs/:id', SCREEN_ROLES, r => {
+  const view = screeningJobs.view(r.ctx.tenantId, r.user.id, r.params.id!);
+  if (!view) throw new ApiError(404, 'job_not_found');
+  r.send(200, { job: view });
+});
 
 route('GET', '/api/screenings', SCREEN_ROLES, r => {
   r.send(200, { items: r.deps.store.listScreenings(r.ctx, r.user.id) });

@@ -15,6 +15,10 @@ const ERRORS = {
     jd_unsupported_format: 'Upload the job description as a PDF or Word (.docx) file.',
     cv_document_too_large: 'That CV file is too large.', jd_document_too_large: 'That job description file is too large.',
     daily_limit_reached: 'Daily screening limit reached. Try again tomorrow.',
+    instance_limit_reached: 'This demo has reached its daily screening capacity. Try again tomorrow.',
+    busy: 'The server is busy with other screenings. Try again in a minute.',
+    screening_failed: 'The screening did not complete. Try again.',
+    job_not_found: 'The server restarted while this was running. Run it again.',
 };
 const REC_MARK = {
     'Strong Match': 'confirmed', 'Moderate Match': 'claimed', 'Weak Match': 'gap', 'No Match': 'gap',
@@ -63,12 +67,13 @@ export async function renderScreening(content, audience) {
         }
         busy = true;
         run.setAttribute('disabled', 'true');
-        status.textContent = 'Reading both documents and scoring. This can take up to a minute.';
+        status.textContent = '';
         try {
-            const res = await api.post('/api/screenings', {
+            const started = await api.post('/api/screenings', {
                 cv: await toPart(cv), jd: await toPart(jd), githubUsername: github.value, label: label.value,
             });
-            status.textContent = '';
+            const id = await followJob(started.jobId, started.steps);
+            const res = await api.get(`/api/screenings/${id}`);
             showResult(res.screening);
             await loadHistory();
             if (res.screening.meta.githubError)
@@ -76,7 +81,7 @@ export async function renderScreening(content, audience) {
             out.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         catch (e) {
-            status.textContent = '';
+            clear(out);
             toast(ERRORS[String(e.message)] ?? 'The screening did not complete. Try again.');
         }
         finally {
@@ -84,6 +89,24 @@ export async function renderScreening(content, audience) {
             run.removeAttribute('disabled');
         }
     });
+    /* Shows the stages of a running job and resolves with the result id. */
+    async function followJob(jobId, steps) {
+        clear(out);
+        const list = h('ol', { class: 'sc-progress-list' }, ...steps.map(label => h('li', { 'data-state': 'todo' }, label)));
+        const note = h('p', { class: 't-caption mt-2', role: 'status' }, 'Starting');
+        out.append(h('section', { class: 'panel sc-progress', 'aria-label': 'Screening progress' }, h('h2', { class: 't-section' }, 'Screening in progress'), list, note));
+        for (let i = 0; i < 240; i++) {
+            const { job } = await api.get(`/api/screenings/jobs/${jobId}`);
+            Array.from(list.children).forEach((li, n) => li.setAttribute('data-state', job.status === 'done' || n < job.step ? 'done' : n === job.step ? 'now' : 'todo'));
+            note.textContent = job.status === 'running' ? `${job.stepLabel}. ${Math.round(job.elapsedMs / 1000)} seconds so far.` : job.status === 'done' ? 'Done.' : '';
+            if (job.status === 'done' && job.resultId)
+                return job.resultId;
+            if (job.status === 'failed')
+                throw new Error(job.error ?? 'screening_failed');
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        throw new Error('screening_failed');
+    }
     content.append(h('section', { class: 'panel', 'aria-label': 'New screening' }, h('div', { class: 'sc-inputs' }, part('Candidate CV', 'Paste the CV text here', cv, 'sc-cv'), part('Job description', 'Paste the job description here', jd, 'sc-jd')), h('div', { class: 'sc-extras mt-4' }, github, label), h('div', { class: 'row gap-3 mt-4' }, run, status)), out, historyBox);
     function showResult(s) {
         clear(out);

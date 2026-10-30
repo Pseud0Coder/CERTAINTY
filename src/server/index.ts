@@ -13,6 +13,7 @@ import { applyRetention } from '../spine/retention.ts';
 import { providerFromEnv } from '../spine/providers/llm.ts';
 import { userForToken } from './auth.ts';
 import { handleApi } from './api.ts';
+import { health } from './health.ts';
 import type { ApiDeps } from './api.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -35,6 +36,7 @@ if (existsSync(ENV_FILE)) {
   }
 }
 
+const STARTED_AT = Date.now();
 const store = new Store(join(DATA, 'certain.db'));
 
 /* Model provider selection (ADR-0005, ADR-0012). No key, or CERTAINTY_LLM=off,
@@ -64,6 +66,11 @@ else if ((store.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: numb
   console.warn('no accounts exist: set CERTAINTY_OWNER_EMAIL and CERTAINTY_OWNER_PASSWORD to create the first one');
 }
 applyRetention(store);
+/* Retention is also a daily job, not only a boot step (ADR-0028). */
+setInterval(() => {
+  try { const n = applyRetention(store); if (n) console.log(`retention removed ${n} records`); }
+  catch (err) { console.error('retention failed', err instanceof Error ? err.message : err); }
+}, 24 * 3600 * 1000).unref();
 
 /* SSE hub plus pipeline handlers, composed on the single event bus (A0). */
 const sseClients = new Map<string, Set<ServerResponse>>();
@@ -104,6 +111,14 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
 
   try {
+    /* Health check: no session, no body to parse, safe to ping often. */
+    if (url.pathname === '/healthz' && (req.method === 'GET' || req.method === 'HEAD')) {
+      const h = health(store, llm, STARTED_AT);
+      res.writeHead(h.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(req.method === 'HEAD' ? undefined : JSON.stringify(h.body));
+      return;
+    }
+
     /* Event stream. */
     if (url.pathname === '/api/events' && req.method === 'GET') {
       const auth = authFor(req);

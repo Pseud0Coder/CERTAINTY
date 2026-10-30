@@ -18,6 +18,13 @@ jobs:
         run: npm run typecheck
       - name: Build web clients
         run: npm run build:web
+      - name: Committed web-dist matches the source
+        run: |
+          if [ -n "$(git status --porcelain -- web-dist)" ]; then
+            echo "web-dist is out of date. Run 'npm run build:web' and commit the result:"
+            git status --porcelain -- web-dist
+            exit 1
+          fi
       - name: Unit, contract, red-team and golden-transcript tests
         run: npm test
       - name: Demo scenario smoke test (master prompt, section 15)

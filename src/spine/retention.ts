@@ -5,6 +5,17 @@ import type { Store, Ctx } from './db.ts';
 
 const DEFAULT_RETENTION_MONTHS = 6;
 
+/* Screenings keep a full CV and JD, so they expire sooner than interview
+   audio (ADR-0028). CERTAINTY_SCREENING_RETENTION_DAYS overrides; 0 or a
+   negative value keeps them until someone deletes them. */
+export const DEFAULT_SCREENING_RETENTION_DAYS = 90;
+export function screeningRetentionDays(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.CERTAINTY_SCREENING_RETENTION_DAYS;
+  if (raw === undefined || raw.trim() === '') return DEFAULT_SCREENING_RETENTION_DAYS;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.floor(n) : DEFAULT_SCREENING_RETENTION_DAYS;
+}
+
 export function applyRetention(store: Store, now = new Date()): number {
   let affected = 0;
   const cutoffs = new Map<string, number>();
@@ -35,6 +46,16 @@ export function applyRetention(store: Store, now = new Date()): number {
       affected++;
     }
   }
+  /* Screenings past their retention window are removed outright, text and
+     scorecard together: the quotes in a scorecard are CV text. */
+  const days = screeningRetentionDays();
+  if (days > 0) {
+    const cutoff = new Date(now.getTime() - days * 24 * 3600 * 1000).toISOString();
+    for (const [tenantId, n] of store.purgeScreeningsBefore(cutoff)) {
+      store.audit(tenantId, 'system', 'system', 'screening_retention_applied', `${n} older than ${days} days`);
+      affected += n;
+    }
+  }
   return affected;
 }
 
@@ -50,6 +71,10 @@ export function gdprExport(store: Store, ctx: Ctx, candidateId: string): Record<
     artifacts: store.artifacts(ctx, candidateId).map(a => ({
       id: a.id, kind: a.kind, title: a.title, createdAt: a.createdAt, content: a.content,
     })),
+    /* Screenings the data subject ran on their own account. A recruiter's
+       screening of someone else's CV belongs to the recruiter's agency and is
+       deleted by them. */
+    screenings: c.userId ? store.userScreenings(ctx, c.userId) : [],
     consents: store.db.prepare('SELECT * FROM consents WHERE tenant_id = ? AND candidate_id = ?')
       .all(ctx.tenantId, candidateId),
     audit: store.db.prepare(
@@ -74,5 +99,6 @@ export function gdprErase(store: Store, ctx: Ctx, candidateId: string, actor: st
   }
   store.db.prepare('UPDATE tasks SET done = 1 WHERE tenant_id = ? AND candidate_id = ?')
     .run(ctx.tenantId, candidateId);
-  store.audit(ctx.tenantId, actor, 'system', 'gdpr_erase', candidateId);
+  const removed = c.userId ? store.deleteUserScreenings(ctx, c.userId) : 0;
+  store.audit(ctx.tenantId, actor, 'system', 'gdpr_erase', `${candidateId}${removed ? ` (${removed} screenings)` : ''}`);
 }
