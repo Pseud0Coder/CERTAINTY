@@ -128,6 +128,28 @@ async function showBatch(stage, id) {
     stage.append(h('div', { class: 'row gap-3' }, back), header, progress, board, detail);
     let stopped = false;
     let openId = null;
+    let current = null;
+    let filter = 'all';
+    let focusId = null;
+    /* A decision is posted, then the board and tallies redraw from the answer. */
+    const decide = async (rowId, decision) => {
+        try {
+            const res = await api.post(`/api/batches/${id}/items/${rowId}/decision`, { decision });
+            if (!current)
+                return;
+            const row = current.leaderboard.find(r => r.id === rowId);
+            if (row) {
+                row.decision = decision;
+                row.decidedBy = decision ? 'you' : null;
+            }
+            current.tallies = res.tallies;
+            focusId = rowId;
+            paint(current);
+        }
+        catch {
+            toast('The decision could not be saved. Try again.');
+        }
+    };
     const open = async (rowId) => {
         openId = rowId;
         try {
@@ -142,7 +164,8 @@ async function showBatch(stage, id) {
     };
     const paint = (v) => {
         clear(header);
-        header.append(h('h2', { class: 'sc-batch-title' }, v.batch.label), h('p', { class: 't-secondary' }, `${v.batch.jobTitle ?? 'Job description'} · ${v.leaderboard.length} screened`), h('p', { class: 't-caption mt-2' }, `Judged on: ${v.axes.map(a => `${a.title}${a.priority === 'must' ? '' : ' (nice)'}`).join(', ')}`), tallyChips(v.tallies));
+        header.append(h('h2', { class: 'sc-batch-title' }, v.batch.label), h('p', { class: 't-secondary' }, `${v.batch.jobTitle ?? 'Job description'} · ${v.leaderboard.length} screened`), h('p', { class: 't-caption mt-2' }, `Judged on: ${v.axes.map(a => `${a.title}${a.priority === 'must' ? '' : ' (nice)'}`).join(', ')}`), tallyChips(v.tallies, filter, f => { filter = f; if (current)
+            paint(current); }));
         clear(progress);
         const waiting = v.queue.filter(q => q.status === 'queued' || q.status === 'running');
         const failed = v.queue.filter(q => q.status === 'failed');
@@ -154,7 +177,11 @@ async function showBatch(stage, id) {
             progress.append(h('section', { class: 'panel mt-4', 'aria-label': 'CVs that failed' }, h('h2', { class: 't-section' }, `${failed.length} CV${failed.length === 1 ? '' : 's'} could not be screened`), h('ul', { class: 'sc-files' }, ...failed.map(q => h('li', {}, `${q.name}: ${ERRORS[q.error ?? ''] ?? 'the screening did not complete'}`)))));
         }
         clear(board);
-        board.append(leaderboardTable(v.leaderboard, rowId => void open(rowId), openId));
+        const shown = v.leaderboard.filter(r => filter === 'all' || (filter === 'undecided' ? r.decision === null : r.decision === filter));
+        board.append(h('p', { class: 't-caption sc-keys' }, 'Keys: arrows move, S shortlist, M maybe, P pass, X clear, Enter open.'), leaderboardTable(shown, rowId => void open(rowId), openId, decide, focusId));
+        if (focusId) {
+            board.querySelector(`tr[data-id="${focusId}"]`)?.focus({ preventScroll: true });
+        }
         const del = h('button', { class: 'btn btn-sm btn-ghost mt-4' }, 'Delete this batch');
         del.addEventListener('click', async () => {
             if (!confirm('Delete this batch and every CV in it?'))
@@ -179,32 +206,67 @@ async function showBatch(stage, id) {
         }
         if (stopped)
             return;
+        current = v;
         paint(v);
         if (!v.queue.some(q => q.status === 'queued' || q.status === 'running'))
             return;
         await new Promise(r => setTimeout(r, 1500));
     }
 }
-function tallyChips(t) {
-    const chip = (label, n) => h('span', { class: 'chip sc-tally' }, `${label} ${n}`);
-    return h('div', { class: 'chip-row sc-tallies mt-2', role: 'status', 'aria-label': 'Triage tallies' }, chip('Shortlisted', t.shortlist), chip('Maybe', t.maybe), chip('Pass', t.pass), chip('Undecided', t.undecided));
+/* The tallies double as filters: pressing one shows only those CVs. */
+function tallyChips(t, active, onPick) {
+    const total = t.shortlist + t.maybe + t.pass + t.undecided;
+    const chip = (f, label, n) => {
+        const b = h('button', { class: 'chip sc-tally', 'aria-pressed': f === active ? 'true' : 'false', type: 'button' }, `${label} ${n}`);
+        b.addEventListener('click', () => onPick(f === active ? 'all' : f));
+        return b;
+    };
+    return h('div', { class: 'chip-row sc-tallies mt-2', role: 'group', 'aria-label': 'Triage tallies, press one to filter' }, chip('all', 'All', total), chip('shortlist', 'Shortlisted', t.shortlist), chip('maybe', 'Maybe', t.maybe), chip('pass', 'Pass', t.pass), chip('undecided', 'Undecided', t.undecided));
 }
-function leaderboardTable(rows, onOpen, openId) {
+function leaderboardTable(rows, onOpen, openId, decide, focusId) {
     if (!rows.length)
-        return empty('Results appear here as each CV is screened.');
+        return empty('Nothing here. Results appear as each CV is screened, or change the filter.');
     const table = h('table', { class: 'sc-table', 'aria-label': 'Ranked CVs' });
     table.append(h('thead', {}, h('tr', {}, ...['#', 'Candidate', 'Score', 'Result', 'Percentile', 'Flags', 'Years', 'Skills', 'Decision'].map(c => h('th', { scope: 'col' }, c)))));
     const tbody = h('tbody', {});
+    const KEYS = { s: 'shortlist', m: 'maybe', p: 'pass', x: null };
     for (const r of rows) {
         const flags = [];
         if (r.capped)
             flags.push('Capped');
         if (r.mustMissing)
             flags.push(`${r.mustMissing} must-have${r.mustMissing === 1 ? '' : 's'} missing`);
-        const tr = h('tr', { 'data-id': r.id, 'data-decision': r.decision ?? '', tabindex: '0', 'aria-selected': r.id === openId ? 'true' : 'false' }, h('td', {}, String(r.rank)), h('td', {}, h('span', { class: 'sc-cand' }, r.name), r.file ? h('span', { class: 't-caption' }, r.file) : h('span', {})), h('td', { class: 'sc-num' }, r.overall.toFixed(1)), h('td', {}, stamp(r.recommendation, REC_MARK[r.recommendation] ?? 'claimed')), h('td', {}, r.percentile === null ? 'n/a' : `${r.percentile}`), h('td', {}, flags.length ? flags.join(', ') : 'None'), h('td', {}, r.years === null ? 'n/a' : `${r.years}${r.yearsStated ? ' stated' : ''}`), h('td', {}, r.skills.required ? `${r.skills.found}/${r.skills.required}` : 'n/a'), h('td', { class: 'sc-decision' }, r.decision ? r.decision[0].toUpperCase() + r.decision.slice(1) : 'Undecided'));
+        const buttons = h('div', { class: 'sc-triage', role: 'group', 'aria-label': `Decision for ${r.name}` });
+        for (const [key, label, value] of [['S', 'Shortlist', 'shortlist'], ['M', 'Maybe', 'maybe'], ['P', 'Pass', 'pass']]) {
+            const b = h('button', { class: 'sc-tri', type: 'button', 'aria-pressed': r.decision === value ? 'true' : 'false', title: `${label} (${key})`, 'aria-label': `${label} ${r.name}` }, key);
+            b.addEventListener('click', e => { e.stopPropagation(); void decide(r.id, r.decision === value ? null : value); });
+            buttons.append(b);
+        }
+        const tr = h('tr', { 'data-id': r.id, 'data-decision': r.decision ?? '', tabindex: r.id === focusId || (!focusId && r === rows[0]) ? '0' : '-1', 'aria-selected': r.id === openId ? 'true' : 'false' }, h('td', {}, String(r.rank)), h('td', {}, h('span', { class: 'sc-cand' }, r.name), r.file ? h('span', { class: 't-caption' }, r.file) : h('span', {})), h('td', { class: 'sc-num' }, r.overall.toFixed(1)), h('td', {}, stamp(r.recommendation, REC_MARK[r.recommendation] ?? 'claimed')), h('td', {}, r.percentile === null ? 'n/a' : `${r.percentile}`), h('td', {}, flags.length ? flags.join(', ') : 'None'), h('td', {}, r.years === null ? 'n/a' : `${r.years}${r.yearsStated ? ' stated' : ''}`), h('td', {}, r.skills.required ? `${r.skills.found}/${r.skills.required}` : 'n/a'), h('td', { class: 'sc-decision' }, buttons, h('span', { class: 'sc-decision-word' }, r.decision ? r.decision[0].toUpperCase() + r.decision.slice(1) : '')));
         tr.addEventListener('click', () => onOpen(r.id));
-        tr.addEventListener('keydown', e => { if (e.key === 'Enter')
-            onOpen(r.id); });
+        tr.addEventListener('keydown', e => {
+            const k = e.key;
+            const lower = k.toLowerCase();
+            if (k === 'Enter') {
+                onOpen(r.id);
+                return;
+            }
+            if (k === 'ArrowDown' || k === 'ArrowUp') {
+                e.preventDefault();
+                const next = (k === 'ArrowDown' ? tr.nextElementSibling : tr.previousElementSibling);
+                if (next) {
+                    tr.tabIndex = -1;
+                    next.tabIndex = 0;
+                    next.focus();
+                }
+                return;
+            }
+            if (lower in KEYS && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                e.preventDefault();
+                const value = KEYS[lower];
+                void decide(r.id, value !== null && r.decision === value ? null : value);
+            }
+        });
         tbody.append(tr);
     }
     table.append(tbody);
