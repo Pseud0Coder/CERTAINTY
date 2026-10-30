@@ -30,7 +30,7 @@ export class Store {
     /* ADR-0030: a screening can belong to a batch, carry a triage decision and
        a candidate name. */
     const scCols = (this.db.prepare('PRAGMA table_info(screenings)').all() as unknown as Array<{ name: string }>).map(c => c.name);
-    for (const [col, type] of [['batch_id', 'TEXT'], ['decision', 'TEXT'], ['candidate_name', 'TEXT']] as const) {
+    for (const [col, type] of [['batch_id', 'TEXT'], ['decision', 'TEXT'], ['candidate_name', 'TEXT'], ['decided_by', 'TEXT']] as const) {
       if (!scCols.includes(col)) this.db.exec(`ALTER TABLE screenings ADD COLUMN ${col} ${type}`);
     }
     this.db.exec('CREATE INDEX IF NOT EXISTS ix_screenings_batch ON screenings(tenant_id, batch_id)');
@@ -239,20 +239,20 @@ export class Store {
   }
   batchItems(ctx: Ctx, batchId: string): Array<{
     id: string; overall: number; recommendation: string; decision: string | null; candidateName: string | null;
-    createdAt: string; result: any; meta: any;
+    createdAt: string; result: any; meta: any; decidedBy: string | null;
   }> {
-    return (this.db.prepare('SELECT id, overall, recommendation, decision, candidate_name, created_at, result, meta FROM screenings WHERE tenant_id = ? AND batch_id = ? ORDER BY overall DESC, created_at')
+    return (this.db.prepare('SELECT id, overall, recommendation, decision, decided_by, candidate_name, created_at, result, meta FROM screenings WHERE tenant_id = ? AND batch_id = ? ORDER BY overall DESC, created_at')
       .all(ctx.tenantId, batchId) as any[])
-      .map(r => ({ id: r.id, overall: r.overall, recommendation: r.recommendation, decision: r.decision, candidateName: r.candidate_name, createdAt: r.created_at, result: JSON.parse(r.result), meta: JSON.parse(r.meta) }));
+      .map(r => ({ id: r.id, overall: r.overall, recommendation: r.recommendation, decision: r.decision, decidedBy: r.decided_by, candidateName: r.candidate_name, createdAt: r.created_at, result: JSON.parse(r.result), meta: JSON.parse(r.meta) }));
   }
   /* A screening read through its batch, by anyone in the tenant. */
   batchScreening(ctx: Ctx, batchId: string, id: string): { id: string; result: unknown; cvText: string; jdText: string; meta: unknown; createdAt: string; decision: string | null } | null {
     const r = this.db.prepare('SELECT * FROM screenings WHERE tenant_id = ? AND batch_id = ? AND id = ?').get(ctx.tenantId, batchId, id) as any;
     return r ? { id: r.id, result: JSON.parse(r.result), cvText: r.cv_text, jdText: r.jd_text, meta: JSON.parse(r.meta), createdAt: r.created_at, decision: r.decision } : null;
   }
-  setDecision(ctx: Ctx, batchId: string, id: string, decision: string | null): boolean {
-    return Number(this.db.prepare('UPDATE screenings SET decision = ? WHERE tenant_id = ? AND batch_id = ? AND id = ?')
-      .run(decision, ctx.tenantId, batchId, id).changes) > 0;
+  setDecision(ctx: Ctx, batchId: string, id: string, decision: string | null, decidedBy: string | null): boolean {
+    return Number(this.db.prepare('UPDATE screenings SET decision = ?, decided_by = ? WHERE tenant_id = ? AND batch_id = ? AND id = ?')
+      .run(decision, decision === null ? null : decidedBy, ctx.tenantId, batchId, id).changes) > 0;
   }
   deleteBatch(ctx: Ctx, id: string): boolean {
     this.db.prepare('DELETE FROM screenings WHERE tenant_id = ? AND batch_id = ?').run(ctx.tenantId, id);

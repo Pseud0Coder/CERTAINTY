@@ -144,3 +144,56 @@ test('delete removes the batch and every CV in it', async () => {
     assert.equal((await rec.get(`/api/batches/${id}`)).status, 404);
   } finally { await t.close(); }
 });
+
+test('triage: a person shortlists, maybes or passes; tallies follow; every change is audited', async () => {
+  const t = await boot();
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const id = (await rec.post('/api/batches', { jd: { text: jd } })).body.batch.id;
+    for (const c of ['java-strong', 'wrong-field', 'devops-missing-must']) await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf(c) } });
+    const before = await rec.settle(id);
+    const [first, second, third] = before.leaderboard.map((x: any) => x.id);
+    assert.deepEqual(before.tallies, { shortlist: 0, maybe: 0, pass: 0, undecided: 3 });
+
+    assert.equal((await rec.post(`/api/batches/${id}/items/${first}/decision`, { decision: 'shortlist' })).status, 200);
+    assert.equal((await rec.post(`/api/batches/${id}/items/${second}/decision`, { decision: 'maybe' })).status, 200);
+    const last = await rec.post(`/api/batches/${id}/items/${third}/decision`, { decision: 'pass' });
+    assert.deepEqual(last.body.tallies, { shortlist: 1, maybe: 1, pass: 1, undecided: 0 });
+    const after = await rec.get(`/api/batches/${id}`);
+    assert.equal(after.body.leaderboard[0].decision, 'shortlist');
+    assert.equal(after.body.leaderboard[0].decidedBy, 'R. Osei', 'who decided is kept');
+
+    const cleared = await rec.post(`/api/batches/${id}/items/${first}/decision`, { decision: null });
+    assert.deepEqual(cleared.body.tallies, { shortlist: 0, maybe: 1, pass: 1, undecided: 1 });
+    assert.equal((await rec.get(`/api/batches/${id}`)).body.leaderboard[0].decidedBy, null);
+
+    assert.equal((await rec.post(`/api/batches/${id}/items/${first}/decision`, { decision: 'hire' })).body.error, 'invalid_decision');
+    assert.equal((await rec.post(`/api/batches/${id}/items/${first}/decision`, { decision: 'advance' })).status, 400);
+    assert.equal((await rec.post(`/api/batches/${id}/items/nope/decision`, { decision: 'pass' })).status, 404);
+
+    const audit = t.store.auditList({ tenantId: t.ids.tenantId }).filter(e => e.action === 'triage_decision');
+    assert.equal(audit.length, 4);
+    assert.ok(audit.every(e => e.actor === 'R. Osei'));
+  } finally { await t.close(); }
+});
+
+test('triage is staff only, tenant scoped, and a decision never changes the score', async () => {
+  const t = await boot();
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const id = (await rec.post('/api/batches', { jd: { text: jd } })).body.batch.id;
+    await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf('java-strong') } });
+    const b = await rec.settle(id);
+    const sid = b.leaderboard[0].id;
+    assert.equal((await t.as('nadia@gennext.demo').post(`/api/batches/${id}/items/${sid}/decision`, { decision: 'pass' })).status, 403);
+    assert.equal((await t.as('recruiter@northgate.demo').post(`/api/batches/${id}/items/${sid}/decision`, { decision: 'pass' })).status, 404);
+    await rec.post(`/api/batches/${id}/items/${sid}/decision`, { decision: 'pass' });
+    const after = await rec.get(`/api/batches/${id}`);
+    assert.equal(after.body.leaderboard[0].overall, b.leaderboard[0].overall);
+    assert.equal(after.body.leaderboard[0].recommendation, b.leaderboard[0].recommendation);
+    /* A teammate sees and can change it. */
+    const hr = t.as('admin@gennext.demo');
+    assert.equal((await hr.get(`/api/batches/${id}`)).body.leaderboard[0].decision, 'pass');
+    assert.equal((await hr.post(`/api/batches/${id}/items/${sid}/decision`, { decision: 'shortlist' })).status, 200);
+  } finally { await t.close(); }
+});

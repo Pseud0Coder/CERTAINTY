@@ -935,7 +935,7 @@ function leaderboard(items: ReturnType<Store['batchItems']>) {
     };
     return {
       id: it.id, rank: i + 1, name: it.candidateName ?? 'Candidate', file: (it.meta?.cvFile as string | null) ?? null,
-      overall: it.overall, recommendation: it.recommendation, decision: it.decision,
+      overall: it.overall, recommendation: it.recommendation, decision: it.decision, decidedBy: it.decidedBy,
       percentile: n > 1 ? Math.round((100 * (below + 0.5 * (equal - 1))) / (n - 1)) : null,
       capped: !!res.capReason,
       mustMissing: res.criteria.filter(c => c.priority === 'must' && c.grade === 1).length
@@ -1026,6 +1026,20 @@ route('GET', '/api/batches/:id/items/:sid', BATCH_ROLES, r => {
   const rec = r.deps.store.batchScreening(r.ctx, r.params.id!, r.params.sid!);
   if (!rec) throw new ApiError(404, 'not_found');
   r.send(200, { screening: { ...screeningView(rec, r.user.role), decision: rec.decision } });
+});
+
+/* Triage (ADR-0030): shortlist, maybe or pass, by a person. The model never
+   sets a decision; null clears one. Every change is audited with who made it. */
+const DECISIONS = new Set(['shortlist', 'maybe', 'pass']);
+route('POST', '/api/batches/:id/items/:sid/decision', BATCH_ROLES, r => {
+  const store = r.deps.store;
+  const batchId = r.params.id!;
+  const raw = r.body?.decision;
+  if (raw !== null && !(typeof raw === 'string' && DECISIONS.has(raw))) throw new ApiError(400, 'invalid_decision');
+  if (!store.batchScreening(r.ctx, batchId, r.params.sid!)) throw new ApiError(404, 'not_found');
+  store.setDecision(r.ctx, batchId, r.params.sid!, raw, r.user.displayName);
+  store.audit(r.ctx.tenantId, r.user.displayName, r.user.role, 'triage_decision', `${r.params.sid}:${raw ?? 'cleared'}`);
+  r.send(200, { decision: raw, tallies: tallies(store.batchItems(r.ctx, batchId)) });
 });
 
 route('DELETE', '/api/batches/:id', BATCH_ROLES, r => {
