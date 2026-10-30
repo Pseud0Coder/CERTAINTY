@@ -500,3 +500,19 @@ test('a slow model does not hold the request: the POST returns at once and the j
     assert.fail('job never finished');
   } finally { release(); await t.close(); }
 });
+
+/* ---------- health check (ADR-0028) ---------- */
+
+import { health } from '../src/server/health.ts';
+
+test('the health check answers without a session and reports the database and model', () => {
+  const store = new Store(':memory:');
+  const ok = health(store, nullProvider, 1_000, 61_000);
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.body, { ok: true, uptimeSec: 60, db: true, model: false });
+  assert.equal(health(store, { name: 'deepseek:deepseek-flash', complete: async () => null }, 0, 1000).body.model, true);
+  store.db.close();
+  const down = health(store, nullProvider, 0, 1000);
+  assert.equal(down.status, 503, 'a dead database is reported, so a monitor can alert');
+  assert.equal(down.body.ok, false);
+});

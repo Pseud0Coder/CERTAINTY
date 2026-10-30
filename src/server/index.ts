@@ -13,6 +13,7 @@ import { applyRetention } from '../spine/retention.ts';
 import { providerFromEnv } from '../spine/providers/llm.ts';
 import { userForToken } from './auth.ts';
 import { handleApi } from './api.ts';
+import { health } from './health.ts';
 import type { ApiDeps } from './api.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -35,6 +36,7 @@ if (existsSync(ENV_FILE)) {
   }
 }
 
+const STARTED_AT = Date.now();
 const store = new Store(join(DATA, 'certain.db'));
 
 /* Model provider selection (ADR-0005, ADR-0012). No key, or CERTAINTY_LLM=off,
@@ -109,6 +111,14 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
 
   try {
+    /* Health check: no session, no body to parse, safe to ping often. */
+    if (url.pathname === '/healthz' && (req.method === 'GET' || req.method === 'HEAD')) {
+      const h = health(store, llm, STARTED_AT);
+      res.writeHead(h.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(req.method === 'HEAD' ? undefined : JSON.stringify(h.body));
+      return;
+    }
+
     /* Event stream. */
     if (url.pathname === '/api/events' && req.method === 'GET') {
       const auth = authFor(req);
