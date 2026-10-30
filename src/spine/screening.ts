@@ -26,7 +26,7 @@
    never its structure. */
 
 import { structureResume, type ResumeFields } from './agents.ts';
-import { requirementTerms, canon, SKILL_TERMS, requirementShare, isLogistics } from './terms.ts';
+import { requirementTerms, canon, matchForm, SKILL_TERMS, requirementShare, isLogistics } from './terms.ts';
 import { extract, sanitize } from './quarantine.ts';
 import { normalizeModelText } from './contracts.ts';
 import type { LlmProvider } from './providers/llm.ts';
@@ -539,7 +539,7 @@ function bestLine(lines: string[], requirement: string): { line: string; share: 
   if (!terms.length) return null;
   let best: { line: string; share: number } | null = null;
   for (const line of lines) {
-    const share = requirementShare(requirement, canon(line), terms);
+    const share = requirementShare(requirement, matchForm(line), terms);
     if (share > 0 && (!best || share > best.share || (share === best.share && hasMetric(line) && !hasMetric(best.line)))) best = { line, share };
   }
   return best;
@@ -548,7 +548,7 @@ function bestLine(lines: string[], requirement: string): { line: string; share: 
 function corpusShare(corpus: string, requirement: string): number {
   const terms = [...new Set(requirementTerms(requirement))];
   if (!terms.length) return 0;
-  return requirementShare(requirement, canon(corpus), terms);
+  return requirementShare(requirement, matchForm(corpus), terms);
 }
 
 /* A JD that asks for "advanced Excel" is met by a CV that says "Excel" or

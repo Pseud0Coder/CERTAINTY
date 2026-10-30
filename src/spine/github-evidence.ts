@@ -18,7 +18,7 @@
    analyst can say a project exists and what it is described as, not that
    the code is good. An account that has not proved ownership is a claim. */
 
-import { requirementTerms, canon, requirementShare } from './terms.ts';
+import { requirementTerms, matchForm, requirementShare } from './terms.ts';
 import type { GithubSnapshot } from './connectors.ts';
 import type { LlmProvider } from './providers/llm.ts';
 import { numbersAreGrounded } from './intelligence.ts';
@@ -56,7 +56,7 @@ export interface GithubAnalysis {
 }
 
 function itemText(parts: Array<string | null | undefined>): string {
-  return canon(parts.filter(Boolean).join(' '));
+  return matchForm(parts.filter(Boolean).join(' '));
 }
 
 /* Deterministic stage. Items are scored by the share of the requirement's

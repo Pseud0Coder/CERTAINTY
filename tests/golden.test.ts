@@ -78,3 +78,12 @@ test('"advanced Excel" in a JD is met by "MS Excel" in a CV, and "excel at" is s
   assert.ok(r.facts.skillsFound.includes('advanced excel'));
   assert.ok(!r.facts.skillsRequired.includes('excel'));
 });
+
+test('skills written with punctuation (CI/CD, C++, Node.js) are matched, not lost to the word splitter', async () => {
+  const c = GOLDEN.find(x => x.id === 'undated-cv')!;
+  const r = await screen({ cvText: c.cv, jdText: c.jd });
+  const ci = r.criteria.find(k => /ci\/cd/i.test(k.requirement));
+  assert.ok(ci && ci.grade >= 3, `CI/CD requirement graded ${ci?.grade}`);
+  const cpp = await screen({ cvText: c.cv.replace('Selenium and Java framework', 'C++ and Node.js framework'), jdText: 'Systems Engineer\nWhat we are looking for:\n- 3+ years of experience writing C++ services\n- Experience with Node.js tooling\n- Strong debugging skills' });
+  assert.ok(cpp.facts.skillsFound.includes('c++') && cpp.facts.skillsFound.includes('node.js'));
+});

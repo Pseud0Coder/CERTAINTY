@@ -111,10 +111,27 @@ export const SKILL_TERMS = [
   'project management', 'pmp', 'stakeholder management',
 ];
 
+/* Skill names written with punctuation ("CI/CD", "C++", "Node.js") are split
+   into fragments too short to match by the word splitter, so for matching
+   they are squashed to plain letters on both sides. Skill detection itself
+   still reads the punctuated canonical spelling. */
+const SQUASH: Array<[RegExp, string]> = [
+  [/ci\/cd/g, 'cicd'], [/c\+\+/g, 'cplusplus'], [/c#/g, 'csharp'], [/\.net\b/g, 'dotnet'],
+  [/next\.js/g, 'nextjs'], [/node\.js/g, 'nodejs'],
+];
+export function squash(text: string): string {
+  let out = text;
+  for (const [re, to] of SQUASH) out = out.replace(re, to);
+  return out;
+}
+
+/* The form text takes for matching: aliases collapsed, then squashed. */
+export function matchForm(text: string): string { return squash(canon(text)); }
+
 /* Stems of the single-word skills above. A requirement that names one of
    these (Kubernetes, SAP, Tally) is mostly about that word, so it counts for
    more than the connecting words around it. */
-const SKILL_STEMS = new Set(SKILL_TERMS.filter(t => !t.includes(' ')).map(t => stem(canon(t))));
+const SKILL_STEMS = new Set(SKILL_TERMS.filter(t => !t.includes(' ')).map(t => stem(matchForm(t))));
 
 /* Share of a requirement's terms found in `canonText`, with skill names
    weighted three times a plain word. */
@@ -155,7 +172,7 @@ export function isLogistics(requirement: string): boolean { return LOGISTICS.tes
 
 export function requirementTerms(text: string): string[] {
   const out: string[] = [];
-  for (const w of keywords(canon(text))) {
+  for (const w of keywords(matchForm(text))) {
     if (FLUFF.has(w) || /^\d/.test(w)) continue;
     const s = stem(w);
     if (!out.includes(s)) out.push(s);
