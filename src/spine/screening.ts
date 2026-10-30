@@ -197,10 +197,28 @@ function termRegex(term: string): RegExp {
   return new RegExp(`(?<![a-z0-9])${esc}(?![a-z0-9])`, 'i');
 }
 
-/* Tech terms the JD names, in the order they first appear. */
+/* All-caps or mixed-case tokens that read as a tool name, for a JD whose
+   skills are not on the built-in list. Degrees, places and pay terms are not
+   skills. */
+const NOT_A_SKILL = new Set(['and', 'the', 'for', 'you', 'our', 'mba', 'bba', 'bca', 'mca', 'bcom', 'mcom', 'btech', 'mtech', 'usa', 'uk', 'inr', 'lpa', 'ctc', 'pm', 'am', 'eod', 'ceo', 'cto', 'cfo', 'coo', 'vp', 'jd', 'cv', 'ca', 'cs', 'icwa', 'it', 'us', 'eu', 'ok', 'faq', 'pf', 'esi', 'wfh', 'ftc']);
+function toolNames(jd: string): string[] {
+  const out: string[] = [];
+  for (const line of jd.split(/\r?\n/)) {
+    for (const m of line.matchAll(/\b([A-Z]{2,6}|[A-Z][a-z]+[A-Z][A-Za-z]+|[A-Za-z]+[+#]{1,2})\b/g)) {
+      const t = m[1]!.toLowerCase();
+      if (NOT_A_SKILL.has(t) || out.includes(t)) continue;
+      out.push(t);
+    }
+  }
+  return out.slice(0, 8);
+}
+
+/* Skills the JD names, in the order they first appear: the built-in list
+   first, then, if the JD names fewer than two, tool-like words lifted from
+   the JD itself so a non-technical role still has a Skills Fit axis. */
 export function jdSkills(jd: string): string[] {
   const jdCanon = canon(jd);
-  const found: Array<{ t: string; at: number }> = [];
+  const found: Array<{ t: string; at: number; end: number }> = [];
   const seen = new Set<string>();
   for (const t of SKILL_TERMS) {
     const m = termRegex(t).exec(jdCanon);
@@ -208,9 +226,15 @@ export function jdSkills(jd: string): string[] {
     const canonical = t === 'nextjs' ? 'next.js' : t === 'nodejs' ? 'node.js' : t === 'postgresql' ? 'postgres' : t;
     if (seen.has(canonical)) continue;
     seen.add(canonical);
-    found.push({ t: canonical, at: m.index });
+    found.push({ t: canonical, at: m.index, end: m.index + m[0].length });
   }
-  return found.sort((a, b) => a.at - b.at).slice(0, 12).map(f => f.t);
+  /* "tally" and "erp" inside "tally erp" are one skill, not three. */
+  const listed = found
+    .filter(a => !found.some(b => b !== a && b.at <= a.at && b.end >= a.end && b.end - b.at > a.end - a.at))
+    .sort((a, b) => a.at - b.at).map(f => f.t);
+  if (listed.length >= 2) return listed.slice(0, 12);
+  for (const t of toolNames(jd)) if (!listed.includes(t) && !listed.includes(canon(t))) listed.push(canon(t));
+  return listed.slice(0, 12);
 }
 
 /* ---------------------------------------------------------------------- */

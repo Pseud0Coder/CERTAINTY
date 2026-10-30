@@ -96,8 +96,18 @@ export const SKILL_TERMS = [
   'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform', 'ansible', 'jenkins', 'ci/cd', 'linux', 'nginx', 'serverless', 'lambda',
   'postgres', 'postgresql', 'mysql', 'mongodb', 'redis', 'kafka', 'rabbitmq', 'elasticsearch', 'snowflake', 'bigquery', 'spark', 'hadoop', 'airflow', 'dbt',
   'machine learning', 'deep learning', 'pytorch', 'tensorflow', 'scikit-learn', 'pandas', 'numpy', 'nlp', 'llm', 'computer vision',
-  'android', 'ios', 'flutter', 'react native', 'figma', 'tableau', 'power bi', 'excel', 'salesforce', 'sap', 'jira', 'git', 'github', 'agile', 'scrum', 'microservices',
+  'android', 'ios', 'flutter', 'react native', 'figma', 'tableau', 'power bi', 'salesforce', 'sap', 'jira', 'git', 'github', 'agile', 'scrum', 'microservices',
   'prometheus', 'grafana', 'datadog', 'oauth', 'devops', 'sre', 'blockchain', 'solidity',
+  /* Business, finance, sales, HR, operations, marketing and design. "excel"
+     alone is not listed because "excel at" is ordinary English. */
+  'ms excel', 'advanced excel', 'microsoft excel', 'vlookup', 'pivot tables', 'tally', 'tally erp', 'quickbooks', 'zoho', 'hubspot', 'sap fico', 'oracle',
+  'gst', 'tds', 'kyc', 'aml', 'crm', 'erp', 'mis', 'b2b', 'b2c', 'profit and loss', 'financial modelling', 'financial modeling', 'valuation', 'budgeting', 'forecasting',
+  'accounts payable', 'accounts receivable', 'internal audit', 'statutory audit', 'taxation', 'ifrs', 'ind as', 'payroll', 'credit risk', 'underwriting', 'equity research', 'mutual funds',
+  'lead generation', 'cold calling', 'key account management', 'business development', 'channel sales', 'territory management', 'negotiation', 'customer success', 'customer support', 'voice process', 'bpo',
+  'recruitment', 'talent sourcing', 'employee engagement', 'hr analytics', 'onboarding', 'talent acquisition',
+  'supply chain', 'logistics', 'procurement', 'inventory management', 'warehouse management', 'six sigma', 'lean manufacturing', 'autocad', 'solidworks', 'plc', 'scada',
+  'seo', 'sem', 'google analytics', 'google ads', 'facebook ads', 'content marketing', 'copywriting', 'social media marketing', 'photoshop', 'illustrator', 'canva', 'after effects', 'ux', 'ui', 'wireframing',
+  'project management', 'pmp', 'stakeholder management',
 ];
 
 /* Stems of the single-word skills above. A requirement that names one of

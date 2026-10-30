@@ -581,3 +581,54 @@ test('the GitHub analyst also reads aliases', () => {
   const snap = { ...SNAP, repos: [{ name: 'infra', description: 'K8s operators and Helm charts', language: 'Go', stars: 3, pushedAt: '2026-09-01T00:00:00Z', url: 'https://github.com/x/infra', topics: [] }], mergedPrs: [] };
   assert.equal(candidateFindings(snap, 'Kubernetes in production').findings[0]?.name, 'infra');
 });
+
+/* ---------- non-IT roles (ADR-0029) ---------- */
+
+import { jdSkills } from '../src/spine/screening.ts';
+
+const FINANCE_JD = `Assistant Manager, Accounts - Pune
+
+What we're looking for:
+- 4+ years in accounting with hands-on GST and TDS compliance
+- Strong working knowledge of Tally ERP and advanced Excel (VLOOKUP, pivot tables)
+- Experience with month-end closing, accounts payable and MIS reporting
+- You will excel at managing deadlines
+
+Nice to have:
+- Exposure to SAP FICO
+`;
+
+const FINANCE_CV = `Rohan Mehta
+rohan.mehta@example.com
+
+Experience
+Senior Accountant, Shree Traders Pvt Ltd
+04/2020 - Present
+- Filed monthly GSTR-1 and GSTR-3B returns and handled TDS deductions and quarterly returns for 120+ vendors
+- Maintained books in Tally ERP and built MIS reports in Excel using pivot tables and VLOOKUP, cutting month-end closing from 9 days to 5
+- Managed accounts payable of INR 4 crore a month
+
+Accountant, Kapoor & Co
+06/2017 - 03/2020
+- Prepared statutory audit schedules and GST reconciliations
+
+Skills
+Tally ERP, GST, TDS, MS Excel, Accounts Payable, MIS
+`;
+
+test('a finance JD gets a real Skills Fit from business terms, and "excel at" is not a skill', async () => {
+  const skills = jdSkills(FINANCE_JD);
+  for (const s of ['gst', 'tds', 'tally erp', 'advanced excel', 'vlookup', 'accounts payable', 'mis', 'sap fico']) assert.ok(skills.includes(s), `${s} is read from the JD: ${skills.join(', ')}`);
+  assert.ok(!skills.includes('excel'), '"excel at" is ordinary English');
+  const r = await screen({ cvText: FINANCE_CV, jdText: FINANCE_JD });
+  const sk = r.criteria.find(c => c.id === 'skills')!;
+  assert.ok(sk.grade >= 4, `skills fit ${sk.grade}`);
+  assert.ok(r.facts.skillsMissing.includes('sap fico'));
+  assert.ok(r.facts.years! >= 9);
+});
+
+test('a JD with no listed skills falls back to tool names written in it', () => {
+  const skills = jdSkills('Operations Executive\nWhat we are looking for:\n- Working knowledge of SAP and Zoho Books\n- Comfortable with QuickBooks and WMS\n- Degree: MBA or BBA');
+  assert.ok(skills.includes('sap') || skills.includes('quickbooks'));
+  assert.ok(!skills.includes('mba') && !skills.includes('bba'), 'degrees are not skills');
+});
