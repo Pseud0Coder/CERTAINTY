@@ -16,6 +16,7 @@ const FLUFF = new Set([
   'great', 'excellent', 'preferred', 'bonus', 'nice', 'desirable', 'minimum', 'least', 'more', 'than', 'you', 'our', 'your',
   'will', 'who', 'are', 'can', 'one', 'two', 'three', 'both', 'each', 'within', 'across', 'between', 'while', 'where',
   'role', 'team', 'teams', 'company', 'candidate', 'candidates', 'looking', 'seeking', 'skills', 'skill', 'ideal',
+  'improve', 'improving', 'improved', 'enhance', 'enhancing', 'meeting', 'meet', 'spoken', 'written', 'verbal', 'comfortable', 'ability',
 ]);
 
 function stem(word: string): string {
@@ -127,6 +128,30 @@ export function weightedShare(terms: string[], canonText: string): number {
   }
   return have / all;
 }
+
+/* A requirement that offers a choice ("Jenkins or GitHub Actions", "a CRM such
+   as HubSpot") is met by any one of the named skills. */
+const ALTERNATIVES = /\b(?:or|such as|e\.g\.|like|similar to)\b|\//i;
+
+/* How much of a requirement a piece of text covers, in 0..1. Skill names
+   weigh three times a plain word, and when every named skill is present (or,
+   for a choice, any one) the text counts as covering the requirement even if
+   the connecting words differ. */
+export function requirementShare(requirement: string, canonText: string, terms: string[] = requirementTerms(requirement)): number {
+  if (!terms.length) return 0;
+  const base = weightedShare(terms, canonText);
+  const skills = terms.filter(t => SKILL_STEMS.has(t));
+  if (!skills.length) return base;
+  const choice = skills.length >= 2 && ALTERNATIVES.test(requirement);
+  const hit = choice ? skills.some(t => canonText.includes(t)) : skills.every(t => canonText.includes(t));
+  return hit ? Math.max(base, 0.8) : base;
+}
+
+/* Lines about willingness or logistics (shifts, relocation, notice period,
+   office days) cannot be shown by a CV, so they are confirmed with the
+   candidate instead of graded against it. */
+const LOGISTICS = /\b(?:shifts?|rotational|relocat\w*|willing(?:ness)? to|ready to|open to|comfortable (?:with|working)|travel\w*|notice period|immediate joiner|work from office|wfo|wfh|hybrid|on-?site|night|weekend)\b/i;
+export function isLogistics(requirement: string): boolean { return LOGISTICS.test(requirement); }
 
 export function requirementTerms(text: string): string[] {
   const out: string[] = [];

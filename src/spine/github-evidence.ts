@@ -18,7 +18,7 @@
    analyst can say a project exists and what it is described as, not that
    the code is good. An account that has not proved ownership is a claim. */
 
-import { requirementTerms, canon, weightedShare } from './terms.ts';
+import { requirementTerms, canon, requirementShare } from './terms.ts';
 import type { GithubSnapshot } from './connectors.ts';
 import type { LlmProvider } from './providers/llm.ts';
 import { numbersAreGrounded } from './intelligence.ts';
@@ -71,7 +71,7 @@ export function candidateFindings(snapshot: GithubSnapshot, requirement: string)
     const matched = terms.filter(t => text.includes(t));
     if (!matched.length) continue;
     scored.push({
-      share: weightedShare(terms, text),
+      share: requirementShare(requirement, text, terms),
       f: {
         kind: 'repo', name: r.name, url: r.url, matched,
         detail: [r.language, r.description, r.stars ? `${r.stars} stars` : ''].filter(Boolean).join(' · '),
@@ -83,7 +83,7 @@ export function candidateFindings(snapshot: GithubSnapshot, requirement: string)
     const matched = terms.filter(t => text.includes(t));
     if (!matched.length) continue;
     scored.push({
-      share: weightedShare(terms, text),
+      share: requirementShare(requirement, text, terms),
       f: { kind: 'merged_pr', name: `${p.repo}: ${p.title}`, url: p.url, matched, detail: 'Merged pull request to a project the candidate does not own' },
     });
   }

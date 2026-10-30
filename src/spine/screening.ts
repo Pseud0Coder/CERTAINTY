@@ -26,7 +26,7 @@
    never its structure. */
 
 import { structureResume, type ResumeFields } from './agents.ts';
-import { requirementTerms, canon, SKILL_TERMS, weightedShare } from './terms.ts';
+import { requirementTerms, canon, SKILL_TERMS, requirementShare, isLogistics } from './terms.ts';
 import { extract, sanitize } from './quarantine.ts';
 import { normalizeModelText } from './contracts.ts';
 import type { LlmProvider } from './providers/llm.ts';
@@ -63,6 +63,10 @@ export interface Rubric {
      scorecard stays 3+3) but they are never ignored: each is checked, and a
      must-have with no evidence counts toward the cap. */
   extras: Requirement[];
+  /* Willingness and logistics lines, confirmed with the candidate. */
+  confirm: string[];
+  /* A JD that welcomes freshers: experience counts for less. */
+  entryLevel: boolean;
   producer: 'model' | 'scripted';
 }
 
@@ -95,8 +99,9 @@ export interface ScreeningResult {
   capReason: string | null;
   summary: string;
   otherRequirements: OtherRequirement[];
+  confirm: string[];
   nextSteps: { recruiter: NextStep[]; candidate: NextStep[] };
-  facts: { years: number | null; statedYears: number | null; minYears: number | null; roles: number; bullets: number; quantifiedBullets: number; skillsRequired: string[]; skillsFound: string[]; skillsMissing: string[] };
+  facts: { entryLevel: boolean; years: number | null; statedYears: number | null; minYears: number | null; roles: number; bullets: number; quantifiedBullets: number; skillsRequired: string[]; skillsFound: string[]; skillsMissing: string[] };
   producer: 'model' | 'scripted';
   github: GithubAnalysis | null;
 }
@@ -278,6 +283,10 @@ function shortTitle(requirement: string): string {
   return title ? title[0]!.toUpperCase() + title.slice(1) : 'Role requirement';
 }
 
+export function isEntryLevel(jd: string): boolean {
+  return /\bfreshers?\b|entry[- ]level|\b0\s*(?:-|\u2013|to)\s*\d+\s*(?:years?|yrs?)/i.test(jd);
+}
+
 const YEARS_RE = /\d{1,2}\s*\+?\s*(?:(?:-|\u2013|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)\b/i;
 const YEARS_ALL = /(?:(?:at least|minimum(?: of)?|min\.?)\s*)?(\d{1,2})\s*\+?\s*(?:(?:-|\u2013|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)\b/gi;
 /* A line about the company, not the candidate: "founded 25 years ago". */
@@ -334,13 +343,14 @@ function requirementLines(jd: string): JdLine[] {
     .map(l => ({ text: l.trim().replace(/[.\s]+$/, ''), priority: (/nice|preferred|bonus|plus/i.test(l) ? 'nice' : 'must') as Priority }));
 }
 
-function buildAxes(roleAxes: Array<{ title: string; requirement: string; priority: Priority }>, minYears: number | null, skills: string[]): RubricAxis[] {
+function buildAxes(roleAxes: Array<{ title: string; requirement: string; priority: Priority }>, minYears: number | null, skills: string[], entryLevel = false): RubricAxis[] {
   const universal: RubricAxis[] = UNIVERSAL.map(u => ({
     ...u, category: 'universal' as const,
+    ...(u.id === 'experience' && entryLevel ? { priority: 'nice' as const, weight: 1 } : {}),
     requirement: u.id === 'skills'
       ? (skills.length ? `The stack the JD names: ${skills.join(', ')}` : 'The technical skills and tools the JD requires')
       : u.id === 'experience'
-        ? (minYears ? `${minYears}+ years of relevant experience` : 'Seniority and years that match the level the JD implies')
+        ? (entryLevel ? 'Open to freshers: experience is a bonus, not a minimum' : minYears ? `${minYears}+ years of relevant experience` : 'Seniority and years that match the level the JD implies')
         : 'Measurable outcomes (figures, scale, business impact) in past roles',
   }));
   const used = new Set<string>(UNIVERSAL_TITLES);
@@ -359,9 +369,11 @@ function buildAxes(roleAxes: Array<{ title: string; requirement: string; priorit
 export function scriptedRubric(jd: string): Rubric {
   const minYears = jdMinYears(jd);
   const skills = jdSkills(jd);
-  const lines = requirementLines(jd)
+  const all = requirementLines(jd)
     .filter(l => !(YEARS_RE.test(l.text) && requirementTerms(l.text.replace(YEARS_RE, '')).length < 3))
     .filter(l => l.text.length >= 12);
+  const confirm = all.filter(l => isLogistics(l.text)).map(l => l.text).slice(0, 5);
+  const lines = all.filter(l => !isLogistics(l.text));
   const ordered = [...lines.filter(l => l.priority === 'must'), ...lines.filter(l => l.priority === 'nice')];
   /* Skip lines that only restate the skills list: they add no axis. */
   const picked: JdLine[] = [];
@@ -373,7 +385,8 @@ export function scriptedRubric(jd: string): Rubric {
   const roleAxes = picked.map(l => ({ title: shortTitle(l.text), requirement: l.text, priority: l.priority }));
   const extras = ordered.filter(l => !picked.includes(l) && !picked.some(p => norm(p.text) === norm(l.text)))
     .slice(0, 8).map(l => ({ requirement: l.text, priority: l.priority }));
-  return { jobTitle: jdTitle(jd), minYears, skills, axes: buildAxes(roleAxes, minYears, skills), extras, producer: 'scripted' };
+  const entryLevel = isEntryLevel(jd);
+  return { jobTitle: jdTitle(jd), minYears, skills, axes: buildAxes(roleAxes, minYears, skills, entryLevel), extras, confirm, entryLevel, producer: 'scripted' };
 }
 
 interface RubricOut {
@@ -428,7 +441,7 @@ function validateRubric(out: RubricOut | null, jd: string): Rubric | null {
     if (!a || typeof a.requirement !== 'string' || typeof a.title !== 'string') continue;
     const requirement = a.requirement.trim().replace(/[.\s]+$/, '').slice(0, 220);
     const terms = [...new Set(requirementTerms(requirement))];
-    if (requirement.length < 8 || !terms.length) continue;
+    if (requirement.length < 8 || !terms.length || isLogistics(requirement)) continue;
     const backed = terms.filter(t => jdNorm.includes(t)).length / terms.length;
     if (backed < 0.6) continue;
     axes.push({
@@ -447,7 +460,7 @@ function validateRubric(out: RubricOut | null, jd: string): Rubric | null {
   const consider = (text: string, priority: Priority) => {
     const requirement = text.trim().replace(/[.\s]+$/, '').slice(0, 220);
     const terms = [...new Set(requirementTerms(requirement))];
-    if (requirement.length < 8 || !terms.length || taken.has(norm(requirement))) return;
+    if (requirement.length < 8 || !terms.length || isLogistics(requirement) || taken.has(norm(requirement))) return;
     if (terms.filter(t => jdNorm.includes(t)).length / terms.length < 0.6) return;
     if (axes.some(a => corpusShare(a.requirement, requirement) >= 0.8 && corpusShare(requirement, a.requirement) >= 0.8)) return;
     taken.add(norm(requirement));
@@ -457,7 +470,8 @@ function validateRubric(out: RubricOut | null, jd: string): Rubric | null {
     if (e && typeof e.requirement === 'string') consider(e.requirement, e.priority === 'nice' ? 'nice' : 'must');
   }
   for (const e of scriptedRubric(jd).extras) consider(e.requirement, e.priority);
-  return { jobTitle: title, minYears: years ?? jdMinYears(jd), skills: mergedSkills, axes: buildAxes(axes, years ?? jdMinYears(jd), mergedSkills), extras: extras.slice(0, 8), producer: 'model' };
+  const entryLevel = isEntryLevel(jd);
+  return { jobTitle: title, minYears: years ?? jdMinYears(jd), skills: mergedSkills, axes: buildAxes(axes, years ?? jdMinYears(jd), mergedSkills, entryLevel), extras: extras.slice(0, 8), confirm: scriptedRubric(jd).confirm, entryLevel, producer: 'model' };
 }
 
 export async function extractRubric(jd: string, llm?: LlmProvider): Promise<Rubric> {
@@ -525,7 +539,7 @@ function bestLine(lines: string[], requirement: string): { line: string; share: 
   if (!terms.length) return null;
   let best: { line: string; share: number } | null = null;
   for (const line of lines) {
-    const share = weightedShare(terms, canon(line));
+    const share = requirementShare(requirement, canon(line), terms);
     if (share > 0 && (!best || share > best.share || (share === best.share && hasMetric(line) && !hasMetric(best.line)))) best = { line, share };
   }
   return best;
@@ -534,7 +548,7 @@ function bestLine(lines: string[], requirement: string): { line: string; share: 
 function corpusShare(corpus: string, requirement: string): number {
   const terms = [...new Set(requirementTerms(requirement))];
   if (!terms.length) return 0;
-  return weightedShare(terms, canon(corpus));
+  return requirementShare(requirement, canon(corpus), terms);
 }
 
 function skillsFound(cv: string, skills: string[]): { found: string[]; missing: string[] } {
@@ -579,6 +593,12 @@ function scriptedCriterion(axis: RubricAxis, cv: string, lines: string[], facts:
     }
   }
   if (axis.id === 'experience') {
+    if (rubric.entryLevel) {
+      /* Freshers welcome: any experience is a bonus and none is not a gap. */
+      const y = facts.years ?? facts.stated?.years ?? 0;
+      return mk(y >= 2 ? 5 : y >= 1 ? 4 : 3, y > 0 ? `${y} years of experience; the JD welcomes freshers.` : 'The JD welcomes freshers, so no experience is required.',
+        y > 0 ? { source: 'computed', quote: `${y} years across ${facts.fields.roles.length} roles` } : null, 'code');
+    }
     if (facts.years !== null && rubric.minYears) {
       const grade = experienceGrade(facts.years, rubric.minYears);
       return mk(grade, `${facts.years} years across ${facts.fields.roles.length} roles against ${rubric.minYears}+ required.`,
@@ -625,12 +645,23 @@ function scriptedCriterion(axis: RubricAxis, cv: string, lines: string[], facts:
   return mk(1, 'No evidence of this requirement was found in the CV.', null);
 }
 
+/* Years only count when they are in the right field. If the CV names almost
+   none of the skills the JD lists, a long career elsewhere is not experience
+   for this role, so Experience Level is held to weak. */
+export function relevanceGate(criteria: Criterion[], rubric: Rubric): Criterion[] {
+  const skills = criteria.find(c => c.id === 'skills');
+  if (!skills || skills.grade > 1 || rubric.skills.length < 3) return criteria;
+  return criteria.map(c => c.id === 'experience' && c.grade > 2
+    ? { ...c, grade: 2, label: labelFor(2), rationale: `${c.rationale} The CV names almost none of the JD's skills, so these years are not counted in full.`, note: 'Held to weak: the experience is in another field.' }
+    : c);
+}
+
 export async function gradeAll(
   rubric: Rubric, cv: string, facts: CvFacts, gh: GithubLine[], llm?: LlmProvider,
 ): Promise<{ criteria: Criterion[]; producer: 'model' | 'scripted' }> {
   const lines = cvLines(cv);
   const scripted = rubric.axes.map(a => scriptedCriterion(a, cv, lines, facts, rubric, gh));
-  if (!llm) return { criteria: scripted, producer: 'scripted' };
+  if (!llm) return { criteria: relevanceGate(scripted, rubric), producer: 'scripted' };
 
   const ghText = gh.slice(0, 40).map((x, i) => `G${i + 1}: ${x.text}`).join('\n');
   const user = [
@@ -640,7 +671,7 @@ export async function gradeAll(
     ...(ghText ? ['', 'GITHUB PROJECT LINES:', '"""', ghText, '"""'] : []),
   ].join('\n');
   const res = await llm.complete<GradeOut>({ system: GRADE_SYSTEM, user, schema: GRADE_SCHEMA, schemaName: 'screening_grades', tier: 'strong' });
-  if (!res || !Array.isArray(res.value?.grades)) return { criteria: scripted, producer: 'scripted' };
+  if (!res || !Array.isArray(res.value?.grades)) return { criteria: relevanceGate(scripted, rubric), producer: 'scripted' };
 
   const ghCorpus = gh.map(x => x.text).join('\n');
   let modelUsed = false;
@@ -688,7 +719,7 @@ export async function gradeAll(
       rationale: rationale || fallback.rationale,
     };
   });
-  return { criteria, producer: modelUsed ? 'model' : 'scripted' };
+  return { criteria: relevanceGate(criteria, rubric), producer: modelUsed ? 'model' : 'scripted' };
 }
 
 /* The requirements that are not tiles: covered when a CV line names every
@@ -700,6 +731,8 @@ export function checkOthers(extras: Requirement[], cv: string, gh: GithubLine[])
     const best = bestLine(lines, e.requirement);
     if (best && best.share >= 0.8) return { ...e, status: 'covered', evidence: { source: 'cv', quote: best.line.slice(0, 220) } };
     if (best && best.share >= 0.5) return { ...e, status: 'partial', evidence: { source: 'cv', quote: best.line.slice(0, 220) } };
+    /* No single line covers it, but the CV as a whole names most of it. */
+    if (best && corpusShare(cv, e.requirement) >= 0.5) return { ...e, status: 'partial', evidence: { source: 'cv', quote: best.line.slice(0, 220) } };
     const g = bestLine(gh.map(x => x.text), e.requirement);
     if (g && g.share >= 0.6) {
       const hit = gh.find(x => x.text === g.line)!;
@@ -759,11 +792,11 @@ function buildSummary(criteria: Criterion[], overall: number, rec: Recommendatio
 
 export function buildNextSteps(
   criteria: Criterion[], facts: ScreeningResult['facts'], rec: Recommendation, capReason: string | null, hasGithub: boolean,
-  others: OtherRequirement[] = [],
+  others: OtherRequirement[] = [], confirm: string[] = [],
 ): ScreeningResult['nextSteps'] {
   const recruiter: NextStep[] = [];
   const candidate: NextStep[] = [];
-  const weak = criteria.filter(c => c.grade <= 3).sort((a, b) => a.grade - b.grade || b.weight - a.weight);
+  const weak = criteria.filter(c => c.grade <= 3 && !(c.id === 'experience' && facts.entryLevel)).sort((a, b) => a.grade - b.grade || b.weight - a.weight);
 
   recruiter.push({
     text: rec === 'Strong Match' ? 'Shortlist and book a screening call.'
@@ -806,6 +839,10 @@ export function buildNextSteps(
   for (const o of others.filter(o => o.status !== 'covered' && o.priority === 'must').slice(0, 3)) {
     recruiter.push({ text: o.status === 'missing' ? `Ask about "${o.requirement}": the CV gives no evidence for it.` : `Confirm "${o.requirement}": the CV only partly covers it.` });
     candidate.push({ text: o.status === 'missing' ? `The job asks for "${o.requirement}" and your CV does not show it. Add it if you have it, or say what you have that is closest.` : `Make "${o.requirement}" explicit in a bullet: name the tool or method and the outcome.` });
+  }
+  for (const line of confirm.slice(0, 3)) {
+    recruiter.push({ text: `Confirm with the candidate: ${line}. A CV cannot show this.` });
+    candidate.push({ text: `Be ready to confirm: ${line}.` });
   }
   if (!hasGithub && facts.skillsRequired.length >= 3) {
     recruiter.push({ text: 'Ask for a GitHub or portfolio link to verify the technical skills.' });
@@ -855,15 +892,15 @@ export async function screen(input: ScreenInput): Promise<ScreeningResult> {
   const resultFacts: ScreeningResult['facts'] = {
     years: facts.years, statedYears: facts.stated?.years ?? null, minYears: rubric.minYears, roles: facts.fields.roles.length,
     bullets: facts.bullets.length, quantifiedBullets: facts.quantified.length,
-    skillsRequired: rubric.skills, skillsFound: sk.found, skillsMissing: sk.missing,
+    skillsRequired: rubric.skills, skillsFound: sk.found, skillsMissing: sk.missing, entryLevel: rubric.entryLevel,
   };
   const github = input.analyseGithub ? await input.analyseGithub(rubric) : null;
   const producer = rubric.producer === 'model' || graded.producer === 'model' ? 'model' : 'scripted';
 
   return {
-    jobTitle: rubric.jobTitle, criteria: graded.criteria, overall, recommendation, capReason, otherRequirements,
+    jobTitle: rubric.jobTitle, criteria: graded.criteria, overall, recommendation, capReason, otherRequirements, confirm: rubric.confirm,
     summary: buildSummary(graded.criteria, overall, recommendation, rubric.jobTitle, otherRequirements),
-    nextSteps: buildNextSteps(graded.criteria, resultFacts, recommendation, capReason, !!input.github, otherRequirements),
+    nextSteps: buildNextSteps(graded.criteria, resultFacts, recommendation, capReason, !!input.github, otherRequirements, rubric.confirm),
     facts: resultFacts, producer, github,
   };
 }
