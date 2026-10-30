@@ -71,3 +71,10 @@ test('years in another field are not counted in full', () => {
   const few = relevanceGate([mk('skills', 1), mk('experience', 5)], { skills: ['java'] } as Parameters<typeof relevanceGate>[1]);
   assert.equal(few.find(c => c.id === 'experience')!.grade, 5, 'too few listed skills to judge relevance');
 });
+
+test('"advanced Excel" in a JD is met by "MS Excel" in a CV, and "excel at" is still not a skill', async () => {
+  const c = GOLDEN.find(x => x.id === 'accounts-good')!;
+  const r = await screen({ cvText: c.cv, jdText: c.jd });
+  assert.ok(r.facts.skillsFound.includes('advanced excel'));
+  assert.ok(!r.facts.skillsRequired.includes('excel'));
+});

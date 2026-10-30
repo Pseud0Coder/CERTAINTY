@@ -551,9 +551,17 @@ function corpusShare(corpus: string, requirement: string): number {
   return requirementShare(requirement, canon(corpus), terms);
 }
 
+/* A JD that asks for "advanced Excel" is met by a CV that says "Excel" or
+   "MS Excel": the CV rarely repeats the adjective. */
+const SATISFIED_BY: Record<string, string[]> = {
+  'advanced excel': ['advanced excel', 'ms excel', 'microsoft excel', 'excel'],
+  'ms excel': ['ms excel', 'microsoft excel', 'excel'],
+  'microsoft excel': ['ms excel', 'microsoft excel', 'excel'],
+};
+
 function skillsFound(cv: string, skills: string[]): { found: string[]; missing: string[] } {
   const cvCanon = canon(cv);
-  const found = skills.filter(s => termRegex(s).test(cvCanon));
+  const found = skills.filter(s => (SATISFIED_BY[s] ?? [s]).some(v => termRegex(v).test(cvCanon)));
   return { found, missing: skills.filter(s => !found.includes(s)) };
 }
 
