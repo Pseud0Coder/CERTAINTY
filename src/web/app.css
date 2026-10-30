@@ -792,3 +792,7 @@ main.apply{display:block;flex:none;height:auto;overflow:visible;max-width:820px;
 .ch-table{width:100%;border-collapse:collapse;margin-top:var(--space-2)}
 .ch-table th,.ch-table td{text-align:start;padding:3px var(--space-2);border-top:var(--hairline) solid var(--rule);font-variant-numeric:tabular-nums}
 .ch-table th{font:var(--type-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase}
+@media (min-width:900px){
+  .chart-overview{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+  .chart-overview .chart-radar{grid-row:span 2}
+}

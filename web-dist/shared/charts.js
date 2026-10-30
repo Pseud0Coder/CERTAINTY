@@ -35,7 +35,7 @@ function figure(spec, svg, table, summary) {
 }
 const f1 = (n) => (Math.round(n * 10) / 10).toString();
 function radar(spec) {
-    const W = 340, H = 300, cx = W / 2, cy = 150, r = 100;
+    const W = 480, H = 300, cx = W / 2, cy = 150, r = 98;
     const g = radarGeometry(spec.axes.map(a => a.value), spec.max, cx, cy, r);
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'ch-svg' });
     for (const ring of g.ringPaths)
@@ -52,13 +52,16 @@ function radar(spec) {
     return figure(spec, svg, dataTable(['Axis', `Grade (of ${spec.max})`], spec.axes.map(a => [a.label, f1(a.value)])), `Lowest: ${low.label}, ${f1(low.value)} of ${spec.max}.`);
 }
 function bars(spec) {
-    const rowH = 38, labelW = 150, W = 420, pad = 8;
-    const max = spec.max ?? niceMax(Math.max(...spec.rows.flatMap(r => [r.value, r.target ?? 0])));
+    const rowH = 38, labelW = 128, W = 360, pad = 8;
+    /* Rows can have different units (years, skills, bullets), so each row has
+       its own scale: to its requirement when it has one, else to a round figure. */
+    const maxFor = (row) => spec.max ?? (row.target !== undefined ? Math.max(row.value, row.target) * 1.15 : niceMax(row.value));
     const H = spec.rows.length * rowH + pad * 2;
-    const barW = W - labelW - 56;
+    const barW = W - labelW - 44;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'ch-svg' });
     spec.rows.forEach((row, i) => {
         const y = pad + i * rowH;
+        const max = maxFor(row) || 1;
         const w = Math.max(row.value > 0 ? 2 : 0, (row.value / max) * barW);
         svg.append(el('text', { x: 0, y: y + 22, class: 'ch-label' }, row.label.length > 24 ? `${row.label.slice(0, 23)}…` : row.label));
         svg.append(el('rect', { x: labelW, y: y + 8, width: barW, height: 14, rx: 3, class: 'ch-track' }));
@@ -149,8 +152,8 @@ export function renderChart(input) {
         case 'funnel': return funnel(spec);
     }
 }
-export function chartRow(...charts) {
-    const row = html('div', 'chart-row');
+export function chartRow(cls, ...charts) {
+    const row = html('div', `chart-row ${cls}`.trim());
     for (const c of charts)
         if (c)
             row.append(c);
