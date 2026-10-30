@@ -274,11 +274,22 @@ const UNIVERSAL: Array<Pick<RubricAxis, 'id' | 'title' | 'priority' | 'weight'>>
 const UNIVERSAL_TITLES = new Set(UNIVERSAL.map(u => u.title.toLowerCase()));
 const WEIGHT: Record<Priority, number> = { must: 2, nice: 1 };
 
+/* A tile title is the subject of the requirement: no years phrase (that is
+   the Experience tile's), no "strong working knowledge of", and no dangling
+   half phrase when it has to be cut. */
 function shortTitle(requirement: string): string {
-  const head = requirement.split(/[:;,–—]|\s-\s|\(|\sincluding\s/i)[0]!.trim();
-  const words = head.replace(/^(experience|strong|deep|proven|solid|excellent)\s+(with|in|of)?\s*/i, '').split(/\s+/).filter(Boolean);
-  const kept = words.slice(0, 7);
-  while (kept.length > 2 && /^(at|in|of|for|with|and|or|to|on|a|an|the)$/i.test(kept[kept.length - 1]!)) kept.pop();
+  const stripped = requirement
+    .replace(/^\s*\d{1,2}\s*\+?\s*(?:years?|yrs?)\s*(?:of\s+|in\s+)?/i, '')
+    .replace(/^(?:(?:strong|working|good|deep|proven|solid|excellent|hands-on|extensive|basic|sound|thorough|demonstrated)\s+)*(?:(?:knowledge|experience|expertise|understanding|exposure|familiarity)\s+(?:of|in|with|on)\s+)?/i, '')
+    .replace(/^experience\s+/i, '');
+  const head = stripped.split(/[:;,\u2013\u2014]|\s-\s|\(|\sincluding\s/i)[0]!.trim();
+  const words = head.split(/\s+/).filter(Boolean);
+  let kept = words.slice(0, 7);
+  if (words.length > 7) {
+    const cut = kept.map((w, i) => (/^(and|or|with)$/i.test(w) ? i : -1)).filter(i => i >= 2).pop();
+    if (cut !== undefined) kept = kept.slice(0, cut);
+  }
+  while (kept.length > 2 && /^(at|in|of|for|with|and|or|to|on|a|an|the|advanced)$/i.test(kept[kept.length - 1]!)) kept.pop();
   const title = kept.join(' ');
   return title ? title[0]!.toUpperCase() + title.slice(1) : 'Role requirement';
 }

@@ -94,3 +94,11 @@ test('a CV that only states its years is never a strong match, and says why', as
   assert.equal(r.recommendation, 'Moderate Match');
   assert.match(String(r.capReason), /no role has dates/);
 });
+
+test('a tile title drops the years phrase, which belongs to the Experience tile', async () => {
+  const c = GOLDEN.find(x => x.id === 'accounts-good')!;
+  const r = await screen({ cvText: c.cv, jdText: c.jd });
+  const titles = r.criteria.filter(k => k.category === 'role').map(k => k.title);
+  assert.ok(titles.every(t => !/^\d/.test(t)), `titles: ${titles.join(' | ')}`);
+  assert.ok(titles.some(t => /accounting/i.test(t)));
+});
