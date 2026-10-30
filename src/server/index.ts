@@ -64,6 +64,11 @@ else if ((store.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: numb
   console.warn('no accounts exist: set CERTAINTY_OWNER_EMAIL and CERTAINTY_OWNER_PASSWORD to create the first one');
 }
 applyRetention(store);
+/* Retention is also a daily job, not only a boot step (ADR-0028). */
+setInterval(() => {
+  try { const n = applyRetention(store); if (n) console.log(`retention removed ${n} records`); }
+  catch (err) { console.error('retention failed', err instanceof Error ? err.message : err); }
+}, 24 * 3600 * 1000).unref();
 
 /* SSE hub plus pipeline handlers, composed on the single event bus (A0). */
 const sseClients = new Map<string, Set<ServerResponse>>();

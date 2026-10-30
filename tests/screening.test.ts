@@ -357,3 +357,59 @@ test('screening API: a GitHub failure never blocks the screening', async () => {
     assert.equal(res.body.screening.result.github, null);
   } finally { await t.close(); }
 });
+
+/* ---------- retention, erase and export (ADR-0028) ---------- */
+
+import { applyRetention, gdprErase, gdprExport, screeningRetentionDays } from '../src/spine/retention.ts';
+
+function seedScreening(store: Store, tenantId: string, userId: string, daysAgo: number, id: string): void {
+  store.insertScreening({ tenantId }, userId, {
+    id, jobTitle: 'Role', overall: 3, recommendation: 'Moderate Match', result: { quote: 'a CV line' },
+    cvText: 'cv text', jdText: 'jd text', meta: { label: id }, createdAt: new Date(Date.now() - daysAgo * 24 * 3600 * 1000).toISOString(),
+  });
+}
+
+test('screenings past the retention window are deleted and audited, newer ones stay', () => {
+  const store = new Store(':memory:');
+  const ids = seedDemo(store);
+  const rec = store.userByEmail('recruiter@gennext.demo')!;
+  seedScreening(store, ids.tenantId, rec.id, 120, 'old');
+  seedScreening(store, ids.tenantId, rec.id, 10, 'new');
+  assert.equal(applyRetention(store), 1);
+  assert.deepEqual(store.listScreenings({ tenantId: ids.tenantId }, rec.id).map(s => s.id), ['new']);
+  assert.ok(store.auditList({ tenantId: ids.tenantId }).some(e => e.action === 'screening_retention_applied'));
+});
+
+test('the retention window is configurable and can be switched off', () => {
+  assert.equal(screeningRetentionDays({}), 90);
+  assert.equal(screeningRetentionDays({ CERTAINTY_SCREENING_RETENTION_DAYS: '30' }), 30);
+  assert.equal(screeningRetentionDays({ CERTAINTY_SCREENING_RETENTION_DAYS: 'oops' }), 90);
+  const prev = process.env.CERTAINTY_SCREENING_RETENTION_DAYS;
+  process.env.CERTAINTY_SCREENING_RETENTION_DAYS = '0';
+  try {
+    const store = new Store(':memory:');
+    const ids = seedDemo(store);
+    const rec = store.userByEmail('recruiter@gennext.demo')!;
+    seedScreening(store, ids.tenantId, rec.id, 400, 'ancient');
+    assert.equal(applyRetention(store), 0, 'zero keeps screenings until deleted');
+    assert.equal(store.listScreenings({ tenantId: ids.tenantId }, rec.id).length, 1);
+  } finally {
+    if (prev === undefined) delete process.env.CERTAINTY_SCREENING_RETENTION_DAYS; else process.env.CERTAINTY_SCREENING_RETENTION_DAYS = prev;
+  }
+});
+
+test('a data subject export includes their screenings and erase removes them, only theirs', () => {
+  const store = new Store(':memory:');
+  const ids = seedDemo(store);
+  const ctx = { tenantId: ids.tenantId };
+  const nadia = store.userByEmail('nadia@gennext.demo')!;
+  const rec = store.userByEmail('recruiter@gennext.demo')!;
+  seedScreening(store, ids.tenantId, nadia.id, 1, 'mine');
+  seedScreening(store, ids.tenantId, rec.id, 1, 'agency');
+  const exported = gdprExport(store, ctx, ids.candidateId) as { screenings: Array<{ id: string }> };
+  assert.deepEqual(exported.screenings.map(s => s.id), ['mine']);
+  gdprErase(store, ctx, ids.candidateId, 'Nadia Rowe');
+  assert.equal(store.listScreenings(ctx, nadia.id).length, 0);
+  assert.equal(store.listScreenings(ctx, rec.id).length, 1, 'the agency keeps its own screening');
+  assert.ok(store.auditList(ctx).some(e => e.action === 'gdpr_erase' && /1 screenings/.test(e.target)));
+});
