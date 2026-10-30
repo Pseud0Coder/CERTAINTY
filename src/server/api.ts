@@ -795,7 +795,11 @@ route('GET', '/api/recruiter/candidates/:id/connectors', ['recruiter', 'hr', 'ad
 /* ---------- screening (ADR-0027): a CV against a JD, any signed-in role ---------- */
 
 const SCREEN_ROLES: Role[] = ['recruiter', 'hr', 'admin', 'candidate'];
-const SCREEN_DAILY_LIMIT = Math.max(1, Number(process.env.CERTAINTY_SCREEN_DAILY_LIMIT ?? 40) || 40);
+/* Read at request time so a deployment can change them without a rebuild. A
+   per-user cap stops one account running away; the instance cap stops a public
+   demo from spending the model key (ADR-0028). */
+const screenUserLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_DAILY_LIMIT ?? 40) || 40);
+const screenInstanceLimit = () => Math.max(1, Number(process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT ?? 300) || 300);
 
 /* A document part is either pasted text or an uploaded PDF or Word file. */
 async function screeningDoc(part: any, label: 'cv' | 'jd'): Promise<{ text: string; filename: string | null }> {
@@ -824,7 +828,8 @@ route('POST', '/api/screenings', SCREEN_ROLES, async r => {
   const store = r.deps.store;
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   /* Running jobs count too, so parallel requests cannot slip past the cap. */
-  if (store.countScreeningsSince(r.ctx, r.user.id, since) + screeningJobs.runningFor(r.user.id) >= SCREEN_DAILY_LIMIT) throw new ApiError(429, 'daily_limit_reached');
+  if (store.countScreeningsSince(r.ctx, r.user.id, since) + screeningJobs.runningFor(r.user.id) >= screenUserLimit()) throw new ApiError(429, 'daily_limit_reached');
+  if (store.countAllScreeningsSince(since) + screeningJobs.running() >= screenInstanceLimit()) throw new ApiError(429, 'instance_limit_reached');
   const cv = await screeningDoc(r.body?.cv, 'cv');
   const jd = await screeningDoc(r.body?.jd, 'jd');
   const cvClean = cleanText(cv.text, MAX_CV_CHARS);

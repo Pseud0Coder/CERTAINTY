@@ -238,6 +238,11 @@ export class Store {
   deleteUserScreenings(ctx: Ctx, userId: string): number {
     return Number(this.db.prepare('DELETE FROM screenings WHERE tenant_id = ? AND user_id = ?').run(ctx.tenantId, userId).changes);
   }
+  /* Whole instance, all tenants: the cost guard for a public demo. */
+  countAllScreeningsSince(sinceIso: string): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM screenings WHERE created_at >= ?')
+      .get(sinceIso) as { n: number }).n;
+  }
   countScreeningsSince(ctx: Ctx, userId: string, sinceIso: string): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM screenings WHERE tenant_id = ? AND user_id = ? AND created_at >= ?')
       .get(ctx.tenantId, userId, sinceIso) as { n: number }).n;

@@ -516,3 +516,30 @@ test('the health check answers without a session and reports the database and mo
   assert.equal(down.status, 503, 'a dead database is reported, so a monitor can alert');
   assert.equal(down.body.ok, false);
 });
+
+/* ---------- cost caps (ADR-0028) ---------- */
+
+test('a per-user and an instance-wide daily cap stop screenings before any work starts', async () => {
+  const t = await boot();
+  const prevUser = process.env.CERTAINTY_SCREEN_DAILY_LIMIT;
+  const prevAll = process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT;
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const nadia = t.as('nadia@gennext.demo');
+    process.env.CERTAINTY_SCREEN_DAILY_LIMIT = '1';
+    assert.equal((await rec.screen({ cv: { text: CV }, jd: { text: JD } })).status, 200);
+    const second = await rec.post('/api/screenings', { cv: { text: CV }, jd: { text: JD } });
+    assert.equal(second.status, 429);
+    assert.equal(second.body.error, 'daily_limit_reached');
+
+    process.env.CERTAINTY_SCREEN_DAILY_LIMIT = '40';
+    process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT = '1';
+    const other = await nadia.post('/api/screenings', { cv: { text: CV }, jd: { text: JD } });
+    assert.equal(other.status, 429, 'another user is stopped by the instance cap');
+    assert.equal(other.body.error, 'instance_limit_reached');
+  } finally {
+    if (prevUser === undefined) delete process.env.CERTAINTY_SCREEN_DAILY_LIMIT; else process.env.CERTAINTY_SCREEN_DAILY_LIMIT = prevUser;
+    if (prevAll === undefined) delete process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT; else process.env.CERTAINTY_SCREEN_INSTANCE_DAILY_LIMIT = prevAll;
+    await t.close();
+  }
+});

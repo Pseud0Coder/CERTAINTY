@@ -15,6 +15,7 @@ const ERRORS = {
     jd_unsupported_format: 'Upload the job description as a PDF or Word (.docx) file.',
     cv_document_too_large: 'That CV file is too large.', jd_document_too_large: 'That job description file is too large.',
     daily_limit_reached: 'Daily screening limit reached. Try again tomorrow.',
+    instance_limit_reached: 'This demo has reached its daily screening capacity. Try again tomorrow.',
     busy: 'The server is busy with other screenings. Try again in a minute.',
     screening_failed: 'The screening did not complete. Try again.',
     job_not_found: 'The server restarted while this was running. Run it again.',
