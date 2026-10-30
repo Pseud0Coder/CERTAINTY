@@ -763,3 +763,32 @@ main.apply{display:block;flex:none;height:auto;overflow:visible;max-width:820px;
 .sc-tri:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
 .sc-decision-word{margin-inline-start:var(--space-2);font:var(--type-caption);color:var(--ink-quiet)}
 .sc-table tr[data-decision="pass"] .sc-decision-word{color:var(--ink-disabled)}
+
+/* ---------- Charts (ADR-0031): SVG on the design tokens, so dark mode follows ---------- */
+.chart-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--space-4);align-items:start}
+.chart{margin:0;padding:var(--space-4);background:var(--sheet);border:var(--hairline) solid var(--rule);border-radius:var(--radius-sheet);box-shadow:var(--elev-sheet)}
+.ch-title{font:var(--type-section);margin-bottom:var(--space-3)}
+.ch-svg{display:block;width:100%;height:auto;max-height:340px;overflow:visible}
+.ch-label{fill:var(--ink);font:500 12px var(--font-sans)}
+.ch-value{fill:var(--ink-quiet);font:500 12px var(--font-sans);font-variant-numeric:tabular-nums}
+.ch-axis{fill:var(--ink-quiet);font:400 11px var(--font-sans)}
+.ch-centre{fill:var(--ink);font:400 26px var(--font-serif)}
+.ch-ring{fill:none;stroke:var(--rule);stroke-width:1}
+.ch-spoke,.ch-grid{stroke:var(--rule);stroke-width:1}
+.ch-area{fill:color-mix(in srgb, var(--accent) 22%, transparent);stroke:var(--accent);stroke-width:2;stroke-linejoin:round}
+.ch-dot{fill:var(--accent)}
+.ch-dot-strong{fill:var(--sheet);stroke:var(--accent);stroke-width:2.5}
+.ch-track{fill:var(--sheet-sunken);stroke:var(--rule);stroke-width:1}
+.ch-track-ring{stroke:var(--rule)}
+.ch-target{stroke:var(--tick);stroke-width:2.5}
+.ch-good{fill:var(--accent)}
+.ch-neutral{fill:var(--ink-disabled)}
+.ch-warn{fill:var(--pastel-orange-ink)}
+.ch-bad{fill:var(--severity-blocking)}
+.ch-slice{stroke:var(--sheet);stroke-width:2}
+.ch-data{margin-top:var(--space-3);font:var(--type-caption);color:var(--ink-quiet)}
+.ch-data summary{cursor:pointer;display:inline-block;padding:2px 0}
+.ch-data summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.ch-table{width:100%;border-collapse:collapse;margin-top:var(--space-2)}
+.ch-table th,.ch-table td{text-align:start;padding:3px var(--space-2);border-top:var(--hairline) solid var(--rule);font-variant-numeric:tabular-nums}
+.ch-table th{font:var(--type-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase}
