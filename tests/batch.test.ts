@@ -197,3 +197,21 @@ test('triage is staff only, tenant scoped, and a decision never changes the scor
     assert.equal((await hr.post(`/api/batches/${id}/items/${sid}/decision`, { decision: 'shortlist' })).status, 200);
   } finally { await t.close(); }
 });
+
+test('CVs arrive as real Word and PDF files, and the file name is kept', async () => {
+  const { readFileSync } = await import('node:fs');
+  const t = await boot();
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const id = (await rec.post('/api/batches', { jd: { text: jd } })).body.batch.id;
+    for (const f of ['cv-word.docx', 'cv-two-column.pdf']) {
+      const b64 = readFileSync(new URL(`./fixtures/${f}`, import.meta.url)).toString('base64');
+      const res = await rec.post(`/api/batches/${id}/cvs`, { cv: { filename: f, dataBase64: b64 } });
+      assert.equal(res.status, 202, `${f}: ${JSON.stringify(res.body)}`);
+    }
+    const b = await rec.settle(id);
+    assert.equal(b.leaderboard.length, 2);
+    assert.deepEqual(b.leaderboard.map((x: any) => x.file).sort(), ['cv-two-column.pdf', 'cv-word.docx']);
+    assert.equal((await rec.post(`/api/batches/${id}/cvs`, { cv: { filename: 'x.pdf', dataBase64: Buffer.from('not a pdf').toString('base64') } })).status, 400);
+  } finally { await t.close(); }
+});

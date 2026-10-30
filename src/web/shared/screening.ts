@@ -4,6 +4,7 @@
    recruiter's list leads for staff, the candidate's for a candidate. */
 import { api } from './api.js';
 import { h, stamp, toast, empty, clear, viewHeader, fileToBase64, setWidthPct } from './dom.js';
+import { renderBatch } from './batch.js';
 
 interface Evidence { source: 'cv' | 'github' | 'computed'; quote: string; ref?: string; url?: string }
 interface Criterion {
@@ -19,13 +20,13 @@ interface Result {
   github: null | { username: string; verified: boolean; repos: number; mergedPrs: number; languages: string[]; activeMonths: number; producer: string;
     requirements: Array<{ id: string; title: string; findings: GithubFinding[]; note: string | null; strong: boolean }> };
 }
-interface Screening {
+export interface Screening {
   id: string; createdAt: string; audience: 'recruiter' | 'candidate'; result: Result;
   meta: { label: string; cvFile: string | null; jdFile: string | null; githubUsername: string | null; githubError: string | null; injectionAttempts: number };
 }
 interface HistoryItem { id: string; jobTitle: string | null; overall: number; recommendation: string; createdAt: string; label: string }
 
-const ERRORS: Record<string, string> = {
+export const ERRORS: Record<string, string> = {
   cv_required: 'Add the CV: upload a file or paste its text.',
   jd_required: 'Add the job description: upload a file or paste its text.',
   cv_too_short: 'The CV text is too short to screen.',
@@ -44,7 +45,7 @@ const ERRORS: Record<string, string> = {
 
 interface JobView { id: string; status: 'running' | 'done' | 'failed'; step: number; steps: string[]; stepLabel: string; resultId: string | null; error: string | null; elapsedMs: number }
 
-const REC_MARK: Record<string, 'confirmed' | 'claimed' | 'gap'> = {
+export const REC_MARK: Record<string, 'confirmed' | 'claimed' | 'gap'> = {
   'Strong Match': 'confirmed', 'Moderate Match': 'claimed', 'Weak Match': 'gap', 'No Match': 'gap',
 };
 
@@ -56,6 +57,26 @@ export async function renderScreening(content: HTMLElement, audience: 'recruiter
       ? 'Score a CV against a strict job description. Every grade rests on a quote from the CV, and a missing must-have caps the result.'
       : 'Check your CV against a job description before you apply. You see the same scorecard a recruiter would, with steps to improve it.'));
 
+  /* Staff can screen one CV or a whole batch against one JD. */
+  const body = h('div', { class: 'sc-body' });
+  if (audience === 'recruiter') {
+    const bar = h('div', { class: 'tabs sc-modes', role: 'tablist' });
+    const modes: Array<[string, string, () => void]> = [
+      ['single', 'One CV', () => { clear(body); void mountSingle(body, audience); }],
+      ['batch', 'Batch', () => { clear(body); void renderBatch(body); }],
+    ];
+    for (const [id, label, open] of modes) {
+      const b = h('button', { class: 'tab', role: 'tab', 'data-mode': id, 'aria-selected': id === 'single' ? 'true' : 'false' }, label);
+      b.addEventListener('click', () => { bar.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t === b ? 'true' : 'false')); open(); });
+      bar.append(b);
+    }
+    content.append(bar);
+  }
+  content.append(body);
+  await mountSingle(body, audience);
+}
+
+async function mountSingle(content: HTMLElement, audience: 'recruiter' | 'candidate'): Promise<void> {
   const cv: Part = { file: null, text: '' };
   const jd: Part = { file: null, text: '' };
   let busy = false;
@@ -165,7 +186,7 @@ export async function renderScreening(content: HTMLElement, audience: 'recruiter
   await loadHistory();
 }
 
-function renderResult(s: Screening, audience: 'recruiter' | 'candidate', onDelete: () => Promise<void>): HTMLElement {
+export function renderResult(s: Screening, audience: 'recruiter' | 'candidate', onDelete?: () => Promise<void>): HTMLElement {
   const r = s.result;
   const root = h('div', { class: 'sc-result' });
 
@@ -227,8 +248,8 @@ function renderResult(s: Screening, audience: 'recruiter' | 'candidate', onDelet
   root.append(h('h2', { class: 'sc-eyebrow mt-6' }, 'Next steps'), tabs, body);
   show(order[0]!);
 
-  const del = h('button', { class: 'btn btn-sm btn-ghost mt-6' }, 'Delete this screening');
-  del.addEventListener('click', () => { if (confirm('Delete this screening and the text it stored?')) void onDelete(); });
+  const del = onDelete ? h('button', { class: 'btn btn-sm btn-ghost mt-6' }, 'Delete this screening') : h('span', {});
+  del.addEventListener('click', () => { if (onDelete && confirm('Delete this screening and the text it stored?')) void onDelete(); });
   root.append(h('div', { class: 'row gap-3 wrap mt-6' }, del,
     h('span', { class: 't-caption' }, `Run ${s.createdAt.slice(0, 16).replace('T', ' ')} UTC${s.meta.cvFile ? ` · ${s.meta.cvFile}` : ''}`)));
   return root;

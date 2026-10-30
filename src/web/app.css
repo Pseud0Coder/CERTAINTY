@@ -729,3 +729,25 @@ main.apply{display:block;flex:none;height:auto;overflow:visible;max-width:820px;
 .sc-progress-list li[data-state="done"]::before{background:var(--accent);border-color:var(--accent)}
 .sc-progress-list li[data-state="now"]{color:var(--ink);font-weight:500}
 .sc-progress-list li[data-state="now"]::before{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)}
+
+/* ---------- Batch (ADR-0030) ---------- */
+.sc-modes{margin:var(--space-6) 0 var(--space-5)}
+.sc-batch-title{font:var(--type-card);letter-spacing:var(--track-view-title);margin:var(--space-4) 0 0}
+.sc-drop{display:flex;align-items:center;justify-content:center;min-height:120px;margin-top:var(--space-2);border:1.5px dashed var(--rule-strong);border-radius:var(--radius-sheet);background:var(--sheet-sunken);color:var(--ink-quiet);font:var(--type-secondary);cursor:pointer;text-align:center;padding:var(--space-4)}
+.sc-drop:hover,.sc-drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.sc-drop:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px}
+.sc-files{list-style:none;margin:var(--space-2) 0 0;padding:0;font:var(--type-caption);color:var(--ink-quiet);display:flex;flex-direction:column;gap:2px}
+.sc-tallies{margin-top:var(--space-3)}
+.sc-table-wrap{overflow-x:auto;border:var(--hairline) solid var(--rule);border-radius:var(--radius-sheet);background:var(--sheet)}
+.sc-table{width:100%;border-collapse:collapse;font:var(--type-secondary)}
+.sc-table th{position:sticky;top:0;text-align:start;padding:var(--space-2) var(--space-3);font:var(--type-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase;color:var(--ink-quiet);background:var(--sheet-sunken);border-bottom:var(--hairline) solid var(--rule)}
+.sc-table td{padding:var(--space-3);border-top:var(--hairline) solid var(--rule);vertical-align:middle}
+.sc-table tbody tr{cursor:pointer}
+.sc-table tbody tr:hover{background:var(--hover-wash)}
+.sc-table tbody tr:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+.sc-table tbody tr[aria-selected="true"]{background:var(--accent-soft)}
+.sc-cand{display:block;font-weight:500;color:var(--ink)}
+.sc-num{font:var(--type-figure);font-size:24px}
+.sc-decision{white-space:nowrap}
+.sc-table tr[data-decision="shortlist"] .sc-decision{color:var(--accent-ink);font-weight:600}
+.sc-table tr[data-decision="pass"]{opacity:.55}
