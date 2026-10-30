@@ -311,7 +311,20 @@ async function boot(llm?: LlmProvider) {
       const res = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
       return { status: res.status, body: await res.json().catch(() => ({})) as any };
     };
-    return { get: (p: string) => call('GET', p), post: (p: string, b: unknown = {}) => call('POST', p, b), del: (p: string) => call('DELETE', p) };
+    const api = { get: (p: string) => call('GET', p), post: (p: string, b: unknown = {}) => call('POST', p, b), del: (p: string) => call('DELETE', p) };
+    /* Starts a screening and follows its job to the end, as the page does. */
+    const screen = async (b: unknown) => {
+      const started = await call('POST', '/api/screenings', b);
+      if (started.status !== 202) return started;
+      for (let i = 0; i < 200; i++) {
+        const j = (await call('GET', `/api/screenings/jobs/${started.body.jobId}`)).body.job;
+        if (j.status === 'done') return call('GET', `/api/screenings/${j.resultId}`);
+        if (j.status === 'failed') return { status: 422, body: { error: j.error } };
+        await new Promise(r => setTimeout(r, 10));
+      }
+      throw new Error('job did not finish');
+    };
+    return { ...api, screen };
   };
   return { store, as, close: () => new Promise<void>(r => server.close(() => r())) };
 }
@@ -320,7 +333,7 @@ test('screening API: run, list, reopen, privacy between users, delete, CSRF', as
   const t = await boot();
   try {
     const rec = t.as('recruiter@gennext.demo');
-    const run = await rec.post('/api/screenings', { cv: { text: longEnough(CV) }, jd: { text: JD }, label: 'Priya for Atlas' });
+    const run = await rec.screen({ cv: { text: longEnough(CV) }, jd: { text: JD }, label: 'Priya for Atlas' });
     assert.equal(run.status, 200);
     const s = run.body.screening;
     assert.equal(s.audience, 'recruiter');
@@ -334,7 +347,7 @@ test('screening API: run, list, reopen, privacy between users, delete, CSRF', as
     const other = t.as('nadia@gennext.demo');
     assert.equal((await other.get(`/api/screenings/${s.id}`)).status, 404, 'another user cannot read it');
     assert.equal((await other.get('/api/screenings')).body.items.length, 0);
-    const mine = await other.post('/api/screenings', { cv: { text: CV }, jd: { text: JD } });
+    const mine = await other.screen({ cv: { text: CV }, jd: { text: JD } });
     assert.equal(mine.body.screening.audience, 'candidate');
 
     assert.equal((await t.as('recruiter@gennext.demo', { csrf: false }).del(`/api/screenings/${s.id}`)).status, 403, 'delete needs the CSRF header');
@@ -342,7 +355,7 @@ test('screening API: run, list, reopen, privacy between users, delete, CSRF', as
     assert.equal((await rec.get(`/api/screenings/${s.id}`)).status, 404);
 
     assert.equal((await rec.post('/api/screenings', { cv: {}, jd: { text: JD } })).body.error, 'cv_required');
-    assert.equal((await rec.post('/api/screenings', { cv: { text: 'too short' }, jd: { text: JD } })).body.error, 'cv_too_short');
+    assert.equal((await rec.post('/api/screenings', { cv: { text: 'too short' }, jd: { text: JD } })).body.error, 'cv_too_short', 'bad input is refused up front, before a job starts');
     assert.ok(t.store.auditList({ tenantId: t.store.userByEmail('recruiter@gennext.demo')!.tenantId }).some(e => e.action === 'screening_run'));
   } finally { await t.close(); }
 });
@@ -351,7 +364,7 @@ test('screening API: a GitHub failure never blocks the screening', async () => {
   const t = await boot();
   try {
     const rec = t.as('recruiter@gennext.demo');
-    const res = await rec.post('/api/screenings', { cv: { text: CV }, jd: { text: JD }, githubUsername: 'not a valid username!!' });
+    const res = await rec.screen({ cv: { text: CV }, jd: { text: JD }, githubUsername: 'not a valid username!!' });
     assert.equal(res.status, 200);
     assert.equal(res.body.screening.meta.githubError, 'invalid_username');
     assert.equal(res.body.screening.result.github, null);
@@ -412,4 +425,78 @@ test('a data subject export includes their screenings and erase removes them, on
   assert.equal(store.listScreenings(ctx, nadia.id).length, 0);
   assert.equal(store.listScreenings(ctx, rec.id).length, 1, 'the agency keeps its own screening');
   assert.ok(store.auditList(ctx).some(e => e.action === 'gdpr_erase' && /1 screenings/.test(e.target)));
+});
+
+/* ---------- background jobs (ADR-0028) ---------- */
+
+import { JobRegistry, JobBusyError } from '../src/spine/jobs.ts';
+
+test('a job reports its step, finishes with a result id, and fails with a code', async () => {
+  const jobs = new JobRegistry({ concurrency: 2 });
+  let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  const job = jobs.start({ tenantId: 't', userId: 'u', kind: 'x', steps: ['one', 'two', 'three'] }, async advance => {
+    advance('two'); await gate; return 'result-1';
+  });
+  assert.equal(jobs.view('t', 'u', job.id)!.stepLabel, 'two');
+  assert.equal(jobs.view('t', 'u', job.id)!.status, 'running');
+  release(); await new Promise(r => setTimeout(r, 5));
+  const done = jobs.view('t', 'u', job.id)!;
+  assert.equal(done.status, 'done'); assert.equal(done.resultId, 'result-1');
+
+  const bad = jobs.start({ tenantId: 't', userId: 'u', kind: 'x', steps: ['one'] }, async () => { const e = new Error('x') as Error & { code: string }; e.code = 'cv_too_short'; throw e; });
+  await new Promise(r => setTimeout(r, 5));
+  assert.equal(jobs.view('t', 'u', bad.id)!.error, 'cv_too_short');
+  const odd = jobs.start({ tenantId: 't', userId: 'u', kind: 'x', steps: ['one'] }, async () => { throw new Error('secret internal detail'); });
+  await new Promise(r => setTimeout(r, 5));
+  assert.equal(jobs.view('t', 'u', odd.id)!.error, 'screening_failed', 'internal errors never reach the client');
+});
+
+test('jobs are private to their user and tenant, and the instance has a concurrency limit', async () => {
+  const jobs = new JobRegistry({ concurrency: 1 });
+  let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  const job = jobs.start({ tenantId: 't', userId: 'u', kind: 'x', steps: ['a'] }, async () => { await gate; return 'r'; });
+  assert.equal(jobs.view('t', 'other', job.id), null);
+  assert.equal(jobs.view('other-tenant', 'u', job.id), null);
+  assert.equal(jobs.runningFor('u'), 1);
+  assert.throws(() => jobs.start({ tenantId: 't', userId: 'v', kind: 'x', steps: ['a'] }, async () => 'r'), JobBusyError);
+  release(); await new Promise(r => setTimeout(r, 5));
+  assert.equal(jobs.runningFor('u'), 0);
+});
+
+test('finished jobs are swept after an hour', async () => {
+  let t = 0;
+  const jobs = new JobRegistry({ now: () => t });
+  const j = jobs.start({ tenantId: 't', userId: 'u', kind: 'x', steps: ['a'] }, async () => 'r');
+  await new Promise(r => setTimeout(r, 5));
+  assert.equal(jobs.view('t', 'u', j.id)!.status, 'done');
+  t = 61 * 60 * 1000;
+  jobs.start({ tenantId: 't', userId: 'u', kind: 'x', steps: ['a'] }, async () => 'r2');
+  assert.equal(jobs.view('t', 'u', j.id), null);
+});
+
+test('a slow model does not hold the request: the POST returns at once and the job shows progress', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  const slow: LlmProvider = { name: 'slow', async complete() { await gate; return null; } };
+  const t = await boot(slow);
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const started = Date.now();
+    const res = await rec.post('/api/screenings', { cv: { text: CV }, jd: { text: JD } });
+    assert.equal(res.status, 202);
+    assert.ok(Date.now() - started < 2000, 'returned before the model answered');
+    const job = (await rec.get(`/api/screenings/jobs/${res.body.jobId}`)).body.job;
+    assert.equal(job.status, 'running');
+    assert.ok(['Reading the job description', 'Grading the CV'].includes(job.stepLabel));
+    assert.equal((await t.as('nadia@gennext.demo').get(`/api/screenings/jobs/${res.body.jobId}`)).status, 404, 'another user cannot follow it');
+    release();
+    for (let i = 0; i < 100; i++) {
+      const j = (await rec.get(`/api/screenings/jobs/${res.body.jobId}`)).body.job;
+      if (j.status === 'done') { assert.ok(j.resultId); return; }
+      await new Promise(r => setTimeout(r, 20));
+    }
+    assert.fail('job never finished');
+  } finally { release(); await t.close(); }
 });

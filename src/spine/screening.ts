@@ -764,6 +764,8 @@ export interface ScreenInput {
   llm?: LlmProvider;
   /* Injected so tests and the API can attach the GitHub analyst. */
   analyseGithub?: (rubric: Rubric) => Promise<GithubAnalysis | null>;
+  /* Progress for a background job: called as each stage begins. */
+  onStep?: (step: 'rubric' | 'grading' | 'finishing') => void;
 }
 
 export class ScreeningError extends Error {
@@ -777,11 +779,14 @@ export async function screen(input: ScreenInput): Promise<ScreeningResult> {
   if (cv.length < 80) throw new ScreeningError('cv_too_short');
   if (jd.length < 60) throw new ScreeningError('jd_too_short');
 
+  input.onStep?.('rubric');
   const rubric = await extractRubric(jd, input.llm);
   const facts = cvFacts(cv);
   const gh = githubLines(input.github?.snapshot ?? null);
+  input.onStep?.('grading');
   const graded = await gradeAll(rubric, cv, facts, gh, input.llm);
 
+  input.onStep?.('finishing');
   const overall = weightedOverall(graded.criteria);
   const otherRequirements = checkOthers(rubric.extras, cv, gh);
   const { recommendation, capReason } = applyCaps(graded.criteria, recommendationFor(overall), otherRequirements);
