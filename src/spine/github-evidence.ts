@@ -130,11 +130,13 @@ export async function analyseGithub(
       const req = requirements.find(q => q.id === b.id)!;
       return `REQUIREMENT ${b.id}: ${req.requirement}\n${b.findings.map(f => `- ${f.name} | ${f.detail}`).join('\n')}`;
     }).join('\n\n');
-    const res = await llm.complete<RerankOut>({
-      system: RERANK_SYSTEM, user, schema: RERANK_SCHEMA, schemaName: 'github_rerank', tier: 'cheap',
-    });
-    if (res && Array.isArray(res.value?.items)) {
-      for (const it of res.value.items) {
+    let res: Awaited<ReturnType<LlmProvider['complete']>> | null = null;
+    try {
+      res = await llm.complete<RerankOut>({ system: RERANK_SYSTEM, user, schema: RERANK_SCHEMA, schemaName: 'github_rerank', tier: 'cheap' });
+    } catch { res = null; }
+    const value = res?.value as RerankOut | undefined;
+    if (value && Array.isArray(value.items)) {
+      for (const it of value.items) {
         const target = base.find(b => b.id === it.id);
         if (!target || !Array.isArray(it.picks)) continue;
         const picked = target.findings.filter(f => it.picks.includes(f.name));

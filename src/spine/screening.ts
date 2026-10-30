@@ -33,6 +33,14 @@ import type { LlmProvider } from './providers/llm.ts';
 import type { GithubSnapshot } from './connectors.ts';
 import type { GithubAnalysis } from './github-evidence.ts';
 
+/* A provider is meant to return null instead of throwing, but one that throws
+   (a bug, a bad network library) must degrade the wording of a result and never
+   fail it, so every model call here goes through this. */
+async function ask<T>(llm: LlmProvider | undefined, req: Parameters<LlmProvider['complete']>[0]) {
+  if (!llm) return null;
+  try { return await llm.complete<T>(req); } catch { return null; }
+}
+
 export const MAX_CV_CHARS = 15_000;
 export const MAX_JD_CHARS = 8_000;
 
@@ -487,7 +495,7 @@ function validateRubric(out: RubricOut | null, jd: string): Rubric | null {
 
 export async function extractRubric(jd: string, llm?: LlmProvider): Promise<Rubric> {
   if (llm) {
-    const res = await llm.complete<RubricOut>({
+    const res = await ask<RubricOut>(llm, {
       system: RUBRIC_SYSTEM, user: `JOB DESCRIPTION:\n"""\n${jd}\n"""`, schema: RUBRIC_SCHEMA, schemaName: 'screening_rubric', tier: 'cheap',
     });
     const valid = validateRubric(res?.value ?? null, jd);
@@ -689,7 +697,7 @@ export async function gradeAll(
     '', 'CV:', '"""', cv, '"""',
     ...(ghText ? ['', 'GITHUB PROJECT LINES:', '"""', ghText, '"""'] : []),
   ].join('\n');
-  const res = await llm.complete<GradeOut>({ system: GRADE_SYSTEM, user, schema: GRADE_SCHEMA, schemaName: 'screening_grades', tier: 'strong' });
+  const res = await ask<GradeOut>(llm, { system: GRADE_SYSTEM, user, schema: GRADE_SCHEMA, schemaName: 'screening_grades', tier: 'strong' });
   if (!res || !Array.isArray(res.value?.grades)) return { criteria: relevanceGate(scripted, rubric), producer: 'scripted' };
 
   const ghCorpus = gh.map(x => x.text).join('\n');

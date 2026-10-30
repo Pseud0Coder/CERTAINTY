@@ -215,3 +215,92 @@ test('CVs arrive as real Word and PDF files, and the file name is kept', async (
     assert.equal((await rec.post(`/api/batches/${id}/cvs`, { cv: { filename: 'x.pdf', dataBase64: Buffer.from('not a pdf').toString('base64') } })).status, 400);
   } finally { await t.close(); }
 });
+
+/* ---------- team, retention and caps (ADR-0030) ---------- */
+
+import { applyRetention } from '../src/spine/retention.ts';
+
+test('a teammate sees the batch, knows whose it is, and can add CVs to it', async () => {
+  const t = await boot();
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const admin = t.as('admin@gennext.demo');
+    const id = (await rec.post('/api/batches', { jd: { text: jd }, label: 'Shared role' })).body.batch.id;
+    await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf('java-strong') } });
+    await rec.settle(id);
+    const mine = (await rec.get(`/api/batches/${id}`)).body.batch.mine;
+    const theirs = await admin.get(`/api/batches/${id}`);
+    assert.equal(mine, true);
+    assert.equal(theirs.body.batch.mine, false);
+    assert.equal(theirs.body.leaderboard.length, 1);
+    assert.deepEqual((await admin.get('/api/batches')).body.items.map((b: any) => b.label), ['Shared role']);
+    assert.equal((await admin.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf('devops-missing-must') } })).status, 202);
+    assert.equal((await admin.settle(id)).leaderboard.length, 2);
+    /* A single screening stays private to whoever ran it. */
+    const single = await rec.post('/api/screenings', { cv: { text: cvOf('java-strong') }, jd: { text: jd } });
+    assert.equal(single.status, 202);
+  } finally { await t.close(); }
+});
+
+test('batches expire with their CVs: an emptied old batch goes, one with a recent CV stays', async () => {
+  const t = await boot();
+  try {
+    const ctx = { tenantId: t.ids.tenantId };
+    const rec = t.store.userByEmail('recruiter@gennext.demo')!;
+    const old = new Date(Date.now() - 200 * 24 * 3600 * 1000).toISOString();
+    const recent = new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString();
+    t.store.insertBatch(ctx, rec.id, { id: 'b-old', label: 'Old', jdText: jd, rubric: {}, createdAt: old });
+    t.store.insertBatch(ctx, rec.id, { id: 'b-mixed', label: 'Mixed', jdText: jd, rubric: {}, createdAt: old });
+    const row = (id: string, batchId: string, createdAt: string) => t.store.insertScreening(ctx, rec.id, { id, jobTitle: null, overall: 3, recommendation: 'Moderate Match', result: {}, cvText: 'cv', jdText: 'jd', meta: {}, createdAt, batchId, candidateName: id });
+    row('s-old', 'b-old', old); row('s-mixed-old', 'b-mixed', old); row('s-mixed-new', 'b-mixed', recent);
+    assert.equal(applyRetention(t.store), 2);
+    assert.deepEqual(t.store.listBatches(ctx).map(b => b.id), ['b-mixed']);
+    assert.deepEqual(t.store.batchItems(ctx, 'b-mixed').map(i => i.id), ['s-mixed-new']);
+  } finally { await t.close(); }
+});
+
+test('CVs in a batch count against the daily caps, and the cap stops the next one', async () => {
+  const t = await boot();
+  const prev = process.env.CERTAINTY_SCREEN_DAILY_LIMIT;
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const id = (await rec.post('/api/batches', { jd: { text: jd } })).body.batch.id;
+    process.env.CERTAINTY_SCREEN_DAILY_LIMIT = '2';
+    assert.equal((await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf('java-strong') } })).status, 202);
+    assert.equal((await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf('devops-missing-must') } })).status, 202);
+    const third = await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf('wrong-field') } });
+    assert.equal(third.status, 429);
+    assert.equal(third.body.error, 'daily_limit_reached');
+    assert.equal((await rec.settle(id)).leaderboard.length, 2);
+  } finally {
+    if (prev === undefined) delete process.env.CERTAINTY_SCREEN_DAILY_LIMIT; else process.env.CERTAINTY_SCREEN_DAILY_LIMIT = prev;
+    await t.close();
+  }
+});
+
+test('a provider that throws degrades the wording of a result and never fails it', async () => {
+  const breaking: LlmProvider = { name: 'breaking', async complete() { throw new Error('secret internal detail'); } };
+  const t = await boot(breaking);
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const id = (await rec.post('/api/batches', { jd: { text: jd } })).body.batch.id;
+    await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf('java-strong') } });
+    const b = await rec.settle(id);
+    assert.equal(b.leaderboard.length, 1, 'the CV was still screened, by the deterministic reading');
+    assert.equal(b.leaderboard[0].producer, 'scripted');
+    assert.equal(b.queue.length, 0);
+  } finally { await t.close(); }
+});
+
+test('a queued CV whose work fails is reported by code, never by message, and the others run', async () => {
+  const q = new BatchQueue({ concurrency: 1 });
+  const bad = q.enqueue({ tenantId: 't', userId: 'u', batchId: 'b', name: 'bad' }, async () => { throw new Error('secret internal detail'); });
+  const coded = q.enqueue({ tenantId: 't', userId: 'u', batchId: 'b', name: 'coded' }, async () => { const e = new Error('x') as Error & { code: string }; e.code = 'cv_too_short'; throw e; });
+  const good = q.enqueue({ tenantId: 't', userId: 'u', batchId: 'b', name: 'good' }, async () => 'id-good');
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(bad.status, 'failed'); assert.equal(bad.error, 'screening_failed');
+  assert.equal(coded.error, 'cv_too_short');
+  assert.equal(good.status, 'done'); assert.equal(good.screeningId, 'id-good');
+  assert.deepEqual(q.view('t', 'b').map(i => i.name).sort(), ['bad', 'coded'], 'failed items stay visible, done ones leave');
+  assert.ok(!JSON.stringify(q.view('t', 'b')).includes('secret'));
+});
