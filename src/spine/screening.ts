@@ -96,7 +96,7 @@ export interface ScreeningResult {
   summary: string;
   otherRequirements: OtherRequirement[];
   nextSteps: { recruiter: NextStep[]; candidate: NextStep[] };
-  facts: { years: number | null; minYears: number | null; roles: number; bullets: number; quantifiedBullets: number; skillsRequired: string[]; skillsFound: string[]; skillsMissing: string[] };
+  facts: { years: number | null; statedYears: number | null; minYears: number | null; roles: number; bullets: number; quantifiedBullets: number; skillsRequired: string[]; skillsFound: string[]; skillsMissing: string[] };
   producer: 'model' | 'scripted';
   github: GithubAnalysis | null;
 }
@@ -176,15 +176,36 @@ export function yearsOfExperience(roles: ResumeFields['roles']): number | null {
 export interface CvFacts {
   fields: ResumeFields;
   years: number | null;
+  /* "7 years of experience" written in the CV, when no role is dated. Never
+     used when dates exist, and graded lower because nothing backs it. */
+  stated: { years: number; line: string } | null;
   bullets: string[];
   quantified: string[];
+}
+
+const STATED_YEARS = [
+  /(\d{1,2})\s*\+?\s*(?:years?|yrs?)(?:\s+of)?\s+(?:[\w-]+\s+){0,3}?experience/i,
+  /experience\s*(?:of|:|-)?\s*(\d{1,2})\s*\+?\s*(?:years?|yrs?)/i,
+  /(?:over|more than|around|nearly)\s+(\d{1,2})\s*\+?\s*(?:years?|yrs?)/i,
+];
+
+export function statedYears(text: string): { years: number; line: string } | null {
+  for (const line of text.split(/\r?\n/)) {
+    for (const re of STATED_YEARS) {
+      const m = re.exec(line);
+      const n = m ? Number(m[1]) : 0;
+      if (n > 0 && n <= 40) return { years: n, line: line.replace(/\s+/g, ' ').trim().slice(0, 220) };
+    }
+  }
+  return null;
 }
 
 export function cvFacts(text: string): CvFacts {
   const fields = structureResume(text);
   const fromRoles = fields.roles.flatMap(r => r.bullets);
   const bullets = fromRoles.length ? fromRoles : text.split(/\r?\n/).filter(l => /^\s*[-*•▪●]/.test(l)).map(l => l.replace(/^\s*[-*•▪●]\s*/, '').trim());
-  return { fields, years: yearsOfExperience(fields.roles), bullets, quantified: bullets.filter(hasMetric) };
+  const years = yearsOfExperience(fields.roles);
+  return { fields, years, stated: years === null ? statedYears(text) : null, bullets, quantified: bullets.filter(hasMetric) };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -568,6 +589,13 @@ function scriptedCriterion(axis: RubricAxis, cv: string, lines: string[], facts:
       return mk(grade, `${facts.years} years across ${facts.fields.roles.length} roles; the JD states no minimum.`,
         { source: 'computed', quote: `${facts.years} years across ${facts.fields.roles.length} roles` }, 'code');
     }
+    if (facts.stated) {
+      /* Stated, not dated: graded by the same scale, capped at 3 because
+         nothing in the CV backs the number. */
+      const raw = rubric.minYears ? experienceGrade(facts.stated.years, rubric.minYears) : facts.stated.years >= 8 ? 5 : facts.stated.years >= 5 ? 4 : facts.stated.years >= 3 ? 3 : 2;
+      return mk(Math.min(raw, 3), `The CV states ${facts.stated.years} years but no role has dates, so this is unverified${rubric.minYears ? ` (${rubric.minYears}+ required)` : ''}.`,
+        { source: 'cv', quote: facts.stated.line }, 'code');
+    }
     return mk(1, 'No dated roles could be read from the CV, so experience cannot be measured.', null);
   }
   if (axis.id === 'impact') {
@@ -627,7 +655,7 @@ export async function gradeAll(
 
     /* Facts the code computed outrank the model: years, skills coverage and
        metric count. The model's quote and wording still add the evidence. */
-    if (axis.id === 'experience' && facts.years !== null) return { ...fallback };
+    if (axis.id === 'experience' && (facts.years !== null || facts.stated)) return { ...fallback };
     let evidence: Evidence | null = null;
     let note: string | undefined;
     let grade = proposed;
@@ -744,10 +772,18 @@ export function buildNextSteps(
   });
   if (capReason) recruiter.push({ text: capReason });
 
-  for (const c of weak.slice(0, 4)) {
+  /* The four weakest, plus experience whenever it is below strong: a missing
+     or unverifiable figure is a data problem the next step must name. */
+  const shown = weak.slice(0, 4);
+  const exp = weak.find(c => c.id === 'experience');
+  if (exp && !shown.includes(exp)) shown.push(exp);
+  for (const c of shown) {
     if (c.id === 'experience' && facts.years !== null && facts.minYears) {
       recruiter.push({ criterion: c.title, text: `Confirm total experience: the CV shows ${facts.years} years against ${facts.minYears}+ required.` });
       candidate.push({ criterion: c.title, text: `The role asks for ${facts.minYears}+ years and your CV shows ${facts.years}. Make sure every role has start and end dates, and include relevant internships, contract and freelance work.` });
+    } else if (c.id === 'experience' && facts.statedYears !== null) {
+      recruiter.push({ criterion: c.title, text: `Verify the ${facts.statedYears} years the CV states: no role has dates, so nothing backs the number.` });
+      candidate.push({ criterion: c.title, text: 'Add a start and end date (month and year) to every role, so your stated experience can be checked.' });
     } else if (c.id === 'experience') {
       recruiter.push({ criterion: c.title, text: 'Ask for dated employment history: no roles with readable dates were found.' });
       candidate.push({ criterion: c.title, text: 'Add a start and end date (month and year) to every role so your experience can be measured.' });
@@ -817,7 +853,7 @@ export async function screen(input: ScreenInput): Promise<ScreeningResult> {
   const { recommendation, capReason } = applyCaps(graded.criteria, recommendationFor(overall), otherRequirements);
   const sk = skillsFound(cv, rubric.skills);
   const resultFacts: ScreeningResult['facts'] = {
-    years: facts.years, minYears: rubric.minYears, roles: facts.fields.roles.length,
+    years: facts.years, statedYears: facts.stated?.years ?? null, minYears: rubric.minYears, roles: facts.fields.roles.length,
     bullets: facts.bullets.length, quantifiedBullets: facts.quantified.length,
     skillsRequired: rubric.skills, skillsFound: sk.found, skillsMissing: sk.missing,
   };

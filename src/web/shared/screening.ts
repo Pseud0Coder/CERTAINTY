@@ -15,7 +15,7 @@ interface Result {
   jobTitle: string | null; criteria: Criterion[]; overall: number; recommendation: string; capReason: string | null;
   summary: string; producer: 'model' | 'scripted';
   nextSteps: { recruiter: Array<{ text: string; criterion?: string }>; candidate: Array<{ text: string; criterion?: string }> };
-  facts: { years: number | null; minYears: number | null; roles: number; bullets: number; quantifiedBullets: number; skillsRequired: string[]; skillsFound: string[]; skillsMissing: string[] };
+  facts: { years: number | null; statedYears: number | null; minYears: number | null; roles: number; bullets: number; quantifiedBullets: number; skillsRequired: string[]; skillsFound: string[]; skillsMissing: string[] };
   github: null | { username: string; verified: boolean; repos: number; mergedPrs: number; languages: string[]; activeMonths: number; producer: string;
     requirements: Array<{ id: string; title: string; findings: GithubFinding[]; note: string | null; strong: boolean }> };
 }
@@ -194,7 +194,7 @@ function renderResult(s: Screening, audience: 'recruiter' | 'candidate', onDelet
   const f = r.facts;
   const stat = (label: string, value: string) => h('div', { class: 'stat' }, h('span', { class: 'stat-label' }, label), h('div', { class: 'stat-value' }, value));
   root.append(h('div', { class: 'statstrip mt-6' },
-    stat('Years of experience', f.years === null ? 'Not found' : `${f.years}${f.minYears ? ` of ${f.minYears}+` : ''}`),
+    stat('Years of experience', f.years !== null ? `${f.years}${f.minYears ? ` of ${f.minYears}+` : ''}` : f.statedYears !== null ? `${f.statedYears} stated, undated` : 'Not found'),
     stat('Roles read', String(f.roles)),
     stat('Bullets with a figure', `${f.quantifiedBullets} of ${f.bullets}`),
     stat('JD skills named in CV', f.skillsRequired.length ? `${f.skillsFound.length} of ${f.skillsRequired.length}` : 'None listed')));

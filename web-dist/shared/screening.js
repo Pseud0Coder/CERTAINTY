@@ -165,7 +165,7 @@ function renderResult(s, audience, onDelete) {
     /* Facts counted in code */
     const f = r.facts;
     const stat = (label, value) => h('div', { class: 'stat' }, h('span', { class: 'stat-label' }, label), h('div', { class: 'stat-value' }, value));
-    root.append(h('div', { class: 'statstrip mt-6' }, stat('Years of experience', f.years === null ? 'Not found' : `${f.years}${f.minYears ? ` of ${f.minYears}+` : ''}`), stat('Roles read', String(f.roles)), stat('Bullets with a figure', `${f.quantifiedBullets} of ${f.bullets}`), stat('JD skills named in CV', f.skillsRequired.length ? `${f.skillsFound.length} of ${f.skillsRequired.length}` : 'None listed')));
+    root.append(h('div', { class: 'statstrip mt-6' }, stat('Years of experience', f.years !== null ? `${f.years}${f.minYears ? ` of ${f.minYears}+` : ''}` : f.statedYears !== null ? `${f.statedYears} stated, undated` : 'Not found'), stat('Roles read', String(f.roles)), stat('Bullets with a figure', `${f.quantifiedBullets} of ${f.bullets}`), stat('JD skills named in CV', f.skillsRequired.length ? `${f.skillsFound.length} of ${f.skillsRequired.length}` : 'None listed')));
     if (f.skillsMissing.length)
         root.append(h('p', { class: 't-caption mt-2' }, `Not named in the CV: ${f.skillsMissing.join(', ')}`));
     /* GitHub evidence */

@@ -647,3 +647,56 @@ test('minimum years come from lines that ask for experience, not from the compan
   assert.equal(jdMinYears('- Over 40 years of experience required'), null, 'implausible figures are ignored');
   assert.equal(jdMinYears('Great culture. 10 years of free snacks.'), null, 'a line that does not ask for experience is ignored');
 });
+
+/* ---------- CVs without dates (ADR-0029) ---------- */
+
+import { statedYears } from '../src/spine/screening.ts';
+
+const UNDATED_CV = `Anita Rao
+anita.rao@example.com
+
+Summary
+Senior frontend engineer with 8 years of experience building React and TypeScript products.
+
+Experience
+Lead Engineer, Zeta Labs
+- Rebuilt the checkout, cutting load time by 40%
+- Mentored 4 engineers
+
+Skills
+TypeScript, React, Next.js
+`;
+
+test('a stated figure is read, but only when no role is dated', () => {
+  assert.deepEqual(statedYears('Engineer with 8+ years of hands-on experience in React')?.years, 8);
+  assert.equal(statedYears('Experience: 6 years in sales')?.years, 6);
+  assert.equal(statedYears('No numbers here at all'), null);
+  assert.equal(statedYears('Founded a club 50 years of age')?.years ?? null, null);
+});
+
+test('an undated CV is graded on its stated years, capped at partial, and the gap is named', async () => {
+  const r = await screen({ cvText: UNDATED_CV, jdText: JD });
+  const exp = r.criteria.find(c => c.id === 'experience')!;
+  assert.equal(r.facts.years, null);
+  assert.equal(r.facts.statedYears, 8);
+  assert.equal(exp.gradedBy, 'code');
+  assert.equal(exp.grade, 3, '8 years against 5+ would be a 5 if dated; unverified caps it at 3');
+  assert.match(exp.rationale, /unverified/);
+  assert.match(String(exp.evidence?.quote), /8 years of experience/);
+  assert.ok(r.nextSteps.recruiter.some(s => /no role has dates/.test(s.text)));
+  assert.ok(r.nextSteps.candidate.some(s => /start and end date/.test(s.text)));
+});
+
+test('a CV with neither dates nor a stated figure still gets grade 1 with a clear reason', async () => {
+  const bare = UNDATED_CV.replace(/with 8 years of experience building/, 'building');
+  const r = await screen({ cvText: bare, jdText: JD });
+  const exp = r.criteria.find(c => c.id === 'experience')!;
+  assert.equal(exp.grade, 1);
+  assert.match(exp.rationale, /No dated roles/);
+});
+
+test('dates always win over a stated figure', async () => {
+  const r = await screen({ cvText: CV.replace('Experience\n', 'Summary\nFrontend engineer with 20 years of experience.\n\nExperience\n'), jdText: JD });
+  assert.equal(r.facts.statedYears, null);
+  assert.ok(r.facts.years! > 10 && r.facts.years! < 11);
+});
