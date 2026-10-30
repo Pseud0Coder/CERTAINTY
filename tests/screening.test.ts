@@ -632,3 +632,18 @@ test('a JD with no listed skills falls back to tool names written in it', () => 
   assert.ok(skills.includes('sap') || skills.includes('quickbooks'));
   assert.ok(!skills.includes('mba') && !skills.includes('bba'), 'degrees are not skills');
 });
+
+/* ---------- minimum-years parsing (ADR-0029) ---------- */
+
+import { jdMinYears } from '../src/spine/screening.ts';
+
+test('minimum years come from lines that ask for experience, not from the company or a warranty', () => {
+  assert.equal(jdMinYears('We have been in business for 25 years.\n- 5+ years building production React applications'), 5);
+  assert.equal(jdMinYears('Founded 12 years ago, we serve 400 clients.\nSenior engineer role.'), null);
+  assert.equal(jdMinYears('- Minimum of 6 years of experience in sales\n- 3 years warranty on products'), 6);
+  assert.equal(jdMinYears('- 3-5 years of relevant experience'), 3, 'a range reads as its low end');
+  assert.equal(jdMinYears('- At least 4 yrs hands-on with Kubernetes\n- 8+ years of overall experience'), 8, 'the highest requirement is the seniority');
+  assert.equal(jdMinYears('- 0-2 years of experience, freshers welcome'), null, 'zero means no minimum');
+  assert.equal(jdMinYears('- Over 40 years of experience required'), null, 'implausible figures are ignored');
+  assert.equal(jdMinYears('Great culture. 10 years of free snacks.'), null, 'a line that does not ask for experience is ignored');
+});

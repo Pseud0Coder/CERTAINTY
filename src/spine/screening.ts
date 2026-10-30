@@ -257,17 +257,27 @@ function shortTitle(requirement: string): string {
   return title ? title[0]!.toUpperCase() + title.slice(1) : 'Role requirement';
 }
 
-const YEARS_RE = /(\d{1,2})\s*\+?\s*(?:-\s*\d{1,2}\s*)?(?:years?|yrs?)/i;
+const YEARS_RE = /\d{1,2}\s*\+?\s*(?:(?:-|\u2013|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)\b/i;
+const YEARS_ALL = /(?:(?:at least|minimum(?: of)?|min\.?)\s*)?(\d{1,2})\s*\+?\s*(?:(?:-|\u2013|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)\b/gi;
+/* A line about the company, not the candidate: "founded 25 years ago". */
+const ABOUT_THE_COMPANY = /\b(?:we(?:'ve| have| are| were)|founded|established|since \d{4}|in business|our (?:company|firm|group|history|legacy|clients)|years of (?:history|legacy|trust)|warranty|guarantee)\b/i;
+/* A line that asks for experience, so a bare "5 years" elsewhere is ignored. */
+const STARTS_WITH_YEARS = /^\W*(?:at least\s+|minimum(?: of)?\s+)?\d{1,2}\s*\+?\s*(?:(?:-|\u2013|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)/i;
+const ASKS_EXPERIENCE = /\b(?:experience|exp\b|expertise|background|hands-on|worked|working|proven|track record|professional|industry|in a similar role)\b/i;
 
+/* The seniority the JD asks for: the highest "N years" figure on a line that
+   asks for experience. A range reads as its low end ("3-5 years" is 3), a
+   line about the company is skipped, and 0 means no minimum. */
 export function jdMinYears(jd: string): number | null {
+  let best: number | null = null;
   for (const line of jd.split(/\r?\n/)) {
-    const m = YEARS_RE.exec(line);
-    if (m) {
+    if (ABOUT_THE_COMPANY.test(line) || !(ASKS_EXPERIENCE.test(line) || STARTS_WITH_YEARS.test(line))) continue;
+    for (const m of line.matchAll(YEARS_ALL)) {
       const n = Number(m[1]);
-      if (n > 0 && n <= 30) return n;
+      if (n > 0 && n <= 30 && (best === null || n > best)) best = n;
     }
   }
-  return null;
+  return best;
 }
 
 function jdTitle(jd: string): string | null {
