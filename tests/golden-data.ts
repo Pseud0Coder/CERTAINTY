@@ -351,7 +351,7 @@ Lead QA Engineer, Infosys
 Skills
 Selenium, Java, Jenkins, CI/CD
 `,
-    expect: { recommendation: ['Strong Match', 'Moderate Match', 'Weak Match'], overall: [2.5, 4.5], minYears: 5, stated: 9 },
+    expect: { recommendation: ['Moderate Match', 'Weak Match'], overall: [2.5, 4.5], minYears: 5, stated: 9 },
   },
   {
     id: 'injection',

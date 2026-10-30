@@ -87,3 +87,10 @@ test('skills written with punctuation (CI/CD, C++, Node.js) are matched, not los
   const cpp = await screen({ cvText: c.cv.replace('Selenium and Java framework', 'C++ and Node.js framework'), jdText: 'Systems Engineer\nWhat we are looking for:\n- 3+ years of experience writing C++ services\n- Experience with Node.js tooling\n- Strong debugging skills' });
   assert.ok(cpp.facts.skillsFound.includes('c++') && cpp.facts.skillsFound.includes('node.js'));
 });
+
+test('a CV that only states its years is never a strong match, and says why', async () => {
+  const c = GOLDEN.find(x => x.id === 'undated-cv')!;
+  const r = await screen({ cvText: c.cv, jdText: c.jd });
+  assert.equal(r.recommendation, 'Moderate Match');
+  assert.match(String(r.capReason), /no role has dates/);
+});

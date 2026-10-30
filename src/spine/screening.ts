@@ -766,7 +766,10 @@ export function recommendationFor(overall: number): Recommendation {
 const RANK: Record<Recommendation, number> = { 'No Match': 0, 'Weak Match': 1, 'Moderate Match': 2, 'Strong Match': 3 };
 
 /* A missing must-have caps the recommendation however high the average. */
-export function applyCaps(criteria: Criterion[], base: Recommendation, others: OtherRequirement[] = []): { recommendation: Recommendation; capReason: string | null } {
+export function applyCaps(
+  criteria: Criterion[], base: Recommendation, others: OtherRequirement[] = [],
+  unverifiedExperience = false,
+): { recommendation: Recommendation; capReason: string | null } {
   const missing: Array<{ title: string }> = [
     ...criteria.filter(c => c.priority === 'must' && c.grade === 1),
     ...others.filter(o => o.priority === 'must' && o.status === 'missing').map(o => ({ title: trimTo(o.requirement, 90) })),
@@ -774,11 +777,16 @@ export function applyCaps(criteria: Criterion[], base: Recommendation, others: O
   let cap: Recommendation = 'Strong Match';
   if (missing.length === 1) cap = 'Moderate Match';
   if (missing.length >= 2) cap = 'Weak Match';
+  const reasons: string[] = [];
+  if (missing.length) reasons.push(`no evidence for ${missing.map(m => m.title).join('; ')}, which the JD requires`);
+  /* A CV that only states its years cannot be called a strong match: the
+     figure is the candidate's word, not something the CV shows. */
+  if (unverifiedExperience && RANK[cap] > RANK['Moderate Match']) {
+    cap = 'Moderate Match';
+    reasons.push('the CV states its experience but no role has dates, so it cannot be verified');
+  }
   if (RANK[base] <= RANK[cap]) return { recommendation: base, capReason: null };
-  return {
-    recommendation: cap,
-    capReason: `Capped at ${cap}: no evidence for ${missing.map(m => m.title).join('; ')}, which the JD requires.`,
-  };
+  return { recommendation: cap, capReason: `Capped at ${cap}: ${reasons.join(', and ')}.` };
 }
 
 function trimTo(text: string, max: number): string {
@@ -895,7 +903,7 @@ export async function screen(input: ScreenInput): Promise<ScreeningResult> {
   input.onStep?.('finishing');
   const overall = weightedOverall(graded.criteria);
   const otherRequirements = checkOthers(rubric.extras, cv, gh);
-  const { recommendation, capReason } = applyCaps(graded.criteria, recommendationFor(overall), otherRequirements);
+  const { recommendation, capReason } = applyCaps(graded.criteria, recommendationFor(overall), otherRequirements, facts.years === null && !!facts.stated);
   const sk = skillsFound(cv, rubric.skills);
   const resultFacts: ScreeningResult['facts'] = {
     years: facts.years, statedYears: facts.stated?.years ?? null, minYears: rubric.minYears, roles: facts.fields.roles.length,
