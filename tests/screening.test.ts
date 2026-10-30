@@ -543,3 +543,14 @@ test('a per-user and an instance-wide daily cap stop screenings before any work 
     await t.close();
   }
 });
+
+test('the job lists the GitHub stage only when an account was given', async () => {
+  const t = await boot();
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const without = await rec.post('/api/screenings', { cv: { text: CV }, jd: { text: JD } });
+    assert.ok(!without.body.steps.includes('Fetching GitHub'));
+    const withGh = await rec.post('/api/screenings', { cv: { text: CV }, jd: { text: JD }, githubUsername: 'someone' });
+    assert.ok(withGh.body.steps.includes('Fetching GitHub'));
+  } finally { await t.close(); }
+});

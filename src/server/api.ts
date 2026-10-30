@@ -839,10 +839,12 @@ route('POST', '/api/screenings', SCREEN_ROLES, async r => {
   const ghRaw = String(r.body?.githubUsername ?? '').trim();
   const labelRaw = String(r.body?.label ?? '').trim().slice(0, 80);
   const { user, ctx, deps } = r;
+  /* The GitHub stage is listed only when an account was given. */
+  const steps = ghRaw ? SCREEN_STEPS : SCREEN_STEPS.filter(x => x !== 'Fetching GitHub');
 
   let job;
   try {
-    job = screeningJobs.start({ tenantId: ctx.tenantId, userId: user.id, kind: 'screening', steps: SCREEN_STEPS }, async advance => {
+    job = screeningJobs.start({ tenantId: ctx.tenantId, userId: user.id, kind: 'screening', steps }, async advance => {
       /* Optional GitHub account. It is public data and counts as a claim (not
          verified): a failure to fetch never blocks the screening. */
       let github: { snapshot: Awaited<ReturnType<typeof fetchSnapshot>> & { provider: 'github' }; verified: false } | null = null;
@@ -889,7 +891,7 @@ route('POST', '/api/screenings', SCREEN_ROLES, async r => {
     if (e instanceof JobBusyError) throw new ApiError(429, 'busy');
     throw e;
   }
-  r.send(202, { jobId: job.id, steps: SCREEN_STEPS });
+  r.send(202, { jobId: job.id, steps });
 }, { maxBody: UPLOAD_MAX_BODY * 2 + 200_000 });
 
 route('GET', '/api/screenings/jobs/:id', SCREEN_ROLES, r => {
