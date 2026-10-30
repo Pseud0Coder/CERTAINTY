@@ -554,3 +554,30 @@ test('the job lists the GitHub stage only when an account was given', async () =
     assert.ok(withGh.body.steps.includes('Fetching GitHub'));
   } finally { await t.close(); }
 });
+
+/* ---------- synonyms (ADR-0029) ---------- */
+
+import { canon, requirementTerms } from '../src/spine/terms.ts';
+
+test('aliases collapse to one spelling and never rewrite inside another name', () => {
+  assert.equal(canon('Ran K8s clusters on GCP with ReactJS and JS'), 'ran kubernetes clusters on gcp with react and javascript');
+  assert.equal(canon('Next.js and Node.js and Vue.js'), 'next.js and node.js and vue', 'the js in next.js is not an alias');
+  assert.equal(canon('Owned P&L and KPIs for the B2B CRM'), 'owned profit and loss and kpi for the b2b crm');
+  assert.equal(canon('We go to market'), 'we go to market', 'ambiguous short words are left alone');
+  assert.deepEqual(requirementTerms('Kubernetes experience'), requirementTerms('K8s experience'));
+});
+
+test('a CV that says K8s meets a JD that says Kubernetes, in skills coverage and requirements', async () => {
+  const cv = CV.replace('Skills\n', 'Skills\nRan production K8s clusters, Docker, Terraform\n');
+  const jd = JD.replace('Kubernetes experience running frontend workloads in production', 'Kubernetes experience running workloads in production');
+  const r = await screen({ cvText: cv, jdText: jd });
+  assert.ok(r.facts.skillsFound.includes('kubernetes'), 'skills coverage sees K8s as Kubernetes');
+  const kube = r.otherRequirements.find(o => /kubernetes/i.test(o.requirement));
+  assert.ok(kube && kube.status !== 'missing', 'the requirement is no longer reported missing');
+  assert.ok(String(kube!.evidence?.quote).includes('K8s'), 'the quote is the CV\'s own wording');
+});
+
+test('the GitHub analyst also reads aliases', () => {
+  const snap = { ...SNAP, repos: [{ name: 'infra', description: 'K8s operators and Helm charts', language: 'Go', stars: 3, pushedAt: '2026-09-01T00:00:00Z', url: 'https://github.com/x/infra', topics: [] }], mergedPrs: [] };
+  assert.equal(candidateFindings(snap, 'Kubernetes in production').findings[0]?.name, 'infra');
+});
