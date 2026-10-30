@@ -796,3 +796,5 @@ main.apply{display:block;flex:none;height:auto;overflow:visible;max-width:820px;
   .chart-overview{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
   .chart-overview .chart-radar{grid-row:span 2}
 }
+
+.chart-batch{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}

@@ -52,12 +52,12 @@ function radar(spec) {
     return figure(spec, svg, dataTable(['Axis', `Grade (of ${spec.max})`], spec.axes.map(a => [a.label, f1(a.value)])), `Lowest: ${low.label}, ${f1(low.value)} of ${spec.max}.`);
 }
 function bars(spec) {
-    const rowH = 38, labelW = 128, W = 360, pad = 8;
+    const rowH = 38, labelW = 142, W = 380, pad = 8;
     /* Rows can have different units (years, skills, bullets), so each row has
        its own scale: to its requirement when it has one, else to a round figure. */
     const maxFor = (row) => spec.max ?? (row.target !== undefined ? Math.max(row.value, row.target) * 1.15 : niceMax(row.value));
     const H = spec.rows.length * rowH + pad * 2;
-    const barW = W - labelW - 44;
+    const barW = W - labelW - 54;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'ch-svg' });
     spec.rows.forEach((row, i) => {
         const y = pad + i * rowH;
@@ -70,7 +70,9 @@ function bars(spec) {
             const tx = labelW + Math.min(barW, (row.target / max) * barW);
             svg.append(el('line', { x1: tx, y1: y + 3, x2: tx, y2: y + 27, class: 'ch-target' }, el('title', {}, `Required: ${f1(row.target)}`)));
         }
-        svg.append(el('text', { x: W, y: y + 22, 'text-anchor': 'end', class: 'ch-value' }, `${f1(row.value)}${spec.unit ? ` ${spec.unit}` : ''}`));
+        /* "1 CVs" reads wrongly: a plural unit loses its s for exactly one. */
+        const unit = spec.unit ? (row.value === 1 && spec.unit.endsWith('s') ? spec.unit.slice(0, -1) : spec.unit) : '';
+        svg.append(el('text', { x: W, y: y + 22, 'text-anchor': 'end', class: 'ch-value' }, `${f1(row.value)}${unit ? ` ${unit}` : ''}`));
     });
     const head = spec.rows.some(r => r.target !== undefined) ? ['Item', 'Value', 'Required'] : ['Item', 'Value'];
     const rows = spec.rows.map(r => (head.length === 3 ? [r.label, f1(r.value), r.target === undefined ? '' : f1(r.target)] : [r.label, f1(r.value)]));
@@ -124,17 +126,17 @@ function histogram(spec) {
     return figure(spec, svg, dataTable(['From', 'To', 'CVs'], bins.map(b => [f1(b.from), f1(b.to), b.count])), `${n} score${n === 1 ? '' : 's'} between ${f1(spec.lo)} and ${f1(spec.hi)}.`);
 }
 function funnel(spec) {
-    const W = 420, rowH = 40, pad = 6;
+    const W = 380, rowH = 40, pad = 6, labelW = 128;
     const H = spec.stages.length * rowH + pad * 2;
     const widths = funnelWidths(spec.stages.map(s => s.value));
-    const maxW = W - 150;
+    const maxW = W - labelW - 40;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'ch-svg' });
     spec.stages.forEach((s, i) => {
         const y = pad + i * rowH;
         const w = widths[i] * maxW;
         svg.append(el('text', { x: 0, y: y + 24, class: 'ch-label' }, s.label));
-        svg.append(el('rect', { x: 150, y: y + 6, width: Math.max(w, s.value > 0 ? 2 : 0), height: 26, rx: 3, class: `ch-bar ch-${i === spec.stages.length - 1 ? 'good' : 'neutral'}` }, el('title', {}, `${s.label}: ${s.value}`)));
-        svg.append(el('text', { x: 150 + Math.max(w, 2) + 8, y: y + 24, class: 'ch-value' }, String(s.value)));
+        svg.append(el('rect', { x: labelW, y: y + 6, width: Math.max(w, s.value > 0 ? 2 : 0), height: 26, rx: 3, class: `ch-bar ch-${i === spec.stages.length - 1 ? 'good' : 'neutral'}` }, el('title', {}, `${s.label}: ${s.value}`)));
+        svg.append(el('text', { x: labelW + Math.max(w, 2) + 8, y: y + 24, class: 'ch-value' }, String(s.value)));
     });
     return figure(spec, svg, dataTable(['Stage', 'CVs'], spec.stages.map(s => [s.label, s.value])), spec.stages.map(s => `${s.label} ${s.value}`).join(', then ') + '.');
 }

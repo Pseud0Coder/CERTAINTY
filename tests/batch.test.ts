@@ -304,3 +304,19 @@ test('a queued CV whose work fails is reported by code, never by message, and th
   assert.deepEqual(q.view('t', 'b').map(i => i.name).sort(), ['bad', 'coded'], 'failed items stay visible, done ones leave');
   assert.ok(!JSON.stringify(q.view('t', 'b')).includes('secret'));
 });
+
+test('each leaderboard row names the must-haves it has no evidence for', async () => {
+  const t = await boot();
+  try {
+    const rec = t.as('recruiter@gennext.demo');
+    const id = (await rec.post('/api/batches', { jd: { text: jd } })).body.batch.id;
+    for (const c of ['java-strong', 'wrong-field']) await rec.post(`/api/batches/${id}/cvs`, { cv: { text: cvOf(c) } });
+    const b = await rec.settle(id);
+    const good = b.leaderboard.find((x: any) => x.name === 'Karthik Subramanian');
+    const bad = b.leaderboard.find((x: any) => x.name === 'Meera Joshi');
+    assert.deepEqual(good.gaps, []);
+    assert.ok(bad.gaps.length >= 3 && bad.gaps.every((g: string) => g.length <= 70), `gaps: ${bad.gaps.join(' | ')}`);
+    assert.ok(bad.gaps.some((g: string) => /spring|kafka|aws/i.test(g)));
+    assert.equal(bad.mustMissing >= bad.gaps.length, true);
+  } finally { await t.close(); }
+});
