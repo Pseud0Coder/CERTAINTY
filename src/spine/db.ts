@@ -221,6 +221,28 @@ export class Store {
     return this.db.prepare('DELETE FROM screenings WHERE tenant_id = ? AND user_id = ? AND id = ?')
       .run(ctx.tenantId, userId, id).changes > 0;
   }
+  /* Retention and erase (ADR-0028). Cross-tenant by design: the retention
+     job runs for the whole instance, and returns what it removed per tenant so
+     each tenant's audit trail records it. */
+  purgeScreeningsBefore(cutoffIso: string): Map<string, number> {
+    const rows = this.db.prepare('SELECT tenant_id, COUNT(*) AS n FROM screenings WHERE created_at < ? GROUP BY tenant_id')
+      .all(cutoffIso) as unknown as Array<{ tenant_id: string; n: number }>;
+    if (rows.length) this.db.prepare('DELETE FROM screenings WHERE created_at < ?').run(cutoffIso);
+    return new Map(rows.map(r => [r.tenant_id, r.n]));
+  }
+  userScreenings(ctx: Ctx, userId: string): Array<{ id: string; result: unknown; cvText: string; jdText: string; meta: unknown; createdAt: string }> {
+    return (this.db.prepare('SELECT * FROM screenings WHERE tenant_id = ? AND user_id = ? ORDER BY created_at')
+      .all(ctx.tenantId, userId) as any[])
+      .map(r => ({ id: r.id, result: JSON.parse(r.result), cvText: r.cv_text, jdText: r.jd_text, meta: JSON.parse(r.meta), createdAt: r.created_at }));
+  }
+  deleteUserScreenings(ctx: Ctx, userId: string): number {
+    return Number(this.db.prepare('DELETE FROM screenings WHERE tenant_id = ? AND user_id = ?').run(ctx.tenantId, userId).changes);
+  }
+  /* Whole instance, all tenants: the cost guard for a public demo. */
+  countAllScreeningsSince(sinceIso: string): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM screenings WHERE created_at >= ?')
+      .get(sinceIso) as { n: number }).n;
+  }
   countScreeningsSince(ctx: Ctx, userId: string, sinceIso: string): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM screenings WHERE tenant_id = ? AND user_id = ? AND created_at >= ?')
       .get(ctx.tenantId, userId, sinceIso) as { n: number }).n;

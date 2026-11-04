@@ -105,6 +105,15 @@ scorecard with next steps for both sides.
   repositories and merged PRs for projects that bear on each requirement.
   Unverified, so it can never lift a grade above 3.
 
+### Keeping a free Render instance awake
+
+A free Render web service spins down after 15 minutes without traffic and
+takes up to a minute to wake. Point an uptime monitor or a scheduled job at
+`/healthz` every 5 to 10 minutes (not 15: the check races the spin-down). It
+needs no login and returns `{"ok":true,"uptimeSec":...,"db":true,"model":...}`.
+A free instance still loses its database on every restart and redeploy, so
+use a paid instance with a persistent disk for anything you want to keep.
+
 ### Running it for real
 
 ```bash
