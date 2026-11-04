@@ -5,6 +5,7 @@
 import { api } from './api.js';
 import { h, stamp, toast, empty, clear, viewHeader, fileToBase64, setWidthPct } from './dom.js';
 import { renderBatch } from './batch.js';
+import { renderChart, chartRow } from './charts.js';
 
 interface Evidence { source: 'cv' | 'github' | 'computed'; quote: string; ref?: string; url?: string }
 interface Criterion {
@@ -15,6 +16,8 @@ interface GithubFinding { kind: string; name: string; url: string; detail: strin
 interface Result {
   jobTitle: string | null; criteria: Criterion[]; overall: number; recommendation: string; capReason: string | null;
   summary: string; producer: 'model' | 'scripted';
+  otherRequirements: Array<{ requirement: string; priority: 'must' | 'nice'; status: 'covered' | 'partial' | 'missing'; evidence: Evidence | null }>;
+  confirm: string[];
   nextSteps: { recruiter: Array<{ text: string; criterion?: string }>; candidate: Array<{ text: string; criterion?: string }> };
   facts: { years: number | null; statedYears: number | null; minYears: number | null; roles: number; bullets: number; quantifiedBullets: number; skillsRequired: string[]; skillsFound: string[]; skillsMissing: string[] };
   github: null | { username: string; verified: boolean; repos: number; mergedPrs: number; languages: string[]; activeMonths: number; producer: string;
@@ -186,6 +189,27 @@ async function mountSingle(content: HTMLElement, audience: 'recruiter' | 'candid
   await loadHistory();
 }
 
+/* Chart specs for one scorecard. They are plain JSON, drawn by charts.ts. */
+export function resultCharts(r: Result): unknown[] {
+  const gradeTone = (g: number) => (g >= 4 ? 'good' : g >= 3 ? 'warn' : 'bad');
+  const kinds = [
+    ...r.criteria.map(c => (c.grade >= 4 ? 'met' : c.grade >= 2 ? 'partial' : 'gap')),
+    ...r.otherRequirements.map(o => (o.status === 'covered' ? 'met' : o.status === 'partial' ? 'partial' : 'gap')),
+  ];
+  const count = (k: string) => kinds.filter(x => x === k).length;
+  const f = r.facts;
+  const years = f.years ?? f.statedYears;
+  const rows: Array<Record<string, unknown>> = [];
+  if (years !== null) rows.push({ label: f.years === null ? 'Years (stated, undated)' : 'Years of experience', value: years, target: f.minYears ?? undefined, tone: f.minYears ? (years >= f.minYears ? 'good' : years >= f.minYears * 0.75 ? 'warn' : 'bad') : 'neutral' });
+  if (f.skillsRequired.length) rows.push({ label: 'JD skills named in CV', value: f.skillsFound.length, target: f.skillsRequired.length, tone: gradeTone(Math.round((f.skillsFound.length / f.skillsRequired.length) * 5)) });
+  if (f.bullets) rows.push({ label: 'Bullets with a figure', value: f.quantifiedBullets, target: f.bullets, tone: f.quantifiedBullets / f.bullets >= 0.5 ? 'good' : f.quantifiedBullets > 0 ? 'warn' : 'bad' });
+  return [
+    { type: 'radar', title: 'Grade on each axis', max: 5, axes: r.criteria.map(c => ({ label: c.title, value: c.grade, emphasis: c.priority === 'must' })) },
+    { type: 'donut', title: 'Requirements met', centre: `${count('met')}/${kinds.length}`, slices: [{ label: 'Met', value: count('met'), tone: 'good' }, { label: 'Partly met', value: count('partial'), tone: 'warn' }, { label: 'No evidence', value: count('gap'), tone: 'bad' }] },
+    ...(rows.length ? [{ type: 'bars', title: 'Against the job description', rows }] : []),
+  ];
+}
+
 export function renderResult(s: Screening, audience: 'recruiter' | 'candidate', onDelete?: () => Promise<void>): HTMLElement {
   const r = s.result;
   const root = h('div', { class: 'sc-result' });
@@ -204,12 +228,34 @@ export function renderResult(s: Screening, audience: 'recruiter' | 'candidate', 
         ? 'Rubric and quotes proposed by the model, then checked in code against the CV. Totals, caps and next steps are computed, not generated.'
         : 'Deterministic reading, no model used. The same inputs always give the same scorecard.'))));
 
+  root.append(h('div', { class: 'mt-6' }, chartRow('chart-overview', ...resultCharts(r).map(renderChart))));
+
   /* Tiles */
   const tiles = (cs: Criterion[]) => h('div', { class: 'sc-grid' }, ...cs.map(tile));
   const core = r.criteria.filter(c => c.category === 'universal');
   const role = r.criteria.filter(c => c.category === 'role');
   root.append(h('h2', { class: 'sc-eyebrow mt-6' }, 'Core axes'), tiles(core));
   if (role.length) root.append(h('h2', { class: 'sc-eyebrow mt-6' }, 'Role axes, read from the job description'), tiles(role));
+
+  /* Everything else the JD asks for: checked, and a missing must-have caps the result. */
+  if (r.otherRequirements.length || r.confirm.length) {
+    const panel = h('section', { class: 'panel mt-6', 'aria-label': 'Other requirements' });
+    if (r.otherRequirements.length) {
+      panel.append(h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, 'Other requirements'), h('span', { class: 't-caption' }, 'checked, not scored as tiles')));
+      const ul = h('ul', { class: 'readout-list' });
+      const word = { covered: 'Covered', partial: 'Partly covered', missing: 'No evidence' } as const;
+      for (const o of r.otherRequirements) {
+        ul.append(h('li', {}, h('span', { class: 't-body' }, `${o.requirement} (${o.priority === 'must' ? 'must have' : 'nice to have'})`),
+          h('span', { class: o.status === 'missing' && o.priority === 'must' ? 'sc-noev t-caption' : 't-caption' }, word[o.status] + (o.evidence ? `: \u201C${o.evidence.quote.slice(0, 100)}\u201D` : ''))));
+      }
+      panel.append(ul);
+    }
+    if (r.confirm.length) {
+      panel.append(h('h3', { class: 't-body mt-4' }, 'To confirm with the candidate'), h('p', { class: 't-caption' }, 'A CV cannot show these, so they are not graded.'),
+        h('ul', { class: 'sc-files' }, ...r.confirm.map(c => h('li', {}, c))));
+    }
+    root.append(panel);
+  }
 
   /* Facts counted in code */
   const f = r.facts;

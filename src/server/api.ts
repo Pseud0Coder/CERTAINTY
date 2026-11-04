@@ -929,8 +929,8 @@ function leaderboard(items: ReturnType<Store['batchItems']>) {
     const below = items.filter(o => o.overall < it.overall).length;
     const equal = items.filter(o => o.overall === it.overall).length;
     const res = it.result as {
-      criteria: Array<{ priority: string; grade: number }>; capReason: string | null; producer: string;
-      otherRequirements: Array<{ priority: string; status: string }>;
+      criteria: Array<{ priority: string; grade: number; title: string }>; capReason: string | null; producer: string;
+      otherRequirements: Array<{ priority: string; status: string; requirement: string }>;
       facts: { years: number | null; statedYears: number | null; skillsFound: string[]; skillsRequired: string[] };
     };
     return {
@@ -938,6 +938,11 @@ function leaderboard(items: ReturnType<Store['batchItems']>) {
       overall: it.overall, recommendation: it.recommendation, decision: it.decision, decidedBy: it.decidedBy,
       percentile: n > 1 ? Math.round((100 * (below + 0.5 * (equal - 1))) / (n - 1)) : null,
       capped: !!res.capReason,
+      /* The must-haves this CV has no evidence for, for "where the pool falls short". */
+      gaps: [
+        ...res.criteria.filter(c => c.priority === 'must' && c.grade === 1).map(c => c.title),
+        ...res.otherRequirements.filter(o => o.priority === 'must' && o.status === 'missing').map(o => o.requirement.length > 70 ? `${o.requirement.slice(0, 67)}...` : o.requirement),
+      ].slice(0, 6),
       mustMissing: res.criteria.filter(c => c.priority === 'must' && c.grade === 1).length
         + res.otherRequirements.filter(o => o.priority === 'must' && o.status === 'missing').length,
       years: res.facts.years ?? res.facts.statedYears, yearsStated: res.facts.years === null && res.facts.statedYears !== null,

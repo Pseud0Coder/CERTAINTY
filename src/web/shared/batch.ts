@@ -4,12 +4,13 @@
 import { api } from './api.js';
 import { h, stamp, toast, empty, clear, fileToBase64, setWidthPct } from './dom.js';
 import { ERRORS, REC_MARK, renderResult, type Screening } from './screening.js';
+import { renderChart, chartRow } from './charts.js';
 
 interface Axis { title: string; priority: 'must' | 'nice'; category: 'universal' | 'role' }
 interface Row {
   id: string; rank: number; name: string; file: string | null; overall: number; recommendation: string;
   decision: 'shortlist' | 'maybe' | 'pass' | null; decidedBy: string | null; percentile: number | null;
-  capped: boolean; mustMissing: number; years: number | null; yearsStated: boolean;
+  capped: boolean; mustMissing: number; gaps: string[]; years: number | null; yearsStated: boolean;
   skills: { found: number; required: number }; producer: string;
 }
 interface QueueRow { id: string; name: string; status: 'queued' | 'running' | 'done' | 'failed'; error: string | null }
@@ -138,20 +139,23 @@ async function showBatch(stage: HTMLElement, id: string): Promise<void> {
   let stopped = false;
   let openId: string | null = null;
   let current: BatchView | null = null;
+  /* Decisions made here win over a poll that was already in flight, so a slow
+     response can never put an old decision back on screen. */
+  const overrides = new Map<string, Row['decision']>();
+  const applyOverrides = (v: BatchView) => {
+    for (const r of v.leaderboard) if (overrides.has(r.id)) { r.decision = overrides.get(r.id)!; r.decidedBy = r.decision ? 'you' : null; }
+    v.tallies = tallyRows(v.leaderboard);
+  };
   let filter: Filter = 'all';
   let focusId: string | null = null;
 
   /* A decision is posted, then the board and tallies redraw from the answer. */
   const decide = async (rowId: string, decision: Row['decision']) => {
     try {
-      const res = await api.post(`/api/batches/${id}/items/${rowId}/decision`, { decision }) as { tallies: Tallies };
-      if (!current) return;
-      const row = current.leaderboard.find(r => r.id === rowId);
-      if (row) { row.decision = decision; row.decidedBy = decision ? 'you' : null; }
-      current.tallies = res.tallies;
-      focusId = rowId;
-      paint(current);
-    } catch { toast('The decision could not be saved. Try again.'); }
+      overrides.set(rowId, decision);
+      if (current) { applyOverrides(current); focusId = rowId; paint(current); }
+      await api.post(`/api/batches/${id}/items/${rowId}/decision`, { decision });
+    } catch { overrides.delete(rowId); toast('The decision could not be saved. Try again.'); if (current) { void api.get(`/api/batches/${id}`).then(v => { current = v as BatchView; applyOverrides(current); paint(current); }); } }
   };
 
   const open = async (rowId: string) => {
@@ -163,7 +167,15 @@ async function showBatch(stage: HTMLElement, id: string): Promise<void> {
     } catch { toast('Could not open that CV.'); }
   };
 
+  let lastSig = '';
   const paint = (v: BatchView) => {
+    /* A poll that changed nothing must not redraw the board, and a redraw that
+       does happen must keep the row the keyboard is on. */
+    const sig = JSON.stringify([v.leaderboard, v.tallies, v.queue.map(q => [q.id, q.status]), filter, openId, focusId]);
+    if (sig === lastSig) return;
+    lastSig = sig;
+    const active = document.activeElement?.closest?.('tr[data-id]')?.getAttribute('data-id');
+    if (active) focusId = active;
     clear(header);
     header.append(h('h2', { class: 'sc-batch-title' }, v.batch.label),
       h('p', { class: 't-secondary' }, `${v.batch.jobTitle ?? 'Job description'} · ${v.leaderboard.length} screened`),
@@ -185,6 +197,7 @@ async function showBatch(stage: HTMLElement, id: string): Promise<void> {
         h('ul', { class: 'sc-files' }, ...failed.map(q => h('li', {}, `${q.name}: ${ERRORS[q.error ?? ''] ?? 'the screening did not complete'}`)))));
     }
     clear(board);
+    board.append(chartRow('chart-batch', ...batchCharts(v.leaderboard).map(renderChart)), h('div', { class: 'mt-6' }));
     const shown = v.leaderboard.filter(r => filter === 'all' || (filter === 'undecided' ? r.decision === null : r.decision === filter));
     board.append(h('p', { class: 't-caption sc-keys' }, 'Keys: arrows move, S shortlist, M maybe, P pass, X clear, Enter open.'),
       leaderboardTable(shown, rowId => void open(rowId), openId, decide, focusId));
@@ -202,6 +215,7 @@ async function showBatch(stage: HTMLElement, id: string): Promise<void> {
     let v: BatchView;
     try { v = await api.get(`/api/batches/${id}`) as BatchView; } catch { toast('Could not load that batch.'); void showList(stage); return; }
     if (stopped) return;
+    applyOverrides(v);
     current = v;
     paint(v);
     if (!v.queue.some(q => q.status === 'queued' || q.status === 'running')) return;
@@ -209,9 +223,36 @@ async function showBatch(stage: HTMLElement, id: string): Promise<void> {
   }
 }
 
+function tallyRows(rows: Row[]): Tallies {
+  const t = { shortlist: 0, maybe: 0, pass: 0, undecided: 0 };
+  for (const r of rows) { if (r.decision) t[r.decision]++; else t.undecided++; }
+  return t;
+}
+
 type Filter = 'all' | 'shortlist' | 'maybe' | 'pass' | 'undecided';
 
 /* The tallies double as filters: pressing one shows only those CVs. */
+/* Chart specs for a batch: how the scores spread, how far the pool gets
+   through triage, and which must-haves most of it lacks. */
+export function batchCharts(rows: Row[]): unknown[] {
+  if (!rows.length) return [];
+  const n = rows.length;
+  const gapCount = new Map<string, number>();
+  for (const r of rows) for (const g of r.gaps) gapCount.set(g, (gapCount.get(g) ?? 0) + 1);
+  const gaps = [...gapCount].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const decided = rows.filter(r => r.decision !== null).length;
+  return [
+    { type: 'histogram', title: 'How the scores spread', lo: 1, hi: 5, step: 0.5, values: rows.map(r => r.overall), cuts: [2, 3, 4] },
+    { type: 'funnel', title: 'From screened to shortlisted', stages: [
+      { label: 'Screened', value: n },
+      { label: 'Moderate or strong', value: rows.filter(r => r.recommendation === 'Moderate Match' || r.recommendation === 'Strong Match').length },
+      { label: 'Triaged', value: decided },
+      { label: 'Shortlisted', value: rows.filter(r => r.decision === 'shortlist').length },
+    ] },
+    ...(gaps.length ? [{ type: 'bars', title: `Where the pool falls short (of ${n})`, max: n, unit: 'CVs', rows: gaps.map(([label, value]) => ({ label, value, tone: value / n >= 0.5 ? 'bad' : 'warn' })) }] : []),
+  ];
+}
+
 function tallyChips(t: Tallies, active: Filter, onPick: (f: Filter) => void): HTMLElement {
   const total = t.shortlist + t.maybe + t.pass + t.undecided;
   const chip = (f: Filter, label: string, n: number) => {

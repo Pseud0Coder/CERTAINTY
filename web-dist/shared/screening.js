@@ -5,6 +5,7 @@
 import { api } from './api.js';
 import { h, stamp, toast, empty, clear, viewHeader, fileToBase64, setWidthPct } from './dom.js';
 import { renderBatch } from './batch.js';
+import { renderChart, chartRow } from './charts.js';
 export const ERRORS = {
     cv_required: 'Add the CV: upload a file or paste its text.',
     jd_required: 'Add the job description: upload a file or paste its text.',
@@ -167,6 +168,29 @@ async function mountSingle(content, audience) {
     }
     await loadHistory();
 }
+/* Chart specs for one scorecard. They are plain JSON, drawn by charts.ts. */
+export function resultCharts(r) {
+    const gradeTone = (g) => (g >= 4 ? 'good' : g >= 3 ? 'warn' : 'bad');
+    const kinds = [
+        ...r.criteria.map(c => (c.grade >= 4 ? 'met' : c.grade >= 2 ? 'partial' : 'gap')),
+        ...r.otherRequirements.map(o => (o.status === 'covered' ? 'met' : o.status === 'partial' ? 'partial' : 'gap')),
+    ];
+    const count = (k) => kinds.filter(x => x === k).length;
+    const f = r.facts;
+    const years = f.years ?? f.statedYears;
+    const rows = [];
+    if (years !== null)
+        rows.push({ label: f.years === null ? 'Years (stated, undated)' : 'Years of experience', value: years, target: f.minYears ?? undefined, tone: f.minYears ? (years >= f.minYears ? 'good' : years >= f.minYears * 0.75 ? 'warn' : 'bad') : 'neutral' });
+    if (f.skillsRequired.length)
+        rows.push({ label: 'JD skills named in CV', value: f.skillsFound.length, target: f.skillsRequired.length, tone: gradeTone(Math.round((f.skillsFound.length / f.skillsRequired.length) * 5)) });
+    if (f.bullets)
+        rows.push({ label: 'Bullets with a figure', value: f.quantifiedBullets, target: f.bullets, tone: f.quantifiedBullets / f.bullets >= 0.5 ? 'good' : f.quantifiedBullets > 0 ? 'warn' : 'bad' });
+    return [
+        { type: 'radar', title: 'Grade on each axis', max: 5, axes: r.criteria.map(c => ({ label: c.title, value: c.grade, emphasis: c.priority === 'must' })) },
+        { type: 'donut', title: 'Requirements met', centre: `${count('met')}/${kinds.length}`, slices: [{ label: 'Met', value: count('met'), tone: 'good' }, { label: 'Partly met', value: count('partial'), tone: 'warn' }, { label: 'No evidence', value: count('gap'), tone: 'bad' }] },
+        ...(rows.length ? [{ type: 'bars', title: 'Against the job description', rows }] : []),
+    ];
+}
 export function renderResult(s, audience, onDelete) {
     const r = s.result;
     const root = h('div', { class: 'sc-result' });
@@ -175,6 +199,7 @@ export function renderResult(s, audience, onDelete) {
     root.append(h('section', { class: 'panel sc-hero', 'aria-label': 'Result' }, h('div', { class: 'sc-score' }, h('span', { class: 'sc-score-n' }, r.overall.toFixed(1)), h('span', { class: 't-caption' }, 'out of 5')), h('div', { class: 'sc-hero-main' }, h('div', { class: 'row gap-2 wrap' }, stamp(r.recommendation, REC_MARK[r.recommendation] ?? 'claimed'), r.jobTitle ? h('span', { class: 't-secondary' }, r.jobTitle) : h('span', {})), bar, h('p', { class: 't-body mt-2' }, r.summary), ...(r.capReason ? [h('p', { class: 'sc-cap t-secondary mt-2' }, r.capReason)] : []), h('p', { class: 't-caption mt-2' }, r.producer === 'model'
         ? 'Rubric and quotes proposed by the model, then checked in code against the CV. Totals, caps and next steps are computed, not generated.'
         : 'Deterministic reading, no model used. The same inputs always give the same scorecard.'))));
+    root.append(h('div', { class: 'mt-6' }, chartRow('chart-overview', ...resultCharts(r).map(renderChart))));
     /* Tiles */
     const tiles = (cs) => h('div', { class: 'sc-grid' }, ...cs.map(tile));
     const core = r.criteria.filter(c => c.category === 'universal');
@@ -182,6 +207,23 @@ export function renderResult(s, audience, onDelete) {
     root.append(h('h2', { class: 'sc-eyebrow mt-6' }, 'Core axes'), tiles(core));
     if (role.length)
         root.append(h('h2', { class: 'sc-eyebrow mt-6' }, 'Role axes, read from the job description'), tiles(role));
+    /* Everything else the JD asks for: checked, and a missing must-have caps the result. */
+    if (r.otherRequirements.length || r.confirm.length) {
+        const panel = h('section', { class: 'panel mt-6', 'aria-label': 'Other requirements' });
+        if (r.otherRequirements.length) {
+            panel.append(h('div', { class: 'panel-head' }, h('h2', { class: 't-section' }, 'Other requirements'), h('span', { class: 't-caption' }, 'checked, not scored as tiles')));
+            const ul = h('ul', { class: 'readout-list' });
+            const word = { covered: 'Covered', partial: 'Partly covered', missing: 'No evidence' };
+            for (const o of r.otherRequirements) {
+                ul.append(h('li', {}, h('span', { class: 't-body' }, `${o.requirement} (${o.priority === 'must' ? 'must have' : 'nice to have'})`), h('span', { class: o.status === 'missing' && o.priority === 'must' ? 'sc-noev t-caption' : 't-caption' }, word[o.status] + (o.evidence ? `: \u201C${o.evidence.quote.slice(0, 100)}\u201D` : ''))));
+            }
+            panel.append(ul);
+        }
+        if (r.confirm.length) {
+            panel.append(h('h3', { class: 't-body mt-4' }, 'To confirm with the candidate'), h('p', { class: 't-caption' }, 'A CV cannot show these, so they are not graded.'), h('ul', { class: 'sc-files' }, ...r.confirm.map(c => h('li', {}, c))));
+        }
+        root.append(panel);
+    }
     /* Facts counted in code */
     const f = r.facts;
     const stat = (label, value) => h('div', { class: 'stat' }, h('span', { class: 'stat-label' }, label), h('div', { class: 'stat-value' }, value));

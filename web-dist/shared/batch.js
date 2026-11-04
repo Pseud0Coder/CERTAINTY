@@ -4,6 +4,7 @@
 import { api } from './api.js';
 import { h, stamp, toast, empty, clear, fileToBase64, setWidthPct } from './dom.js';
 import { ERRORS, REC_MARK, renderResult } from './screening.js';
+import { renderChart, chartRow } from './charts.js';
 const MAX_FILES = 100;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export async function renderBatch(root) {
@@ -129,25 +130,36 @@ async function showBatch(stage, id) {
     let stopped = false;
     let openId = null;
     let current = null;
+    /* Decisions made here win over a poll that was already in flight, so a slow
+       response can never put an old decision back on screen. */
+    const overrides = new Map();
+    const applyOverrides = (v) => {
+        for (const r of v.leaderboard)
+            if (overrides.has(r.id)) {
+                r.decision = overrides.get(r.id);
+                r.decidedBy = r.decision ? 'you' : null;
+            }
+        v.tallies = tallyRows(v.leaderboard);
+    };
     let filter = 'all';
     let focusId = null;
     /* A decision is posted, then the board and tallies redraw from the answer. */
     const decide = async (rowId, decision) => {
         try {
-            const res = await api.post(`/api/batches/${id}/items/${rowId}/decision`, { decision });
-            if (!current)
-                return;
-            const row = current.leaderboard.find(r => r.id === rowId);
-            if (row) {
-                row.decision = decision;
-                row.decidedBy = decision ? 'you' : null;
+            overrides.set(rowId, decision);
+            if (current) {
+                applyOverrides(current);
+                focusId = rowId;
+                paint(current);
             }
-            current.tallies = res.tallies;
-            focusId = rowId;
-            paint(current);
+            await api.post(`/api/batches/${id}/items/${rowId}/decision`, { decision });
         }
         catch {
+            overrides.delete(rowId);
             toast('The decision could not be saved. Try again.');
+            if (current) {
+                void api.get(`/api/batches/${id}`).then(v => { current = v; applyOverrides(current); paint(current); });
+            }
         }
     };
     const open = async (rowId) => {
@@ -162,7 +174,17 @@ async function showBatch(stage, id) {
             toast('Could not open that CV.');
         }
     };
+    let lastSig = '';
     const paint = (v) => {
+        /* A poll that changed nothing must not redraw the board, and a redraw that
+           does happen must keep the row the keyboard is on. */
+        const sig = JSON.stringify([v.leaderboard, v.tallies, v.queue.map(q => [q.id, q.status]), filter, openId, focusId]);
+        if (sig === lastSig)
+            return;
+        lastSig = sig;
+        const active = document.activeElement?.closest?.('tr[data-id]')?.getAttribute('data-id');
+        if (active)
+            focusId = active;
         clear(header);
         header.append(h('h2', { class: 'sc-batch-title' }, v.batch.label), h('p', { class: 't-secondary' }, `${v.batch.jobTitle ?? 'Job description'} · ${v.leaderboard.length} screened`), h('p', { class: 't-caption mt-2' }, `Judged on: ${v.axes.map(a => `${a.title}${a.priority === 'must' ? '' : ' (nice)'}`).join(', ')}`), tallyChips(v.tallies, filter, f => { filter = f; if (current)
             paint(current); }));
@@ -177,6 +199,7 @@ async function showBatch(stage, id) {
             progress.append(h('section', { class: 'panel mt-4', 'aria-label': 'CVs that failed' }, h('h2', { class: 't-section' }, `${failed.length} CV${failed.length === 1 ? '' : 's'} could not be screened`), h('ul', { class: 'sc-files' }, ...failed.map(q => h('li', {}, `${q.name}: ${ERRORS[q.error ?? ''] ?? 'the screening did not complete'}`)))));
         }
         clear(board);
+        board.append(chartRow('chart-batch', ...batchCharts(v.leaderboard).map(renderChart)), h('div', { class: 'mt-6' }));
         const shown = v.leaderboard.filter(r => filter === 'all' || (filter === 'undecided' ? r.decision === null : r.decision === filter));
         board.append(h('p', { class: 't-caption sc-keys' }, 'Keys: arrows move, S shortlist, M maybe, P pass, X clear, Enter open.'), leaderboardTable(shown, rowId => void open(rowId), openId, decide, focusId));
         if (focusId) {
@@ -206,6 +229,7 @@ async function showBatch(stage, id) {
         }
         if (stopped)
             return;
+        applyOverrides(v);
         current = v;
         paint(v);
         if (!v.queue.some(q => q.status === 'queued' || q.status === 'running'))
@@ -213,7 +237,40 @@ async function showBatch(stage, id) {
         await new Promise(r => setTimeout(r, 1500));
     }
 }
+function tallyRows(rows) {
+    const t = { shortlist: 0, maybe: 0, pass: 0, undecided: 0 };
+    for (const r of rows) {
+        if (r.decision)
+            t[r.decision]++;
+        else
+            t.undecided++;
+    }
+    return t;
+}
 /* The tallies double as filters: pressing one shows only those CVs. */
+/* Chart specs for a batch: how the scores spread, how far the pool gets
+   through triage, and which must-haves most of it lacks. */
+export function batchCharts(rows) {
+    if (!rows.length)
+        return [];
+    const n = rows.length;
+    const gapCount = new Map();
+    for (const r of rows)
+        for (const g of r.gaps)
+            gapCount.set(g, (gapCount.get(g) ?? 0) + 1);
+    const gaps = [...gapCount].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const decided = rows.filter(r => r.decision !== null).length;
+    return [
+        { type: 'histogram', title: 'How the scores spread', lo: 1, hi: 5, step: 0.5, values: rows.map(r => r.overall), cuts: [2, 3, 4] },
+        { type: 'funnel', title: 'From screened to shortlisted', stages: [
+                { label: 'Screened', value: n },
+                { label: 'Moderate or strong', value: rows.filter(r => r.recommendation === 'Moderate Match' || r.recommendation === 'Strong Match').length },
+                { label: 'Triaged', value: decided },
+                { label: 'Shortlisted', value: rows.filter(r => r.decision === 'shortlist').length },
+            ] },
+        ...(gaps.length ? [{ type: 'bars', title: `Where the pool falls short (of ${n})`, max: n, unit: 'CVs', rows: gaps.map(([label, value]) => ({ label, value, tone: value / n >= 0.5 ? 'bad' : 'warn' })) }] : []),
+    ];
+}
 function tallyChips(t, active, onPick) {
     const total = t.shortlist + t.maybe + t.pass + t.undecided;
     const chip = (f, label, n) => {
