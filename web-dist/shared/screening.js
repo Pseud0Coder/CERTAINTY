@@ -4,7 +4,8 @@
    recruiter's list leads for staff, the candidate's for a candidate. */
 import { api } from './api.js';
 import { h, stamp, toast, empty, clear, viewHeader, fileToBase64, setWidthPct } from './dom.js';
-const ERRORS = {
+import { renderBatch } from './batch.js';
+export const ERRORS = {
     cv_required: 'Add the CV: upload a file or paste its text.',
     jd_required: 'Add the job description: upload a file or paste its text.',
     cv_too_short: 'The CV text is too short to screen.',
@@ -20,13 +21,32 @@ const ERRORS = {
     screening_failed: 'The screening did not complete. Try again.',
     job_not_found: 'The server restarted while this was running. Run it again.',
 };
-const REC_MARK = {
+export const REC_MARK = {
     'Strong Match': 'confirmed', 'Moderate Match': 'claimed', 'Weak Match': 'gap', 'No Match': 'gap',
 };
 export async function renderScreening(content, audience) {
     content.append(viewHeader('Screening', audience === 'recruiter'
         ? 'Score a CV against a strict job description. Every grade rests on a quote from the CV, and a missing must-have caps the result.'
         : 'Check your CV against a job description before you apply. You see the same scorecard a recruiter would, with steps to improve it.'));
+    /* Staff can screen one CV or a whole batch against one JD. */
+    const body = h('div', { class: 'sc-body' });
+    if (audience === 'recruiter') {
+        const bar = h('div', { class: 'tabs sc-modes', role: 'tablist' });
+        const modes = [
+            ['single', 'One CV', () => { clear(body); void mountSingle(body, audience); }],
+            ['batch', 'Batch', () => { clear(body); void renderBatch(body); }],
+        ];
+        for (const [id, label, open] of modes) {
+            const b = h('button', { class: 'tab', role: 'tab', 'data-mode': id, 'aria-selected': id === 'single' ? 'true' : 'false' }, label);
+            b.addEventListener('click', () => { bar.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t === b ? 'true' : 'false')); open(); });
+            bar.append(b);
+        }
+        content.append(bar);
+    }
+    content.append(body);
+    await mountSingle(body, audience);
+}
+async function mountSingle(content, audience) {
     const cv = { file: null, text: '' };
     const jd = { file: null, text: '' };
     let busy = false;
@@ -147,7 +167,7 @@ export async function renderScreening(content, audience) {
     }
     await loadHistory();
 }
-function renderResult(s, audience, onDelete) {
+export function renderResult(s, audience, onDelete) {
     const r = s.result;
     const root = h('div', { class: 'sc-result' });
     /* Hero */
@@ -199,8 +219,8 @@ function renderResult(s, audience, onDelete) {
     }
     root.append(h('h2', { class: 'sc-eyebrow mt-6' }, 'Next steps'), tabs, body);
     show(order[0]);
-    const del = h('button', { class: 'btn btn-sm btn-ghost mt-6' }, 'Delete this screening');
-    del.addEventListener('click', () => { if (confirm('Delete this screening and the text it stored?'))
+    const del = onDelete ? h('button', { class: 'btn btn-sm btn-ghost mt-6' }, 'Delete this screening') : h('span', {});
+    del.addEventListener('click', () => { if (onDelete && confirm('Delete this screening and the text it stored?'))
         void onDelete(); });
     root.append(h('div', { class: 'row gap-3 wrap mt-6' }, del, h('span', { class: 't-caption' }, `Run ${s.createdAt.slice(0, 16).replace('T', ' ')} UTC${s.meta.cvFile ? ` · ${s.meta.cvFile}` : ''}`)));
     return root;
