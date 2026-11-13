@@ -554,3 +554,149 @@ test('the job lists the GitHub stage only when an account was given', async () =
     assert.ok(withGh.body.steps.includes('Fetching GitHub'));
   } finally { await t.close(); }
 });
+
+/* ---------- synonyms (ADR-0029) ---------- */
+
+import { canon, requirementTerms } from '../src/spine/terms.ts';
+
+test('aliases collapse to one spelling and never rewrite inside another name', () => {
+  assert.equal(canon('Ran K8s clusters on GCP with ReactJS and JS'), 'ran kubernetes clusters on gcp with react and javascript');
+  assert.equal(canon('Next.js and Node.js and Vue.js'), 'next.js and node.js and vue', 'the js in next.js is not an alias');
+  assert.equal(canon('Owned P&L and KPIs for the B2B CRM'), 'owned profit and loss and kpi for the b2b crm');
+  assert.equal(canon('We go to market'), 'we go to market', 'ambiguous short words are left alone');
+  assert.deepEqual(requirementTerms('Kubernetes experience'), requirementTerms('K8s experience'));
+});
+
+test('a CV that says K8s meets a JD that says Kubernetes, in skills coverage and requirements', async () => {
+  const cv = CV.replace('Skills\n', 'Skills\nRan production K8s clusters, Docker, Terraform\n');
+  const jd = JD.replace('Kubernetes experience running frontend workloads in production', 'Kubernetes experience running workloads in production');
+  const r = await screen({ cvText: cv, jdText: jd });
+  assert.ok(r.facts.skillsFound.includes('kubernetes'), 'skills coverage sees K8s as Kubernetes');
+  const kube = r.otherRequirements.find(o => /kubernetes/i.test(o.requirement));
+  assert.ok(kube && kube.status !== 'missing', 'the requirement is no longer reported missing');
+  assert.ok(String(kube!.evidence?.quote).includes('K8s'), 'the quote is the CV\'s own wording');
+});
+
+test('the GitHub analyst also reads aliases', () => {
+  const snap = { ...SNAP, repos: [{ name: 'infra', description: 'K8s operators and Helm charts', language: 'Go', stars: 3, pushedAt: '2026-09-01T00:00:00Z', url: 'https://github.com/x/infra', topics: [] }], mergedPrs: [] };
+  assert.equal(candidateFindings(snap, 'Kubernetes in production').findings[0]?.name, 'infra');
+});
+
+/* ---------- non-IT roles (ADR-0029) ---------- */
+
+import { jdSkills } from '../src/spine/screening.ts';
+
+const FINANCE_JD = `Assistant Manager, Accounts - Pune
+
+What we're looking for:
+- 4+ years in accounting with hands-on GST and TDS compliance
+- Strong working knowledge of Tally ERP and advanced Excel (VLOOKUP, pivot tables)
+- Experience with month-end closing, accounts payable and MIS reporting
+- You will excel at managing deadlines
+
+Nice to have:
+- Exposure to SAP FICO
+`;
+
+const FINANCE_CV = `Rohan Mehta
+rohan.mehta@example.com
+
+Experience
+Senior Accountant, Shree Traders Pvt Ltd
+04/2020 - Present
+- Filed monthly GSTR-1 and GSTR-3B returns and handled TDS deductions and quarterly returns for 120+ vendors
+- Maintained books in Tally ERP and built MIS reports in Excel using pivot tables and VLOOKUP, cutting month-end closing from 9 days to 5
+- Managed accounts payable of INR 4 crore a month
+
+Accountant, Kapoor & Co
+06/2017 - 03/2020
+- Prepared statutory audit schedules and GST reconciliations
+
+Skills
+Tally ERP, GST, TDS, MS Excel, Accounts Payable, MIS
+`;
+
+test('a finance JD gets a real Skills Fit from business terms, and "excel at" is not a skill', async () => {
+  const skills = jdSkills(FINANCE_JD);
+  for (const s of ['gst', 'tds', 'tally erp', 'advanced excel', 'vlookup', 'accounts payable', 'mis', 'sap fico']) assert.ok(skills.includes(s), `${s} is read from the JD: ${skills.join(', ')}`);
+  assert.ok(!skills.includes('excel'), '"excel at" is ordinary English');
+  const r = await screen({ cvText: FINANCE_CV, jdText: FINANCE_JD });
+  const sk = r.criteria.find(c => c.id === 'skills')!;
+  assert.ok(sk.grade >= 4, `skills fit ${sk.grade}`);
+  assert.ok(r.facts.skillsMissing.includes('sap fico'));
+  assert.ok(r.facts.years! >= 9);
+});
+
+test('a JD with no listed skills falls back to tool names written in it', () => {
+  const skills = jdSkills('Operations Executive\nWhat we are looking for:\n- Working knowledge of SAP and Zoho Books\n- Comfortable with QuickBooks and WMS\n- Degree: MBA or BBA');
+  assert.ok(skills.includes('sap') || skills.includes('quickbooks'));
+  assert.ok(!skills.includes('mba') && !skills.includes('bba'), 'degrees are not skills');
+});
+
+/* ---------- minimum-years parsing (ADR-0029) ---------- */
+
+import { jdMinYears } from '../src/spine/screening.ts';
+
+test('minimum years come from lines that ask for experience, not from the company or a warranty', () => {
+  assert.equal(jdMinYears('We have been in business for 25 years.\n- 5+ years building production React applications'), 5);
+  assert.equal(jdMinYears('Founded 12 years ago, we serve 400 clients.\nSenior engineer role.'), null);
+  assert.equal(jdMinYears('- Minimum of 6 years of experience in sales\n- 3 years warranty on products'), 6);
+  assert.equal(jdMinYears('- 3-5 years of relevant experience'), 3, 'a range reads as its low end');
+  assert.equal(jdMinYears('- At least 4 yrs hands-on with Kubernetes\n- 8+ years of overall experience'), 8, 'the highest requirement is the seniority');
+  assert.equal(jdMinYears('- 0-2 years of experience, freshers welcome'), null, 'zero means no minimum');
+  assert.equal(jdMinYears('- Over 40 years of experience required'), null, 'implausible figures are ignored');
+  assert.equal(jdMinYears('Great culture. 10 years of free snacks.'), null, 'a line that does not ask for experience is ignored');
+});
+
+/* ---------- CVs without dates (ADR-0029) ---------- */
+
+import { statedYears } from '../src/spine/screening.ts';
+
+const UNDATED_CV = `Anita Rao
+anita.rao@example.com
+
+Summary
+Senior frontend engineer with 8 years of experience building React and TypeScript products.
+
+Experience
+Lead Engineer, Zeta Labs
+- Rebuilt the checkout, cutting load time by 40%
+- Mentored 4 engineers
+
+Skills
+TypeScript, React, Next.js
+`;
+
+test('a stated figure is read, but only when no role is dated', () => {
+  assert.deepEqual(statedYears('Engineer with 8+ years of hands-on experience in React')?.years, 8);
+  assert.equal(statedYears('Experience: 6 years in sales')?.years, 6);
+  assert.equal(statedYears('No numbers here at all'), null);
+  assert.equal(statedYears('Founded a club 50 years of age')?.years ?? null, null);
+});
+
+test('an undated CV is graded on its stated years, capped at partial, and the gap is named', async () => {
+  const r = await screen({ cvText: UNDATED_CV, jdText: JD });
+  const exp = r.criteria.find(c => c.id === 'experience')!;
+  assert.equal(r.facts.years, null);
+  assert.equal(r.facts.statedYears, 8);
+  assert.equal(exp.gradedBy, 'code');
+  assert.equal(exp.grade, 3, '8 years against 5+ would be a 5 if dated; unverified caps it at 3');
+  assert.match(exp.rationale, /unverified/);
+  assert.match(String(exp.evidence?.quote), /8 years of experience/);
+  assert.ok(r.nextSteps.recruiter.some(s => /no role has dates/.test(s.text)));
+  assert.ok(r.nextSteps.candidate.some(s => /start and end date/.test(s.text)));
+});
+
+test('a CV with neither dates nor a stated figure still gets grade 1 with a clear reason', async () => {
+  const bare = UNDATED_CV.replace(/with 8 years of experience building/, 'building');
+  const r = await screen({ cvText: bare, jdText: JD });
+  const exp = r.criteria.find(c => c.id === 'experience')!;
+  assert.equal(exp.grade, 1);
+  assert.match(exp.rationale, /No dated roles/);
+});
+
+test('dates always win over a stated figure', async () => {
+  const r = await screen({ cvText: CV.replace('Experience\n', 'Summary\nFrontend engineer with 20 years of experience.\n\nExperience\n'), jdText: JD });
+  assert.equal(r.facts.statedYears, null);
+  assert.ok(r.facts.years! > 10 && r.facts.years! < 11);
+});
